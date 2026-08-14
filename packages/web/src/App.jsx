@@ -13,6 +13,7 @@ import { WorkflowEditPage, WorkflowNewPage } from "./pages/WorkflowEditPage.jsx"
 import { EventsPage } from "./pages/EventsPage.jsx";
 import { EventDetailPage } from "./pages/EventDetailPage.jsx";
 import { UsersPage } from "./pages/UsersPage.jsx";
+import { SecretsPage } from "./pages/SecretsPage.jsx";
 
 export function App() {
   const qc = useQueryClient();
@@ -57,9 +58,15 @@ export function App() {
         <Route path="/events" element={<EventsPage />} />
         <Route path="/events/:id" element={<EventDetailPage />} />
         {user.role === "admin" ? (
-          <Route path="/users" element={<UsersPage />} />
+          <>
+            <Route path="/users" element={<UsersPage />} />
+            <Route path="/secrets" element={<SecretsPage />} />
+          </>
         ) : (
-          <Route path="/users" element={<Navigate to="/" replace />} />
+          <>
+            <Route path="/users" element={<Navigate to="/" replace />} />
+            <Route path="/secrets" element={<Navigate to="/" replace />} />
+          </>
         )}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

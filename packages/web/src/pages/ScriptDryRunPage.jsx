@@ -4,6 +4,7 @@ import { LuArrowLeft, LuPlay, LuSave } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import {
   useDryRunScript,
+  useOwners,
   useSaveScript,
   useScript,
 } from "../api/hooks.js";
@@ -27,6 +28,8 @@ export function ScriptDryRunPage() {
   const existing = useScript(name, stateContent == null);
   const dryRun = useDryRunScript();
   const save = useSaveScript();
+  const { data: owners = [] } = useOwners();
+  const [owner, setOwner] = useState("default");
 
   const [content, setContent] = useState("");
   const [inputJson, setInputJson] = useState(DEFAULT_INPUT_CONTEXT);
@@ -116,6 +119,7 @@ export function ScriptDryRunPage() {
       content,
       data: ctx.data,
       config: ctx.config,
+      owner,
     });
   }
 
@@ -136,6 +140,21 @@ export function ScriptDryRunPage() {
           <span className="text-sm opacity-60">{lastRun.durationMs}ms</span>
         ) : null}
         <div className="flex-1" />
+        <label className="flex items-center gap-1 text-sm">
+          <span className="opacity-60 hidden sm:inline">Owner</span>
+          <select
+            className="select select-sm"
+            value={owner}
+            onChange={(e) => setOwner(e.target.value)}
+          >
+            {owners.includes(owner) ? null : <option value={owner}>{owner}</option>}
+            {owners.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           type="button"
           className="btn btn-primary btn-sm"

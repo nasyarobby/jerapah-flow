@@ -3,6 +3,18 @@ import path from "path";
 import pino from "pino";
 import * as store from "./store.js";
 import { LOGS_DIR } from "./paths.js";
+import { redactString } from "./secret-value.js";
+
+/**
+ * @param {{ write: (line: string) => unknown }} dest
+ */
+function redactStream(dest) {
+  return {
+    write(line) {
+      dest.write(redactString(typeof line === "string" ? line : String(line)));
+    },
+  };
+}
 
 const LEVEL_TO_NUM = {
   trace: 10,
@@ -27,7 +39,7 @@ let timer = null;
 function enqueueLine(line) {
   let record;
   try {
-    record = JSON.parse(line);
+    record = JSON.parse(redactString(line));
   } catch {
     return;
   }
@@ -103,9 +115,9 @@ const rollingFile = pino.transport({
 export const log = pino(
   { level: process.env.SCRUNNER_LOG_LEVEL ?? "debug" },
   pino.multistream([
-    { level: "debug", stream: process.stdout },
-    { level: "debug", stream: rollingFile },
-    { level: "debug", stream: sqliteStream },
+    { level: "debug", stream: redactStream(process.stdout) },
+    { level: "debug", stream: redactStream(rollingFile) },
+    { level: "debug", stream: redactStream(sqliteStream) },
   ]),
 );
 

@@ -207,12 +207,13 @@ export function createRegistry(server) {
    * @param {string} runId
    * @param {import("pino").Logger} runLog
    * @param {string} key
+   * @param {string} owner
    */
-  async function runLinearSteps(compiled, ctx, runId, runLog, key) {
+  async function runLinearSteps(compiled, ctx, runId, runLog, key, owner) {
     let next = ctx;
     for (const index of compiled.order) {
       const parsed = compiled.steps[index];
-      next = await runCompiledStep(parsed, next, index, runId, runLog, key);
+      next = await runCompiledStep(parsed, next, index, runId, runLog, key, owner);
     }
     return next;
   }
@@ -223,8 +224,9 @@ export function createRegistry(server) {
    * @param {string} runId
    * @param {import("pino").Logger} runLog
    * @param {string} key
+   * @param {string} owner
    */
-  async function runDagSteps(compiled, ctx, runId, runLog, key) {
+  async function runDagSteps(compiled, ctx, runId, runLog, key, owner) {
     const triggerData = ctx.data;
     /** @type {Map<string, unknown>} */
     const outputsById = new Map();
@@ -240,6 +242,7 @@ export function createRegistry(server) {
         runId,
         runLog,
         key,
+        owner,
       );
       if (parsed.id) {
         outputsById.set(parsed.id, last);
@@ -255,8 +258,9 @@ export function createRegistry(server) {
    * @param {string} runId
    * @param {import("pino").Logger} runLog
    * @param {string} key
+   * @param {string} owner
    */
-  async function runCompiledStep(parsed, ctx, index, runId, runLog, key) {
+  async function runCompiledStep(parsed, ctx, index, runId, runLog, key, owner) {
     const script = parsed.kind === "set" ? SET_STEP_SCRIPT : parsed.script;
     const config = parsed.config;
     const step = await store.startStep({
@@ -287,6 +291,7 @@ export function createRegistry(server) {
       const result = await runScript(script, { ...ctx, config }, {
         log: stepLog,
         workflowName: key,
+        owner,
       });
       await store.finishStep(step.id, "success", result);
       return result;
@@ -327,9 +332,9 @@ export function createRegistry(server) {
     try {
       const compiled = compileWorkflowScripts(workflow.scripts);
       if (compiled.dagMode) {
-        ctx = await runDagSteps(compiled, ctx, run.id, runLog, key);
+        ctx = await runDagSteps(compiled, ctx, run.id, runLog, key, owner);
       } else {
-        ctx = await runLinearSteps(compiled, ctx, run.id, runLog, key);
+        ctx = await runLinearSteps(compiled, ctx, run.id, runLog, key, owner);
       }
       await store.finishRun(run.id, "success", ctx);
       return { runId: run.id, status: "success", result: ctx };

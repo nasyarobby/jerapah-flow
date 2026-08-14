@@ -4,6 +4,7 @@ import {
   LuCode,
   LuGitBranch,
   LuHouse,
+  LuKey,
   LuLogOut,
   LuMenu,
   LuMoon,
@@ -28,7 +29,10 @@ export function Layout({ user, children }) {
   const navItems = [
     ...links,
     ...(user.role === "admin"
-      ? [{ to: "/users", label: "Users", icon: LuUsers }]
+      ? [
+          { to: "/secrets", label: "Secrets", icon: LuKey },
+          { to: "/users", label: "Users", icon: LuUsers },
+        ]
       : []),
   ];
 

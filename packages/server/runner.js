@@ -15,7 +15,9 @@ import scriptsPluginFactory from "./src/api/scripts.js";
 import workflowsPluginFactory from "./src/api/workflows.js";
 import runsPlugin from "./src/api/runs.js";
 import dashboardPluginFactory from "./src/api/dashboard.js";
+import secretsPlugin from "./src/api/secrets.js";
 import { WEB_DIST } from "./paths.js";
+import { resolveSecretsKeyMaterial } from "./secrets.js";
 
 await migrate();
 enableLogPersistence();
@@ -26,6 +28,13 @@ const jwtSecret =
 
 if (!jwtSecret) {
   log.error("SCRUNNER_JWT_SECRET is required in production");
+  process.exit(1);
+}
+
+try {
+  resolveSecretsKeyMaterial();
+} catch (err) {
+  log.error(err instanceof Error ? err.message : String(err));
   process.exit(1);
 }
 
@@ -78,6 +87,7 @@ await server.register(
     });
     await api.register(authPlugin);
     await api.register(usersPlugin);
+    await api.register(secretsPlugin);
     await api.register(scriptsPluginFactory(registry));
     await api.register(workflowsPluginFactory(registry));
     await api.register(runsPlugin);

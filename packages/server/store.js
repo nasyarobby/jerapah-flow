@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./db.js";
+import { redactString } from "./secret-value.js";
 
 const MAX_JSON_BYTES = 64 * 1024;
 
@@ -15,6 +16,7 @@ export function serialize(value) {
   } catch {
     json = JSON.stringify({ truncated: true, reason: "unserializable" });
   }
+  json = redactString(json);
   if (Buffer.byteLength(json, "utf8") <= MAX_JSON_BYTES) return json;
   return JSON.stringify({
     truncated: true,

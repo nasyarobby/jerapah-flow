@@ -6,6 +6,8 @@ import axios from "axios";
 import pino from "pino";
 import { createKvApi } from "./kv-store.js";
 import { SCRIPTS_DIR } from "./paths.js";
+import { isSecret, Secret, unwrapSecretsDeep } from "./secret-value.js";
+import { getSecretPlaintext } from "./secrets-store.js";
 
 const hostRequire = createRequire(import.meta.url);
 
@@ -256,7 +258,26 @@ function createScreenedAxios(log) {
     screenRequestUrl(url, log);
     return config;
   });
-  return instance;
+
+  for (const method of [
+    "request",
+    "get",
+    "delete",
+    "head",
+    "options",
+    "post",
+    "put",
+    "patch",
+  ]) {
+    const orig = instance[method].bind(instance);
+    instance[method] = (...args) => orig(...unwrapSecretsDeep(args));
+  }
+
+  return new Proxy(instance, {
+    apply(_target, _thisArg, args) {
+      return instance.request(...args);
+    },
+  });
 }
 
 function createRestrictedRequire(screenedAxios) {
@@ -272,18 +293,45 @@ function createRestrictedRequire(screenedAxios) {
 }
 
 /**
- * @param {{ log: import("pino").Logger, script: string, workflowName: string }} opts
+ * @param {string} owner
  */
-function createScriptSandbox({ log, script, workflowName }) {
+function createSecretsApi(owner) {
+  return {
+    /**
+     * @param {string} name
+     */
+    async get(name) {
+      const value = await getSecretPlaintext(owner, name);
+      if (value == null) {
+        throw new Error(`secret "${name}" not found`);
+      }
+      return new Secret(value);
+    },
+    /**
+     * @param {unknown} value
+     */
+    reveal(value) {
+      if (isSecret(value)) return value.reveal();
+      throw new Error("reveal() expects a Secret from $secrets.get()");
+    },
+  };
+}
+
+/**
+ * @param {{ log: import("pino").Logger, script: string, workflowName: string, owner?: string }} opts
+ */
+function createScriptSandbox({ log, script, workflowName, owner = "default" }) {
   const scriptLog = log.child({ workflow: workflowName, script });
   const $axios = createScreenedAxios(scriptLog);
   const $kv = createKvApi(workflowName);
+  const $secrets = createSecretsApi(owner);
   const sandbox = {
     ...pickBuiltins(),
     log: scriptLog,
     console: createConsole(scriptLog),
     $axios,
     $kv,
+    $secrets,
     require: createRestrictedRequire($axios),
   };
 
@@ -328,10 +376,10 @@ export function extractScriptMeta(fn) {
 
 /**
  * @param {import("node:vm").Script} compiled
- * @param {{ log: import("pino").Logger, script: string, workflowName: string }} opts
+ * @param {{ log: import("pino").Logger, script: string, workflowName: string, owner?: string }} opts
  */
-function instantiateCompiled(compiled, { log, script, workflowName }) {
-  const sandbox = createScriptSandbox({ log, script, workflowName });
+function instantiateCompiled(compiled, { log, script, workflowName, owner }) {
+  const sandbox = createScriptSandbox({ log, script, workflowName, owner });
   return compiled.runInContext(sandbox);
 }
 
@@ -341,7 +389,7 @@ function instantiateCompiled(compiled, { log, script, workflowName }) {
  *
  * @param {string} script
  * @param {string} source
- * @param {{ log?: import("pino").Logger, workflowName?: string }} [opts]
+ * @param {{ log?: import("pino").Logger, workflowName?: string, owner?: string }} [opts]
  */
 export function instantiateScriptSource(script, source, opts = {}) {
   const compiled = compileScriptSource(source, script);
@@ -349,6 +397,7 @@ export function instantiateScriptSource(script, source, opts = {}) {
     log: opts.log ?? inspectLog,
     script,
     workflowName: opts.workflowName ?? "inspect",
+    owner: opts.owner ?? "default",
   });
   return { fn, ...extractScriptMeta(fn) };
 }
@@ -390,11 +439,11 @@ function loadCompiledScript(script) {
  *
  * @param {string} script
  * @param {unknown} ctx
- * @param {{ log: import("pino").Logger, workflowName: string }} opts
+ * @param {{ log: import("pino").Logger, workflowName: string, owner?: string }} opts
  */
-export async function runScript(script, ctx, { log, workflowName }) {
+export async function runScript(script, ctx, { log, workflowName, owner }) {
   const compiled = loadCompiledScript(script);
-  const fn = instantiateCompiled(compiled, { log, script, workflowName });
+  const fn = instantiateCompiled(compiled, { log, script, workflowName, owner });
   return await fn(ctx);
 }
 
@@ -404,9 +453,9 @@ export async function runScript(script, ctx, { log, workflowName }) {
  * @param {string} script
  * @param {string} source
  * @param {unknown} ctx
- * @param {{ log: import("pino").Logger, workflowName: string }} opts
+ * @param {{ log: import("pino").Logger, workflowName: string, owner?: string }} opts
  */
-export async function runScriptSource(script, source, ctx, { log, workflowName }) {
-  const { fn } = instantiateScriptSource(script, source, { log, workflowName });
+export async function runScriptSource(script, source, ctx, { log, workflowName, owner }) {
+  const { fn } = instantiateScriptSource(script, source, { log, workflowName, owner });
   return await fn(ctx);
 }

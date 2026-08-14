@@ -1,4 +1,5 @@
 import pino from "pino";
+import { redactString } from "../../secret-value.js";
 
 const LEVEL_TO_NUM = {
   trace: 10,
@@ -22,7 +23,9 @@ export function createDryRunLogger() {
     write(line) {
       let record;
       try {
-        record = JSON.parse(typeof line === "string" ? line : String(line));
+        record = JSON.parse(
+          redactString(typeof line === "string" ? line : String(line)),
+        );
       } catch {
         return;
       }
@@ -43,7 +46,7 @@ export function createDryRunLogger() {
       logs.push({
         ts,
         level,
-        msg,
+        msg: typeof msg === "string" ? redactString(msg) : msg,
         payload: Object.keys(rest).length ? rest : null,
       });
     },
@@ -60,14 +63,16 @@ export function safeSerialize(value) {
   const seen = new WeakSet();
   try {
     return JSON.parse(
-      JSON.stringify(value, (_key, v) => {
-        if (typeof v === "bigint") return v.toString();
-        if (typeof v === "object" && v !== null) {
-          if (seen.has(v)) return "[Circular]";
-          seen.add(v);
-        }
-        return v;
-      }),
+      redactString(
+        JSON.stringify(value, (_key, v) => {
+          if (typeof v === "bigint") return v.toString();
+          if (typeof v === "object" && v !== null) {
+            if (seen.has(v)) return "[Circular]";
+            seen.add(v);
+          }
+          return v;
+        }),
+      ),
     );
   } catch (err) {
     return {

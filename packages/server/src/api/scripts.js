@@ -85,11 +85,20 @@ export default function scriptsPluginFactory(registry) {
         return reply.code(err.statusCode ?? 400).send({ error: err.message });
       }
 
-      const body = /** @type {{ content?: string, data?: unknown, config?: unknown }} */ (
+      const body = /** @type {{ content?: string, data?: unknown, config?: unknown, owner?: string }} */ (
         req.body ?? {}
       );
       if (typeof body.content !== "string") {
         return reply.code(400).send({ error: "content is required" });
+      }
+
+      let owner = "default";
+      if (body.owner != null && body.owner !== "") {
+        try {
+          owner = fsStore.assertOwner(String(body.owner));
+        } catch (err) {
+          return reply.code(err.statusCode ?? 400).send({ error: err.message });
+        }
       }
 
       const ctx = {
@@ -104,6 +113,7 @@ export default function scriptsPluginFactory(registry) {
         const { fn, meta, metaError } = instantiateScriptSource(name, body.content, {
           log,
           workflowName: "dry-run",
+          owner,
         });
         const output = await fn(ctx);
         return {
