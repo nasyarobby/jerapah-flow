@@ -317,10 +317,28 @@ function createSecretsApi(owner) {
   };
 }
 
+const $workflowsStub = {
+  async trigger() {
+    throw new Error("workflow runner is not available");
+  },
+};
+
 /**
- * @param {{ log: import("pino").Logger, script: string, workflowName: string, owner?: string }} opts
+ * @param {{
+ *   log: import("pino").Logger,
+ *   script: string,
+ *   workflowName: string,
+ *   owner?: string,
+ *   $workflows?: { trigger: (name: string, data?: unknown) => Promise<unknown> },
+ * }} opts
  */
-function createScriptSandbox({ log, script, workflowName, owner = "default" }) {
+function createScriptSandbox({
+  log,
+  script,
+  workflowName,
+  owner = "default",
+  $workflows = $workflowsStub,
+}) {
   const scriptLog = log.child({ workflow: workflowName, script });
   const $axios = createScreenedAxios(scriptLog);
   const $kv = createKvApi(workflowName);
@@ -332,6 +350,7 @@ function createScriptSandbox({ log, script, workflowName, owner = "default" }) {
     $axios,
     $kv,
     $secrets,
+    $workflows,
     require: createRestrictedRequire($axios),
   };
 
@@ -376,10 +395,16 @@ export function extractScriptMeta(fn) {
 
 /**
  * @param {import("node:vm").Script} compiled
- * @param {{ log: import("pino").Logger, script: string, workflowName: string, owner?: string }} opts
+ * @param {{
+ *   log: import("pino").Logger,
+ *   script: string,
+ *   workflowName: string,
+ *   owner?: string,
+ *   $workflows?: { trigger: (name: string, data?: unknown) => Promise<unknown> },
+ * }} opts
  */
-function instantiateCompiled(compiled, { log, script, workflowName, owner }) {
-  const sandbox = createScriptSandbox({ log, script, workflowName, owner });
+function instantiateCompiled(compiled, { log, script, workflowName, owner, $workflows }) {
+  const sandbox = createScriptSandbox({ log, script, workflowName, owner, $workflows });
   return compiled.runInContext(sandbox);
 }
 
@@ -389,7 +414,12 @@ function instantiateCompiled(compiled, { log, script, workflowName, owner }) {
  *
  * @param {string} script
  * @param {string} source
- * @param {{ log?: import("pino").Logger, workflowName?: string, owner?: string }} [opts]
+ * @param {{
+ *   log?: import("pino").Logger,
+ *   workflowName?: string,
+ *   owner?: string,
+ *   $workflows?: { trigger: (name: string, data?: unknown) => Promise<unknown> },
+ * }} [opts]
  */
 export function instantiateScriptSource(script, source, opts = {}) {
   const compiled = compileScriptSource(source, script);
@@ -398,6 +428,7 @@ export function instantiateScriptSource(script, source, opts = {}) {
     script,
     workflowName: opts.workflowName ?? "inspect",
     owner: opts.owner ?? "default",
+    $workflows: opts.$workflows,
   });
   return { fn, ...extractScriptMeta(fn) };
 }
@@ -439,11 +470,22 @@ function loadCompiledScript(script) {
  *
  * @param {string} script
  * @param {unknown} ctx
- * @param {{ log: import("pino").Logger, workflowName: string, owner?: string }} opts
+ * @param {{
+ *   log: import("pino").Logger,
+ *   workflowName: string,
+ *   owner?: string,
+ *   $workflows?: { trigger: (name: string, data?: unknown) => Promise<unknown> },
+ * }} opts
  */
-export async function runScript(script, ctx, { log, workflowName, owner }) {
+export async function runScript(script, ctx, { log, workflowName, owner, $workflows }) {
   const compiled = loadCompiledScript(script);
-  const fn = instantiateCompiled(compiled, { log, script, workflowName, owner });
+  const fn = instantiateCompiled(compiled, {
+    log,
+    script,
+    workflowName,
+    owner,
+    $workflows,
+  });
   return await fn(ctx);
 }
 
@@ -453,9 +495,19 @@ export async function runScript(script, ctx, { log, workflowName, owner }) {
  * @param {string} script
  * @param {string} source
  * @param {unknown} ctx
- * @param {{ log: import("pino").Logger, workflowName: string, owner?: string }} opts
+ * @param {{
+ *   log: import("pino").Logger,
+ *   workflowName: string,
+ *   owner?: string,
+ *   $workflows?: { trigger: (name: string, data?: unknown) => Promise<unknown> },
+ * }} opts
  */
-export async function runScriptSource(script, source, ctx, { log, workflowName, owner }) {
-  const { fn } = instantiateScriptSource(script, source, { log, workflowName, owner });
+export async function runScriptSource(script, source, ctx, { log, workflowName, owner, $workflows }) {
+  const { fn } = instantiateScriptSource(script, source, {
+    log,
+    workflowName,
+    owner,
+    $workflows,
+  });
   return await fn(ctx);
 }

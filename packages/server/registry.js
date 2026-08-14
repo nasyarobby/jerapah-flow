@@ -21,6 +21,18 @@ import * as fsStore from "./fs-store.js";
  * @typedef {{ owner: string, file: string, workflow: any }} WorkflowEntry
  */
 
+const MAX_WORKFLOW_TRIGGER_DEPTH = 8;
+
+/**
+ * @param {unknown} workflow
+ */
+function hasWorkflowTrigger(workflow) {
+  if (!workflow || typeof workflow !== "object") return false;
+  const triggers = /** @type {{ triggers?: Array<{ type?: string }> }} */ (workflow)
+    .triggers;
+  return (triggers ?? []).some((t) => t?.type === "workflow");
+}
+
 /**
  * @param {import("fastify").FastifyInstance} server
  */
@@ -35,6 +47,49 @@ export function createRegistry(server) {
   let pruneTask = null;
   /** @type {Set<string>} */
   const registeredHttpRoutes = new Set();
+
+  /**
+   * Resolve a same-owner workflow that opts in with `type: workflow`.
+   * Prefers YAML `name`, then filename (`name` or `name.yaml`).
+   *
+   * @param {string} owner
+   * @param {string} name
+   */
+  function resolveWorkflowTriggerKey(owner, name) {
+    if (typeof name !== "string" || name.length === 0) {
+      throw new Error("workflow name is required");
+    }
+
+    /** @type {string[]} */
+    const byName = [];
+    for (const [key, entry] of workflows) {
+      if (entry.owner !== owner) continue;
+      if (entry.workflow?.enabled === false) continue;
+      if (!hasWorkflowTrigger(entry.workflow)) continue;
+      if (entry.workflow?.name === name) byName.push(key);
+    }
+    if (byName.length === 1) return byName[0];
+    if (byName.length > 1) {
+      throw new Error(`ambiguous workflow name "${name}"`);
+    }
+
+    const fileCandidates =
+      name.endsWith(".yaml") || name.endsWith(".yml")
+        ? [`${owner}/${name}`]
+        : [`${owner}/${name}`, `${owner}/${name}.yaml`];
+
+    for (const key of fileCandidates) {
+      const entry = workflows.get(key);
+      if (!entry) continue;
+      if (entry.workflow?.enabled === false) continue;
+      if (!hasWorkflowTrigger(entry.workflow)) continue;
+      return key;
+    }
+
+    throw new Error(
+      `workflow "${name}" not found or has no workflow trigger (owner "${owner}")`,
+    );
+  }
 
   function registerWorkflows() {
     workflows.clear();
@@ -208,12 +263,22 @@ export function createRegistry(server) {
    * @param {import("pino").Logger} runLog
    * @param {string} key
    * @param {string} owner
+   * @param {number} depth
    */
-  async function runLinearSteps(compiled, ctx, runId, runLog, key, owner) {
+  async function runLinearSteps(compiled, ctx, runId, runLog, key, owner, depth) {
     let next = ctx;
     for (const index of compiled.order) {
       const parsed = compiled.steps[index];
-      next = await runCompiledStep(parsed, next, index, runId, runLog, key, owner);
+      next = await runCompiledStep(
+        parsed,
+        next,
+        index,
+        runId,
+        runLog,
+        key,
+        owner,
+        depth,
+      );
     }
     return next;
   }
@@ -225,8 +290,9 @@ export function createRegistry(server) {
    * @param {import("pino").Logger} runLog
    * @param {string} key
    * @param {string} owner
+   * @param {number} depth
    */
-  async function runDagSteps(compiled, ctx, runId, runLog, key, owner) {
+  async function runDagSteps(compiled, ctx, runId, runLog, key, owner, depth) {
     const triggerData = ctx.data;
     /** @type {Map<string, unknown>} */
     const outputsById = new Map();
@@ -243,12 +309,46 @@ export function createRegistry(server) {
         runLog,
         key,
         owner,
+        depth,
       );
       if (parsed.id) {
         outputsById.set(parsed.id, last);
       }
     }
     return last;
+  }
+
+  /**
+   * @param {string} owner
+   * @param {string} parentKey
+   * @param {string} parentRunId
+   * @param {number} depth
+   */
+  function createWorkflowsApi(owner, parentKey, parentRunId, depth) {
+    return {
+      /**
+       * @param {string} name
+       * @param {unknown} [data]
+       */
+      async trigger(name, data) {
+        if (depth >= MAX_WORKFLOW_TRIGGER_DEPTH) {
+          throw new Error(
+            `workflow trigger depth limit (${MAX_WORKFLOW_TRIGGER_DEPTH}) exceeded`,
+          );
+        }
+        const destKey = resolveWorkflowTriggerKey(owner, name);
+        return runWorkflow(
+          destKey,
+          { data },
+          { type: "workflow", detail: parentKey },
+          {
+            parentRunId,
+            depth: depth + 1,
+            detach: true,
+          },
+        );
+      },
+    };
   }
 
   /**
@@ -259,8 +359,18 @@ export function createRegistry(server) {
    * @param {import("pino").Logger} runLog
    * @param {string} key
    * @param {string} owner
+   * @param {number} depth
    */
-  async function runCompiledStep(parsed, ctx, index, runId, runLog, key, owner) {
+  async function runCompiledStep(
+    parsed,
+    ctx,
+    index,
+    runId,
+    runLog,
+    key,
+    owner,
+    depth,
+  ) {
     const script = parsed.kind === "set" ? SET_STEP_SCRIPT : parsed.script;
     const config = parsed.config;
     const step = await store.startStep({
@@ -292,6 +402,7 @@ export function createRegistry(server) {
         log: stepLog,
         workflowName: key,
         owner,
+        $workflows: createWorkflowsApi(owner, key, runId, depth),
       });
       await store.finishStep(step.id, "success", result);
       return result;
@@ -305,8 +416,17 @@ export function createRegistry(server) {
    * @param {string} key
    * @param {{ data?: unknown }} context
    * @param {{ type: string, detail?: string | null }} trigger
+   * @param {{
+   *   parentRunId?: string | null,
+   *   depth?: number,
+   *   detach?: boolean,
+   * }} [opts]
    */
-  async function runWorkflow(key, context, trigger) {
+  async function runWorkflow(key, context, trigger, opts = {}) {
+    const parentRunId = opts.parentRunId ?? null;
+    const depth = opts.depth ?? 0;
+    const detach = opts.detach === true;
+
     const entry = workflows.get(key);
     if (!entry) {
       log.error({ workflow: key }, "workflow not found");
@@ -320,33 +440,62 @@ export function createRegistry(server) {
       workflowName: workflow?.name,
       trigger,
       input: context.data,
+      parentRunId,
     });
     const runLog = log.child({ runId: run.id, owner, workflow: key });
-    runLog.debug("running workflow");
+    runLog.debug(detach ? "running workflow (detached)" : "running workflow");
 
-    let ctx = {
+    const initialCtx = {
       ...context,
       data: context.data ?? workflow.data ?? null,
     };
 
-    try {
-      const compiled = compileWorkflowScripts(workflow.scripts);
-      if (compiled.dagMode) {
-        ctx = await runDagSteps(compiled, ctx, run.id, runLog, key, owner);
-      } else {
-        ctx = await runLinearSteps(compiled, ctx, run.id, runLog, key, owner);
+    const execute = async () => {
+      let ctx = initialCtx;
+      try {
+        const compiled = compileWorkflowScripts(workflow.scripts);
+        if (compiled.dagMode) {
+          ctx = await runDagSteps(
+            compiled,
+            ctx,
+            run.id,
+            runLog,
+            key,
+            owner,
+            depth,
+          );
+        } else {
+          ctx = await runLinearSteps(
+            compiled,
+            ctx,
+            run.id,
+            runLog,
+            key,
+            owner,
+            depth,
+          );
+        }
+        await store.finishRun(run.id, "success", ctx);
+        return { runId: run.id, status: "success", result: ctx };
+      } catch (err) {
+        runLog.error({ err }, "workflow failed");
+        await store.finishRun(run.id, "failed", null, err);
+        return {
+          runId: run.id,
+          status: "failed",
+          error: err instanceof Error ? err.message : String(err),
+        };
       }
-      await store.finishRun(run.id, "success", ctx);
-      return { runId: run.id, status: "success", result: ctx };
-    } catch (err) {
-      runLog.error({ err }, "workflow failed");
-      await store.finishRun(run.id, "failed", null, err);
-      return {
-        runId: run.id,
-        status: "failed",
-        error: err instanceof Error ? err.message : String(err),
-      };
+    };
+
+    if (detach) {
+      execute().catch((err) => {
+        runLog.error({ err }, "detached workflow failed unexpectedly");
+      });
+      return { runId: run.id, status: "started" };
     }
+
+    return execute();
   }
 
   function reregister() {

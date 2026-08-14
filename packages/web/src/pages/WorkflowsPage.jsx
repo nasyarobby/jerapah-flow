@@ -211,12 +211,14 @@ function triggerLabel(t) {
   const type = String(t?.type ?? "").toLowerCase();
   if (type === "cron") return t.schedule || "cron";
   if (type === "http") return t.path || "/";
+  if (type === "workflow") return "";
   return t?.type ?? "—";
 }
 
 function triggerKind(t) {
   const type = String(t?.type ?? "").toLowerCase();
   if (type === "http") return t.method || "POST";
+  if (type === "workflow") return "workflow";
   return t?.type ?? "—";
 }
 

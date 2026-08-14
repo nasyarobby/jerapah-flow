@@ -47,6 +47,7 @@ function mermaidLabel(text) {
 function triggerLabel(t) {
   const type = String(t?.type ?? "").toLowerCase();
   if (type === "cron") return `cron ${t.schedule ?? ""}`.trim();
+  if (type === "workflow") return "workflow";
   const method = t?.method ?? "POST";
   const path = t?.path ?? "";
   return `${method} ${path}`.trim();
