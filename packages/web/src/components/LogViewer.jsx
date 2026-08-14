@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { LuX } from "react-icons/lu";
 import { levelName } from "../lib/format.jsx";
 
-export function LogViewer({ logs = [], className = "" }) {
+export function LogViewer({ logs = [], filters = [], onRemoveFilter, className = "" }) {
   const [wordWrap, setWordWrap] = useState(true);
 
   return (
@@ -18,6 +19,23 @@ export function LogViewer({ logs = [], className = "" }) {
           />
         </label>
       </div>
+      {filters.length > 0 ? (
+        <div className="mb-2 flex shrink-0 flex-wrap gap-1">
+          {filters.map((f) => (
+            <span key={f.id} className="badge badge-sm badge-outline gap-1">
+              {f.label}
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs btn-square -mr-1"
+                aria-label={`Remove filter ${f.label}`}
+                onClick={() => onRemoveFilter?.(f.id)}
+              >
+                <LuX className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="mockup-code min-h-0 flex-1 overflow-auto text-xs">
         {logs.length === 0 ? (
           <div className="flex gap-3 px-5 py-0.5 font-mono opacity-50">

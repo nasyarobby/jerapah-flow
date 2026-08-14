@@ -1,5 +1,6 @@
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { LuArrowLeft } from "react-icons/lu";
+import { LuArrowLeft, LuFilter } from "react-icons/lu";
 import { useRun } from "../api/hooks.js";
 import { LogViewer } from "../components/LogViewer.jsx";
 import { formatTime, StatusBadge } from "../lib/format.jsx";
@@ -11,6 +12,10 @@ function stepLabel(s) {
   return s.script;
 }
 
+function filterLabel(s) {
+  return `#${s.step_index} ${stepLabel(s)}`;
+}
+
 function isEditableScript(s) {
   return Boolean(s.script) && s.script !== "set";
 }
@@ -18,6 +23,29 @@ function isEditableScript(s) {
 export function EventDetailPage() {
   const { id } = useParams();
   const { data: run, isLoading, error } = useRun(id);
+  const [stepFilters, setStepFilters] = useState([]);
+
+  const steps = run?.steps ?? [];
+  const logs = run?.logs ?? [];
+  const logFilters = useMemo(
+    () =>
+      stepFilters
+        .map((stepId) => steps.find((s) => s.id === stepId))
+        .filter(Boolean)
+        .map((s) => ({ id: s.id, label: filterLabel(s) })),
+    [stepFilters, steps],
+  );
+  const visibleLogs = useMemo(() => {
+    if (stepFilters.length === 0) return logs;
+    const ids = new Set(stepFilters);
+    return logs.filter((l) => ids.has(l.step_id));
+  }, [logs, stepFilters]);
+
+  function toggleStepFilter(stepId) {
+    setStepFilters((prev) =>
+      prev.includes(stepId) ? prev.filter((id) => id !== stepId) : [...prev, stepId],
+    );
+  }
 
   if (isLoading) return <span className="loading loading-spinner loading-lg" />;
   if (error || !run) return <p className="text-error">Event not found</p>;
@@ -71,10 +99,11 @@ export function EventDetailPage() {
                 <th>Status</th>
                 <th>Duration</th>
                 <th>Error</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {(run.steps ?? []).map((s) => (
+              {steps.map((s) => (
                 <tr key={s.id}>
                   <td>{s.step_index}</td>
                   <td className="font-mono">
@@ -91,6 +120,17 @@ export function EventDetailPage() {
                   </td>
                   <td>{s.duration_ms != null ? `${s.duration_ms}ms` : "—"}</td>
                   <td className="text-error text-xs">{s.error || ""}</td>
+                  <td className="text-right">
+                    <button
+                      type="button"
+                      className={`btn btn-ghost btn-xs btn-square ${stepFilters.includes(s.id) ? "btn-active" : ""}`}
+                      aria-label={`Filter logs for ${filterLabel(s)}`}
+                      aria-pressed={stepFilters.includes(s.id)}
+                      onClick={() => toggleStepFilter(s.id)}
+                    >
+                      <LuFilter className="size-3.5" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -98,7 +138,11 @@ export function EventDetailPage() {
         </div>
       </section>
 
-      <LogViewer logs={run.logs ?? []} />
+      <LogViewer
+        logs={visibleLogs}
+        filters={logFilters}
+        onRemoveFilter={(stepId) => toggleStepFilter(stepId)}
+      />
     </div>
   );
 }
