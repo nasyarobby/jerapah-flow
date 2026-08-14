@@ -188,15 +188,6 @@ function createConsole(logger) {
 
 function isBlockedHostname(hostname) {
   const host = hostname.toLowerCase().replace(/\.$/, "");
-  if (
-    host === "localhost" ||
-    host === "0.0.0.0" ||
-    host === "[::]" ||
-    host === "[::1]" ||
-    host.endsWith(".localhost")
-  ) {
-    return true;
-  }
 
   if (host === "metadata.google.internal" || host === "metadata.goog") {
     return true;
@@ -214,7 +205,6 @@ function isBlockedHostname(hostname) {
 
   const [a, b] = octets;
   if (a === 10) return true;
-  if (a === 127) return true;
   if (a === 0) return true;
   if (a === 169 && b === 254) return true;
   if (a === 172 && b >= 16 && b <= 31) return true;
