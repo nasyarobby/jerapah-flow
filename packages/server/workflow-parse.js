@@ -1,12 +1,35 @@
+import jsonata from "jsonata";
+
+const AS_IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const RESERVED_AS = new Set(["data", "config"]);
+
+export const SET_STEP_SCRIPT = "set";
+
 /**
  * @typedef {{ alias: string, from: string }} NeedEdge
  * @typedef {{
+ *   kind: "script",
  *   script: string,
  *   config: unknown | null,
+ *   expression?: undefined,
+ *   as?: undefined,
  *   id: string | null,
  *   needsKind: "none" | "list" | "map",
  *   needs: NeedEdge[],
- * }} ParsedStep
+ *   when: string | null,
+ * }} ParsedScriptStep
+ * @typedef {{
+ *   kind: "set",
+ *   script: typeof SET_STEP_SCRIPT,
+ *   config: { expression: string, as: string },
+ *   expression: string,
+ *   as: string,
+ *   id: string | null,
+ *   needsKind: "none",
+ *   needs: NeedEdge[],
+ *   when: string | null,
+ * }} ParsedSetStep
+ * @typedef {ParsedScriptStep | ParsedSetStep} ParsedStep
  * @typedef {ParsedStep & { index: number }} CompiledStep
  * @typedef {{
  *   dagMode: boolean,
@@ -16,30 +39,36 @@
  */
 
 /**
- * @param {unknown} step
- * @returns {ParsedStep}
+ * Compile a JSONata source so save/load fails on syntax errors.
+ * @param {string} source
+ * @param {string} label
  */
-export function parseScriptStep(step) {
-  if (typeof step === "string") {
-    return {
-      script: step,
-      config: null,
-      id: null,
-      needsKind: "none",
-      needs: [],
-    };
+export function compileJsonata(source, label) {
+  try {
+    return jsonata(source);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Invalid ${label}: ${msg}`);
   }
-  if (step?.script) {
-    const { needsKind, needs } = parseNeeds(step.needs);
-    return {
-      script: step.script,
-      config: step.config ?? null,
-      id: parseOptionalId(step.id),
-      needsKind,
-      needs,
-    };
-  }
-  throw new Error(`Invalid script step: ${JSON.stringify(step)}`);
+}
+
+/**
+ * @param {unknown} value
+ */
+export function isJsonataTruthy(value) {
+  if (value == null || value === false) return false;
+  if (Array.isArray(value) && value.length === 0) return false;
+  return true;
+}
+
+/**
+ * Evaluate JSONata against the full ctx (jsonata 2 may return a Promise).
+ * @param {string} source
+ * @param {unknown} ctx
+ */
+export async function evaluateJsonata(source, ctx) {
+  const result = compileJsonata(source, "expression").evaluate(ctx);
+  return await result;
 }
 
 /**
@@ -50,6 +79,56 @@ export function parseScriptStep(step) {
 export function namespacedPath(owner, triggerPath) {
   const cleaned = String(triggerPath).replace(/^\/+/, "");
   return `/u/${owner}/${cleaned}`;
+}
+
+/**
+ * @param {unknown} step
+ * @returns {ParsedStep}
+ */
+export function parseScriptStep(step) {
+  if (typeof step === "string") {
+    return {
+      kind: "script",
+      script: step,
+      config: null,
+      id: null,
+      needsKind: "none",
+      needs: [],
+      when: null,
+    };
+  }
+  if (step == null || typeof step !== "object" || Array.isArray(step)) {
+    throw new Error(`Invalid script step: ${JSON.stringify(step)}`);
+  }
+
+  const hasScript = step.script != null && step.script !== "";
+  const hasSet = step.set != null;
+
+  if (hasScript && hasSet) {
+    throw new Error("Step cannot have both script and set");
+  }
+
+  if (hasSet) {
+    return parseSetStep(step);
+  }
+
+  if (hasScript) {
+    if (typeof step.script !== "string") {
+      throw new Error(`Invalid script step: ${JSON.stringify(step)}`);
+    }
+    const { needsKind, needs } = parseNeeds(step.needs);
+    return {
+      kind: "script",
+      script: step.script,
+      config: step.config ?? null,
+      id: parseOptionalId(step.id),
+      needsKind,
+      needs,
+      when: parseWhen(step.when),
+    };
+  }
+
+  throw new Error(`Invalid script step: ${JSON.stringify(step)}`);
 }
 
 /**
@@ -79,6 +158,18 @@ export function compileWorkflowScripts(scripts) {
       throw new Error(`Duplicate step id: ${step.id}`);
     }
     ids.set(step.id, step.index);
+  }
+
+  if (dagMode) {
+    for (const step of steps) {
+      const who = step.id ?? String(step.index);
+      if (step.kind === "set") {
+        throw new Error(`set steps are not allowed in DAG workflows (step ${who})`);
+      }
+      if (step.when) {
+        throw new Error(`when is not allowed in DAG workflows (step ${who})`);
+      }
+    }
   }
 
   if (!dagMode) {
@@ -168,6 +259,56 @@ export function mergeStepData(step, outputsById, triggerData) {
 }
 
 /**
+ * @param {object} step
+ * @returns {ParsedSetStep}
+ */
+function parseSetStep(step) {
+  if (step.needs != null) {
+    throw new Error("needs is not allowed on set steps");
+  }
+  const spec = step.set;
+  if (spec == null || typeof spec !== "object" || Array.isArray(spec)) {
+    throw new Error(`Invalid set step: ${JSON.stringify(step)}`);
+  }
+  const expression = spec.expression;
+  const as = spec.as;
+  if (typeof expression !== "string" || !expression.trim()) {
+    throw new Error("set.expression is required");
+  }
+  if (typeof as !== "string" || !AS_IDENT.test(as)) {
+    throw new Error(`Invalid set.as: ${JSON.stringify(as)}`);
+  }
+  if (RESERVED_AS.has(as)) {
+    throw new Error(`set.as "${as}" is reserved`);
+  }
+  compileJsonata(expression, "set.expression");
+  return {
+    kind: "set",
+    script: SET_STEP_SCRIPT,
+    config: { expression, as },
+    expression,
+    as,
+    id: parseOptionalId(step.id),
+    needsKind: "none",
+    needs: [],
+    when: parseWhen(step.when),
+  };
+}
+
+/**
+ * @param {unknown} when
+ * @returns {string | null}
+ */
+function parseWhen(when) {
+  if (when == null || when === "") return null;
+  if (typeof when !== "string") {
+    throw new Error(`Invalid when: ${JSON.stringify(when)}`);
+  }
+  compileJsonata(when, "when");
+  return when;
+}
+
+/**
  * @param {unknown} id
  * @returns {string | null}
  */
@@ -181,7 +322,7 @@ function parseOptionalId(id) {
 
 /**
  * @param {unknown} needs
- * @returns {{ needsKind: ParsedStep["needsKind"], needs: NeedEdge[] }}
+ * @returns {{ needsKind: ParsedScriptStep["needsKind"], needs: NeedEdge[] }}
  */
 function parseNeeds(needs) {
   if (needs == null) {

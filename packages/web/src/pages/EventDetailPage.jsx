@@ -4,6 +4,17 @@ import { useRun } from "../api/hooks.js";
 import { LogViewer } from "../components/LogViewer.jsx";
 import { formatTime, StatusBadge } from "../lib/format.jsx";
 
+function stepLabel(s) {
+  if (s.script === "set") {
+    return s.config?.as ? `set:${s.config.as}` : "set";
+  }
+  return s.script;
+}
+
+function isEditableScript(s) {
+  return Boolean(s.script) && s.script !== "set";
+}
+
 export function EventDetailPage() {
   const { id } = useParams();
   const { data: run, isLoading, error } = useRun(id);
@@ -67,9 +78,13 @@ export function EventDetailPage() {
                 <tr key={s.id}>
                   <td>{s.step_index}</td>
                   <td className="font-mono">
-                    <Link className="link" to={`/scripts/${encodeURIComponent(s.script)}/edit`}>
-                      {s.script}
-                    </Link>
+                    {isEditableScript(s) ? (
+                      <Link className="link" to={`/scripts/${encodeURIComponent(s.script)}/edit`}>
+                        {stepLabel(s)}
+                      </Link>
+                    ) : (
+                      stepLabel(s)
+                    )}
                   </td>
                   <td>
                     <StatusBadge status={s.status} />

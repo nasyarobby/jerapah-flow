@@ -13,7 +13,9 @@ export function StatusBadge({ status }) {
         ? "badge-error"
         : status === "running"
           ? "badge-warning"
-          : "badge-ghost";
+          : status === "skipped"
+            ? "badge-info"
+            : "badge-ghost";
   return <span className={`badge badge-sm ${cls}`}>{status ?? "—"}</span>;
 }
 

@@ -126,7 +126,7 @@ export async function startStep({ runId, index, script, config = null }) {
 
 /**
  * @param {string} id
- * @param {"success" | "failed"} status
+ * @param {"success" | "failed" | "skipped"} status
  * @param {unknown} [output]
  * @param {Error | unknown} [err]
  */

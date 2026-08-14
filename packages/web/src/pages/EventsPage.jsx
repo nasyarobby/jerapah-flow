@@ -38,6 +38,7 @@ export function EventsPage() {
           <option value="running">running</option>
           <option value="success">success</option>
           <option value="failed">failed</option>
+          <option value="skipped">skipped</option>
         </select>
       </div>
       {isLoading ? (

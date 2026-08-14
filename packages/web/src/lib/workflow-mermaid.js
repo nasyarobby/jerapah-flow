@@ -1,12 +1,26 @@
 function parseStep(step) {
   if (typeof step === "string") {
-    return { script: step, id: null, needs: null };
+    return { kind: "script", script: step, id: null, needs: null, when: null, as: null };
+  }
+  if (step?.set) {
+    const as = typeof step.set?.as === "string" && step.set.as ? step.set.as : "set";
+    return {
+      kind: "set",
+      script: null,
+      as,
+      id: typeof step.id === "string" && step.id ? step.id : null,
+      needs: null,
+      when: typeof step.when === "string" && step.when ? step.when : null,
+    };
   }
   if (step?.script) {
     return {
+      kind: "script",
       script: step.script,
+      as: null,
       id: typeof step.id === "string" && step.id ? step.id : null,
       needs: step.needs ?? null,
+      when: typeof step.when === "string" && step.when ? step.when : null,
     };
   }
   return null;
@@ -36,6 +50,15 @@ function triggerLabel(t) {
   const method = t?.method ?? "POST";
   const path = t?.path ?? "";
   return `${method} ${path}`.trim();
+}
+
+function stepLabel(s) {
+  if (s.kind === "set") {
+    const base = s.id ? `${s.id}: set ${s.as}` : `set ${s.as}`;
+    return s.when ? `${base} when: ${s.when}` : base;
+  }
+  const base = s.id ? `${s.id}: ${s.script}` : s.script;
+  return s.when ? `${base} when: ${s.when}` : base;
 }
 
 export function workflowToFlowchart(parsed) {
@@ -72,9 +95,13 @@ export function workflowToFlowchart(parsed) {
   }
 
   for (const s of parsedSteps) {
-    scriptIds[s.mermaidId] = s.script;
-    const label = s.id ? `${s.id}: ${s.script}` : s.script;
-    lines.push(`  ${s.mermaidId}["${mermaidLabel(label)}"]`);
+    const label = mermaidLabel(stepLabel(s));
+    if (s.kind === "set") {
+      lines.push(`  ${s.mermaidId}(["${label}"])`);
+    } else {
+      scriptIds[s.mermaidId] = s.script;
+      lines.push(`  ${s.mermaidId}["${label}"]`);
+    }
   }
 
   if (dagMode) {

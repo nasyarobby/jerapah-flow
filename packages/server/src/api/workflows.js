@@ -26,7 +26,8 @@ function scriptNames(workflow) {
   const names = [];
   for (const raw of workflow.scripts ?? []) {
     try {
-      names.push(parseScriptStep(raw).script);
+      const parsed = parseScriptStep(raw);
+      names.push(parsed.kind === "set" ? `set:${parsed.as}` : parsed.script);
     } catch {
       names.push(null);
     }

@@ -7,7 +7,10 @@ import { log } from "./logger.js";
 import * as store from "./store.js";
 import { clearScriptCache, runScript } from "./script-sandbox.js";
 import {
+  SET_STEP_SCRIPT,
   compileWorkflowScripts,
+  evaluateJsonata,
+  isJsonataTruthy,
   mergeStepData,
   namespacedPath,
   parseScriptStep,
@@ -209,7 +212,7 @@ export function createRegistry(server) {
     let next = ctx;
     for (const index of compiled.order) {
       const parsed = compiled.steps[index];
-      next = await executeStep(parsed, next, index, runId, runLog, key);
+      next = await runCompiledStep(parsed, next, index, runId, runLog, key);
     }
     return next;
   }
@@ -230,7 +233,7 @@ export function createRegistry(server) {
     for (const [orderIndex, stepIndex] of compiled.order.entries()) {
       const parsed = compiled.steps[stepIndex];
       const data = mergeStepData(parsed, outputsById, triggerData);
-      last = await executeStep(
+      last = await runCompiledStep(
         parsed,
         { ...ctx, data },
         orderIndex,
@@ -253,8 +256,9 @@ export function createRegistry(server) {
    * @param {import("pino").Logger} runLog
    * @param {string} key
    */
-  async function executeStep(parsed, ctx, index, runId, runLog, key) {
-    const { script, config } = parsed;
+  async function runCompiledStep(parsed, ctx, index, runId, runLog, key) {
+    const script = parsed.kind === "set" ? SET_STEP_SCRIPT : parsed.script;
+    const config = parsed.config;
     const step = await store.startStep({
       runId,
       index,
@@ -263,6 +267,23 @@ export function createRegistry(server) {
     });
     const stepLog = runLog.child({ stepId: step.id, script });
     try {
+      if (parsed.when) {
+        const whenResult = await evaluateJsonata(parsed.when, ctx);
+        if (!isJsonataTruthy(whenResult)) {
+          stepLog.debug({ when: parsed.when }, "step skipped");
+          await store.finishStep(step.id, "skipped", ctx);
+          return ctx;
+        }
+      }
+      if (parsed.kind === "set") {
+        if (ctx == null || typeof ctx !== "object" || Array.isArray(ctx)) {
+          throw new Error("set requires an object context");
+        }
+        const value = await evaluateJsonata(parsed.expression, ctx);
+        const result = { ...ctx, [parsed.as]: value };
+        await store.finishStep(step.id, "success", result);
+        return result;
+      }
       const result = await runScript(script, { ...ctx, config }, {
         log: stepLog,
         workflowName: key,
@@ -334,7 +355,8 @@ export function createRegistry(server) {
     for (const { workflow } of workflows.values()) {
       for (const raw of workflow.scripts ?? []) {
         try {
-          refs.add(parseScriptStep(raw).script);
+          const parsed = parseScriptStep(raw);
+          if (parsed.kind === "script") refs.add(parsed.script);
         } catch {
           // skip invalid steps
         }
