@@ -1,5 +1,6 @@
-import { clearScriptCache } from "../../script-sandbox.js";
+import { clearScriptCache, runScriptSource } from "../../script-sandbox.js";
 import * as fsStore from "../../fs-store.js";
+import { createDryRunLogger, safeSerialize } from "./dry-run-logger.js";
 
 /**
  * @param {{ referencedScripts: () => Set<string> }} registry
@@ -59,6 +60,52 @@ export default function scriptsPluginFactory(registry) {
       }
       clearScriptCache();
       return { ok: true };
+    });
+
+    fastify.post("/scripts/:name/dry-run", async (req, reply) => {
+      const { name } = /** @type {{ name: string }} */ (req.params);
+      try {
+        fsStore.assertScriptName(name);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({ error: err.message });
+      }
+
+      const body = /** @type {{ content?: string, data?: unknown, config?: unknown }} */ (
+        req.body ?? {}
+      );
+      if (typeof body.content !== "string") {
+        return reply.code(400).send({ error: "content is required" });
+      }
+
+      const ctx = {
+        data: body.data ?? null,
+        config: body.config ?? null,
+      };
+
+      const { log, logs } = createDryRunLogger();
+      const started = Date.now();
+
+      try {
+        const output = await runScriptSource(name, body.content, ctx, {
+          log,
+          workflowName: "dry-run",
+        });
+        return {
+          status: "success",
+          output: safeSerialize(output),
+          error: null,
+          logs,
+          durationMs: Date.now() - started,
+        };
+      } catch (err) {
+        return {
+          status: "failed",
+          output: null,
+          error: err instanceof Error ? err.message : String(err),
+          logs,
+          durationMs: Date.now() - started,
+        };
+      }
     });
   };
 }

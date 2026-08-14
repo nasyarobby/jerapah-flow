@@ -4,3 +4,4 @@ scripts:
   - manual-trigger.yaml
   - cron-example.yaml
   - fetch-devto.yaml
+  - comic-monkeyuser-to-ntfy.yaml

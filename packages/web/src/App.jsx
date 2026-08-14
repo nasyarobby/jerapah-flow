@@ -6,6 +6,8 @@ import { Layout } from "./components/Layout.jsx";
 import { AuthPage } from "./pages/AuthPage.jsx";
 import { HomePage } from "./pages/HomePage.jsx";
 import { ScriptsPage } from "./pages/ScriptsPage.jsx";
+import { ScriptDryRunPage } from "./pages/ScriptDryRunPage.jsx";
+import { ScriptEditPage, ScriptNewPage } from "./pages/ScriptEditPage.jsx";
 import { WorkflowsPage } from "./pages/WorkflowsPage.jsx";
 import { EventsPage } from "./pages/EventsPage.jsx";
 import { EventDetailPage } from "./pages/EventDetailPage.jsx";
@@ -45,6 +47,9 @@ export function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/scripts" element={<ScriptsPage />} />
+        <Route path="/scripts/new" element={<ScriptNewPage />} />
+        <Route path="/scripts/:name/dry-run" element={<ScriptDryRunPage />} />
+        <Route path="/scripts/:name/edit" element={<ScriptEditPage />} />
         <Route path="/workflows" element={<WorkflowsPage />} />
         <Route path="/events" element={<EventsPage />} />
         <Route path="/events/:id" element={<EventDetailPage />} />

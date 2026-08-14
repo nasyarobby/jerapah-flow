@@ -1,89 +1,29 @@
-import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { LuPencil, LuPlus, LuSave, LuTrash2, LuX } from "react-icons/lu";
+import { useState } from "react";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { LuPencil, LuPlay, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
-import {
-  useDeleteScript,
-  useSaveScript,
-  useScript,
-  useScripts,
-} from "../api/hooks.js";
-import { CodeEditor } from "../components/CodeEditor.jsx";
-
-const NEW_TEMPLATE = `export default async function main(ctx) {
-  return ctx;
-}
-`;
+import { useDeleteScript, useScripts } from "../api/hooks.js";
 
 export function ScriptsPage() {
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
   const editName = params.get("edit");
   const { data: scripts = [], isLoading } = useScripts();
-  const [mode, setMode] = useState(null);
-  const [name, setName] = useState("");
-  const [content, setContent] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(null);
-
-  const existing = useScript(mode === "edit" ? name : null, mode === "edit");
-  const save = useSaveScript();
   const del = useDeleteScript();
 
-  useEffect(() => {
-    if (editName) {
-      setMode("edit");
-      setName(editName);
-    }
-  }, [editName]);
-
-  useEffect(() => {
-    if (mode === "edit" && existing.data?.content != null) {
-      setContent(existing.data.content);
-    }
-  }, [mode, existing.data]);
-
-  function openAdd() {
-    setMode("add");
-    setName("");
-    setContent(NEW_TEMPLATE);
-    setParams({});
-  }
-
-  function openEdit(script) {
-    setMode("edit");
-    setName(script);
-    setParams({ edit: script });
-  }
-
-  function closeForm() {
-    setMode(null);
-    setName("");
-    setContent("");
-    setParams({});
-  }
-
-  function onSave(e) {
-    e.preventDefault();
-    const file = name.endsWith(".js") ? name : `${name}.js`;
-    save.mutate(
-      { name: file, content },
-      {
-        onSuccess: () => {
-          setMode("edit");
-          setName(file);
-          setParams({ edit: file });
-        },
-      },
-    );
+  if (editName) {
+    return <Navigate to={`/scripts/${encodeURIComponent(editName)}/edit`} replace />;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Scripts</h1>
-        <button type="button" className="btn btn-primary btn-sm" onClick={openAdd}>
+        <Link to="/scripts/new" className="btn btn-primary btn-sm">
           <LuPlus className="size-4" />
           Add
-        </button>
+        </Link>
       </div>
 
       {isLoading ? (
@@ -94,22 +34,35 @@ export function ScriptsPage() {
             <thead>
               <tr>
                 <th>Name</th>
-                <th className="w-24" />
+                <th className="w-28" />
               </tr>
             </thead>
             <tbody>
               {scripts.map((s) => (
                 <tr key={s} className="hover">
-                  <td className="font-mono">{s}</td>
+                  <td className="font-mono">
+                    <Link className="link" to={`/scripts/${encodeURIComponent(s)}/edit`}>
+                      {s}
+                    </Link>
+                  </td>
                   <td className="text-right whitespace-nowrap">
                     <button
                       type="button"
                       className="btn btn-ghost btn-xs"
+                      title="Dry run"
+                      onClick={() =>
+                        navigate(`/scripts/${encodeURIComponent(s)}/dry-run`)
+                      }
+                    >
+                      <LuPlay className="size-4" />
+                    </button>
+                    <Link
+                      to={`/scripts/${encodeURIComponent(s)}/edit`}
+                      className="btn btn-ghost btn-xs"
                       title="Edit"
-                      onClick={() => openEdit(s)}
                     >
                       <LuPencil className="size-4" />
-                    </button>
+                    </Link>
                     <button
                       type="button"
                       className="btn btn-ghost btn-xs text-error"
@@ -125,38 +78,6 @@ export function ScriptsPage() {
           </table>
         </div>
       )}
-
-      {mode ? (
-        <form onSubmit={onSave} className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">{mode === "add" ? "New script" : name}</h2>
-            <button type="button" className="btn btn-ghost btn-sm btn-square" onClick={closeForm} aria-label="Close">
-              <LuX className="size-4" />
-            </button>
-          </div>
-          {mode === "add" ? (
-            <input
-              className="input input-sm w-full max-w-md"
-              placeholder="name.js"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          ) : null}
-          {mode === "edit" && existing.isLoading ? (
-            <span className="loading loading-spinner" />
-          ) : (
-            <CodeEditor language="javascript" value={content} onChange={setContent} />
-          )}
-          {save.isError ? (
-            <p className="text-error text-sm">{errorMessage(save.error)}</p>
-          ) : null}
-          <button type="submit" className="btn btn-primary btn-sm" disabled={save.isPending}>
-            <LuSave className="size-4" />
-            Save
-          </button>
-        </form>
-      ) : null}
 
       {confirmDelete ? (
         <dialog className="modal modal-open">
@@ -175,10 +96,7 @@ export function ScriptsPage() {
                 disabled={del.isPending}
                 onClick={() =>
                   del.mutate(confirmDelete, {
-                    onSuccess: () => {
-                      if (name === confirmDelete) closeForm();
-                      setConfirmDelete(null);
-                    },
+                    onSuccess: () => setConfirmDelete(null),
                   })
                 }
               >

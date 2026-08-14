@@ -105,6 +105,19 @@ export function useDeleteScript() {
   });
 }
 
+export function useDryRunScript() {
+  return useMutation({
+    mutationFn: async ({ name, content, data, config }) =>
+      (
+        await api.post(`/scripts/${encodeURIComponent(name)}/dry-run`, {
+          content,
+          data,
+          config,
+        })
+      ).data,
+  });
+}
+
 export function useWorkflows(owner) {
   return useQuery({
     queryKey: ["workflows", owner ?? "all"],

@@ -46,7 +46,7 @@ export function MermaidDiagram({ chart, scriptIds = {} }) {
           el.style.cursor = "pointer";
           el.setAttribute("title", script);
           el.addEventListener("click", () => {
-            navigate(`/scripts?edit=${encodeURIComponent(script)}`);
+            navigate(`/scripts/${encodeURIComponent(script)}/edit`);
           });
         }
       })

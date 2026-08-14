@@ -291,6 +291,10 @@ function createScriptSandbox({ log, script, workflowName }) {
   return sandbox;
 }
 
+function compileScriptSource(source, filename) {
+  return new vm.Script(wrapScriptSource(source, filename), { filename });
+}
+
 function loadCompiledScript(script) {
   const filePath = path.join(SCRIPTS_DIR, script);
   const { mtimeMs } = fs.statSync(filePath);
@@ -300,9 +304,7 @@ function loadCompiledScript(script) {
   }
 
   const source = fs.readFileSync(filePath, "utf8");
-  const compiled = new vm.Script(wrapScriptSource(source, script), {
-    filename: filePath,
-  });
+  const compiled = compileScriptSource(source, filePath);
   scriptCache.set(script, { compiled, mtimeMs });
   return compiled;
 }
@@ -316,6 +318,21 @@ function loadCompiledScript(script) {
  */
 export async function runScript(script, ctx, { log, workflowName }) {
   const compiled = loadCompiledScript(script);
+  const sandbox = createScriptSandbox({ log, script, workflowName });
+  const fn = compiled.runInContext(sandbox);
+  return await fn(ctx);
+}
+
+/**
+ * Evaluate script source in memory (dry-run). Does not read from disk or use the disk cache.
+ *
+ * @param {string} script
+ * @param {string} source
+ * @param {unknown} ctx
+ * @param {{ log: import("pino").Logger, workflowName: string }} opts
+ */
+export async function runScriptSource(script, source, ctx, { log, workflowName }) {
+  const compiled = compileScriptSource(source, script);
   const sandbox = createScriptSandbox({ log, script, workflowName });
   const fn = compiled.runInContext(sandbox);
   return await fn(ctx);
