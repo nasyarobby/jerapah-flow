@@ -3,6 +3,7 @@ import path from "path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import axios from "axios";
+import { createKvApi } from "./kv-store.js";
 import { SCRIPTS_DIR } from "./paths.js";
 
 const hostRequire = createRequire(import.meta.url);
@@ -275,11 +276,13 @@ function createRestrictedRequire(screenedAxios) {
 function createScriptSandbox({ log, script, workflowName }) {
   const scriptLog = log.child({ workflow: workflowName, script });
   const $axios = createScreenedAxios(scriptLog);
+  const $kv = createKvApi(workflowName);
   const sandbox = {
     ...pickBuiltins(),
     log: scriptLog,
     console: createConsole(scriptLog),
     $axios,
+    $kv,
     require: createRestrictedRequire($axios),
   };
 
