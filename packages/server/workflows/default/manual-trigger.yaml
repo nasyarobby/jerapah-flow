@@ -6,4 +6,5 @@ triggers:
   - type: HTTP
     method: POST
     path: /mt
+  - type: manual
 

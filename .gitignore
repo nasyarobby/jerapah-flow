@@ -4,3 +4,4 @@ logs/
 *.db
 *.db-*
 .DS_Store
+packages/web/dist

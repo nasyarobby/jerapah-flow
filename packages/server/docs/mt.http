@@ -4,32 +4,38 @@ Content-Type: application/json
 
 0
 
-HTTP/1.1 200  - OK
-content-type: application/json; charset=utf-8
-content-length: 73
-date: Fri, 14 Aug 2026 04:34:56 GMT
-connection: close
 ###
 POST http://localhost:9000/u/default/time-to-ntfy
 Content-Type: application/json
 
 {}
 
-HTTP/1.1 500  - Internal Server Error
-content-type: application/json; charset=utf-8
-content-length: 97
-date: Fri, 14 Aug 2026 04:11:52 GMT
-connection: close
-###
-GET http://localhost:9000/admin/runs?owner=default&limit=20
-###
-POST http://localhost:9000/admin/workflows/reregister
+### Auth bootstrap
+GET http://localhost:9000/api/auth/bootstrap
+
+### Login
+POST http://localhost:9000/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "changeme1"
+}
+
+### Dashboard
+GET http://localhost:9000/api/dashboard
+
+### Runs
+GET http://localhost:9000/api/runs?owner=default&limit=20
+
+### Reregister
+POST http://localhost:9000/api/workflows/reregister
 Content-Type: application/json
 
 {}
 
-HTTP/1.1 200  - OK
-content-type: application/json; charset=utf-8
-content-length: 33
-date: Fri, 14 Aug 2026 04:34:22 GMT
-connection: close
+### Run workflow manually
+POST http://localhost:9000/api/workflows/default/manual-trigger.yaml/run
+Content-Type: application/json
+
+{}

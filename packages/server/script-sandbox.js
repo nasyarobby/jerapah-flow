@@ -1,8 +1,9 @@
 import fs from "fs";
+import path from "path";
 import vm from "node:vm";
-import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import axios from "axios";
+import { SCRIPTS_DIR } from "./paths.js";
 
 const hostRequire = createRequire(import.meta.url);
 
@@ -291,7 +292,7 @@ function createScriptSandbox({ log, script, workflowName }) {
 }
 
 function loadCompiledScript(script) {
-  const filePath = fileURLToPath(new URL(`./scripts/${script}`, import.meta.url));
+  const filePath = path.join(SCRIPTS_DIR, script);
   const { mtimeMs } = fs.statSync(filePath);
   const cached = scriptCache.get(script);
   if (cached && cached.mtimeMs === mtimeMs) {

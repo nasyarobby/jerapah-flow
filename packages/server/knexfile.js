@@ -1,7 +1,8 @@
 import fs from "fs";
 import path from "path";
+import { DATA_DIR, SERVER_ROOT } from "./paths.js";
 
-const dbPath = process.env.SCRUNNER_DB_PATH ?? path.resolve("data/scrunner.db");
+const dbPath = process.env.SCRUNNER_DB_PATH ?? path.join(DATA_DIR, "scrunner.db");
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
 /** @type {import("knex").Knex.Config} */
@@ -12,7 +13,7 @@ const config = {
   },
   useNullAsDefault: true,
   migrations: {
-    directory: "./migrations",
+    directory: path.join(SERVER_ROOT, "migrations"),
     extension: "js",
     loadExtensions: [".js"],
   },

@@ -1,4 +1,4 @@
-name: manual trigger
+name: jsonata
 scripts:
   - get-current-time.js
   - script: jsonata.js

@@ -235,3 +235,102 @@ export async function pruneOlderThan(days) {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
   return db("workflow_runs").where("started_at", "<", cutoff).del();
 }
+
+/**
+ * @returns {Promise<Record<string, { invocationCount: number, lastInvokedAt: string | null, lastStatus: string | null }>>}
+ */
+export async function workflowStats() {
+  const rows = await db("workflow_runs")
+    .select("workflow", "status", "started_at")
+    .orderBy("started_at", "desc");
+
+  /** @type {Record<string, { invocationCount: number, lastInvokedAt: string | null, lastStatus: string | null }>} */
+  const out = {};
+  for (const row of rows) {
+    const existing = out[row.workflow];
+    if (!existing) {
+      out[row.workflow] = {
+        invocationCount: 1,
+        lastInvokedAt: row.started_at ?? null,
+        lastStatus: row.status ?? null,
+      };
+    } else {
+      existing.invocationCount += 1;
+    }
+  }
+  return out;
+}
+
+export async function countUsers() {
+  const row = await db("users").count({ n: "*" }).first();
+  return Number(row?.n ?? 0);
+}
+
+export async function countAdmins() {
+  const row = await db("users").where({ role: "admin" }).count({ n: "*" }).first();
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * @param {{ username: string, passwordHash: string, role: string }} opts
+ */
+export async function createUser({ username, passwordHash, role }) {
+  const id = randomUUID();
+  const now = nowIso();
+  await db("users").insert({
+    id,
+    username,
+    password_hash: passwordHash,
+    role,
+    created_at: now,
+    updated_at: now,
+  });
+  return getUserById(id);
+}
+
+export async function getUserById(id) {
+  const row = await db("users").where({ id }).first();
+  return row ? publicUser(row) : null;
+}
+
+export async function getUserAuthByUsername(username) {
+  return db("users").where({ username }).first();
+}
+
+export async function getUserAuthById(id) {
+  return db("users").where({ id }).first();
+}
+
+export async function listUsers() {
+  const rows = await db("users")
+    .select("id", "username", "role", "created_at", "updated_at")
+    .orderBy("username", "asc");
+  return rows;
+}
+
+/**
+ * @param {string} id
+ * @param {{ passwordHash?: string, role?: string }} patch
+ */
+export async function updateUser(id, patch) {
+  const update = { updated_at: nowIso() };
+  if (patch.passwordHash) update.password_hash = patch.passwordHash;
+  if (patch.role) update.role = patch.role;
+  await db("users").where({ id }).update(update);
+  return getUserById(id);
+}
+
+export async function deleteUser(id) {
+  return db("users").where({ id }).del();
+}
+
+function publicUser(row) {
+  return {
+    id: row.id,
+    username: row.username,
+    role: row.role,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+

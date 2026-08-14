@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import pino from "pino";
 import * as store from "./store.js";
+import { LOGS_DIR } from "./paths.js";
 
 const LEVEL_TO_NUM = {
   trace: 10,
@@ -87,12 +88,12 @@ const sqliteStream = {
   },
 };
 
-fs.mkdirSync("logs", { recursive: true });
+fs.mkdirSync(LOGS_DIR, { recursive: true });
 
 const rollingFile = pino.transport({
   target: "pino-roll",
   options: {
-    file: path.resolve("logs/scrunner.log"),
+    file: path.join(LOGS_DIR, "scrunner.log"),
     size: "10m",
     mkdir: true,
     limit: { count: 5 },

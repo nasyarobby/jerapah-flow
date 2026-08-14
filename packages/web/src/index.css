@@ -1,0 +1,14 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+.mermaid-clickable [id^="s"] {
+  cursor: pointer;
+}
