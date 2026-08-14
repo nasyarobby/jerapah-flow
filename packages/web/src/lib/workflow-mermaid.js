@@ -76,7 +76,22 @@ export function workflowToFlowchart(parsed) {
   triggers.forEach((t, i) => {
     const id = `t${i}`;
     lines.push(`  ${id}(["${mermaidLabel(triggerLabel(t))}"])`);
-    triggerIds.push(id);
+    let outbound = id;
+    if (t?.auth != null && t.auth !== false) {
+      const authId = `${id}auth`;
+      const label =
+        typeof t.auth === "string"
+          ? `auth ${t.auth}`
+          : typeof t.auth === "object" && t.auth?.name
+            ? `auth ${t.auth.name}`
+            : typeof t.auth === "object" && t.auth?.type
+              ? `auth ${t.auth.type}`
+              : "auth";
+      lines.push(`  ${authId}(["${mermaidLabel(label)}"])`);
+      lines.push(`  ${id} --> ${authId}`);
+      outbound = authId;
+    }
+    triggerIds.push(outbound);
   });
 
   const scripts = Array.isArray(parsed.scripts) ? parsed.scripts : [];

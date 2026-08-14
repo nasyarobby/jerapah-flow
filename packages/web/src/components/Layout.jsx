@@ -3,12 +3,14 @@ import {
   LuActivity,
   LuCode,
   LuDatabase,
+  LuFileText,
   LuGitBranch,
   LuHouse,
   LuKey,
   LuLogOut,
   LuMenu,
   LuMoon,
+  LuShield,
   LuSun,
   LuUsers,
 } from "react-icons/lu";
@@ -21,6 +23,8 @@ const links = [
   { to: "/workflows", label: "Workflows", icon: LuGitBranch },
   { to: "/events", label: "Events", icon: LuActivity },
   { to: "/kv", label: "KV", icon: LuDatabase },
+  { to: "/auth", label: "Auth", icon: LuShield },
+  { to: "/responses", label: "Responses", icon: LuFileText },
 ];
 
 export function Layout({ user, children }) {

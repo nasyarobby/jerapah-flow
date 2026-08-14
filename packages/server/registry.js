@@ -16,12 +16,21 @@ import {
   parseScriptStep,
 } from "./workflow-parse.js";
 import * as fsStore from "./fs-store.js";
+import {
+  checkHttpAuth,
+  resolveAuthMechanism,
+  resolveUnauthorizedSpec,
+  sendHttpPageOrJson,
+  sendSuccessPage,
+} from "./http-trigger-auth.js";
 
 /**
  * @typedef {{ owner: string, file: string, workflow: any }} WorkflowEntry
+ * @typedef {{ key: string, owner: string, trigger: any }} HttpRouteEntry
  */
 
 const MAX_WORKFLOW_TRIGGER_DEPTH = 8;
+const HTTP_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"];
 
 /**
  * @param {unknown} workflow
@@ -45,8 +54,9 @@ export function createRegistry(server) {
   const cronTasks = [];
   /** @type {import("node-cron").ScheduledTask | null} */
   let pruneTask = null;
-  /** @type {Set<string>} */
-  const registeredHttpRoutes = new Set();
+  /** @type {Map<string, HttpRouteEntry>} */
+  const httpRoutes = new Map();
+  let httpDispatcherRegistered = false;
 
   /**
    * Resolve a same-owner workflow that opts in with `type: workflow`.
@@ -144,8 +154,12 @@ export function createRegistry(server) {
     log.debug({ count: workflows.size }, "workflows loaded");
   }
 
+  /**
+   * Rebuild in-memory METHOD+path → workflow map. Registers a single /u/*
+   * Fastify route once so path/method changes apply on reregister without restart.
+   */
   function registerHttpTriggers() {
-    const seen = new Set();
+    httpRoutes.clear();
 
     for (const [key, { owner, workflow }] of workflows) {
       if (workflow.enabled === false) {
@@ -160,45 +174,98 @@ export function createRegistry(server) {
         const url = namespacedPath(owner, trigger.path);
         const routeKey = `${method} ${url}`;
 
-        if (seen.has(routeKey)) {
+        if (httpRoutes.has(routeKey)) {
           log.warn(`Skipping duplicate HTTP trigger ${routeKey} (${key})`);
           continue;
         }
-        seen.add(routeKey);
-
-        if (registeredHttpRoutes.has(routeKey)) {
-          continue;
-        }
-        registeredHttpRoutes.add(routeKey);
-
-        server.route({
-          method,
-          url,
-          handler: async (req, reply) => {
-            const entry = workflows.get(key);
-            if (!entry || entry.workflow?.enabled === false) {
-              return reply.code(404).send({ error: "workflow disabled" });
-            }
-            const result = await runWorkflow(
-              key,
-              { data: req.body },
-              { type: "http", detail: `${method} ${url}` },
-            );
-            if (result.status === "failed") {
-              return reply.code(500).send({
-                runId: result.runId,
-                error: result.error,
-              });
-            }
-            return reply.send({
-              runId: result.runId,
-              result: result.result,
-            });
-          },
-        });
-        log.debug(`Registered HTTP trigger ${routeKey} (${key})`);
+        httpRoutes.set(routeKey, { key, owner, trigger });
+        log.debug(`Mapped HTTP trigger ${routeKey} (${key})`);
       }
     }
+
+    if (!httpDispatcherRegistered) {
+      httpDispatcherRegistered = true;
+      server.route({
+        method: HTTP_METHODS,
+        url: "/u/*",
+        handler: dispatchHttpTrigger,
+      });
+      log.debug("Registered HTTP trigger wildcard dispatcher /u/*");
+    }
+  }
+
+  /**
+   * @param {import("fastify").FastifyRequest} req
+   * @param {import("fastify").FastifyReply} reply
+   */
+  async function dispatchHttpTrigger(req, reply) {
+    const wildcard = /** @type {{ "*": string }} */ (req.params)["*"] ?? "";
+    const url = `/u/${String(wildcard).replace(/^\/+/, "")}`;
+    const method = String(req.method ?? "GET").toUpperCase();
+    const routeKey = `${method} ${url}`;
+    const mapped = httpRoutes.get(routeKey);
+
+    if (!mapped) {
+      return reply.code(404).send({ error: "not found" });
+    }
+
+    const entry = workflows.get(mapped.key);
+    if (!entry || entry.workflow?.enabled === false) {
+      return reply.code(404).send({ error: "workflow disabled" });
+    }
+
+    // Prefer live trigger from current workflow YAML (auth/response edits)
+    const liveTrigger =
+      (entry.workflow.triggers ?? []).find((t) => {
+        if (t?.type !== "HTTP") return false;
+        const m = String(t.method ?? "POST").toUpperCase();
+        const p = namespacedPath(entry.owner, t.path);
+        return m === method && p === url;
+      }) ?? mapped.trigger;
+
+    if (liveTrigger.auth != null && liveTrigger.auth !== false) {
+      const mechanism = await resolveAuthMechanism(liveTrigger.auth);
+      if (!mechanism) {
+        const { status, pageName } = resolveUnauthorizedSpec(liveTrigger, null);
+        return sendHttpPageOrJson(reply, status, pageName, {
+          error: "unauthorized",
+        });
+      }
+      const ok = await checkHttpAuth(req, mechanism, {
+        owner: entry.owner,
+        workflowKey: mapped.key,
+      });
+      if (!ok) {
+        const { status, pageName } = resolveUnauthorizedSpec(
+          liveTrigger,
+          mechanism,
+        );
+        return sendHttpPageOrJson(reply, status, pageName, {
+          error: "unauthorized",
+        });
+      }
+    }
+
+    const result = await runWorkflow(
+      mapped.key,
+      { data: req.body },
+      { type: "http", detail: `${method} ${url}` },
+    );
+    if (result.status === "failed") {
+      return reply.code(500).send({
+        runId: result.runId,
+        error: result.error,
+      });
+    }
+
+    const defaultBody = {
+      runId: result.runId,
+      result: result.result,
+    };
+    if (typeof liveTrigger.response === "string" && liveTrigger.response) {
+      return sendSuccessPage(reply, liveTrigger.response, defaultBody);
+    }
+    return reply.send(defaultBody);
   }
 
   function registerCronTriggers() {

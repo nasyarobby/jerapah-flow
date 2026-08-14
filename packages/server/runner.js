@@ -17,6 +17,8 @@ import runsPlugin from "./src/api/runs.js";
 import dashboardPluginFactory from "./src/api/dashboard.js";
 import secretsPlugin from "./src/api/secrets.js";
 import kvPlugin from "./src/api/kv.js";
+import httpPagesPlugin from "./src/api/http-pages.js";
+import httpAuthsPlugin from "./src/api/http-auths.js";
 import { WEB_DIST } from "./paths.js";
 import { resolveSecretsKeyMaterial } from "./secrets.js";
 
@@ -90,6 +92,8 @@ await server.register(
     await api.register(usersPlugin);
     await api.register(secretsPlugin);
     await api.register(kvPlugin);
+    await api.register(httpPagesPlugin);
+    await api.register(httpAuthsPlugin);
     await api.register(scriptsPluginFactory(registry));
     await api.register(workflowsPluginFactory(registry));
     await api.register(runsPlugin);

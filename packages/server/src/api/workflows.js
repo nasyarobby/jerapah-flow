@@ -6,6 +6,10 @@ import {
   namespacedPath,
   parseScriptStep,
 } from "../../workflow-parse.js";
+import {
+  authLabel,
+  validateWorkflowHttpTriggers,
+} from "../../workflow-http-validate.js";
 
 function triggerSummary(owner, workflow) {
   if (!workflow || typeof workflow !== "object") return [];
@@ -17,6 +21,7 @@ function triggerSummary(owner, workflow) {
       method: isHttp ? String(t?.method ?? "POST").toUpperCase() : t?.method ?? null,
       path: isHttp && t?.path != null ? namespacedPath(owner, t.path) : t?.path ?? null,
       schedule: t?.schedule ?? null,
+      auth: isHttp ? authLabel(t?.auth) : null,
     };
   });
 }
@@ -177,6 +182,13 @@ export default function workflowsPluginFactory(registry) {
         compileWorkflowScripts(parsed?.scripts);
       } catch (err) {
         return reply.code(400).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      try {
+        await validateWorkflowHttpTriggers(parsed);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({
           error: err instanceof Error ? err.message : String(err),
         });
       }
