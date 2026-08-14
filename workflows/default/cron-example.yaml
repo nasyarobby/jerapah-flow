@@ -1,0 +1,10 @@
+name: cron example
+description: |
+  this workflow triggered by cron
+scripts:
+  - script: ntfy.js
+    config:
+      url: https://ntfy.sh/scrunner
+triggers:
+  - type: cron
+    schedule: "*/20 * * * *"

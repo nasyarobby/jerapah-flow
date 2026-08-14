@@ -1,0 +1,9 @@
+name: manual trigger
+scripts:
+  - add-one.js
+  - add-ten.js
+triggers:
+  - type: HTTP
+    method: POST
+    path: /mt
+

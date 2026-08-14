@@ -1,0 +1,12 @@
+name: manual trigger
+scripts:
+  - get-current-time.js
+  - script: jsonata.js
+    config: 
+      expression: '{"data": {"message": datetime & " " & processId}}'
+  - ntfy.js
+triggers:
+  - type: HTTP
+    method: POST
+    path: /mt
+

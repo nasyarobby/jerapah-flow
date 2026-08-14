@@ -1,0 +1,5 @@
+scripts:
+  - time-to-ntfy-example.yaml
+  - test.yaml
+  - manual-trigger.yaml
+  - cron-example.yaml

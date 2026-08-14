@@ -1,0 +1,12 @@
+name: time to ntfy example
+description: |
+  this workflow will send a message to ntfy with the current time
+scripts:
+  - get-current-time.js
+  - script: ntfy.js
+    config:
+      url: https://ntfy.sh/scrunner
+triggers:
+  - type: HTTP
+    method: POST
+    path: /time-to-ntfy
