@@ -1,5 +1,4 @@
-import axios from "axios";
-export default function ntfy(ctx) {
+export default async function ntfy(ctx) {
     log.info({ ctx }, "ntfy");
     const headers = {}
     
@@ -7,7 +6,7 @@ export default function ntfy(ctx) {
         headers.Title = ctx.data.title
     }
 
-    axios.post(ctx.config?.url || "https://ntfy.sh/scrunner", ctx.data?.message || "Hello from scrunner", {
+    await $axios.post(ctx.config?.url || "https://ntfy.sh/scrunner", ctx.data?.message || "Hello from scrunner", {
         headers: headers
     })
     return {sent: "true"}

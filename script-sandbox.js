@@ -2,6 +2,7 @@ import fs from "fs";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import axios from "axios";
 
 const hostRequire = createRequire(import.meta.url);
 
@@ -185,10 +186,83 @@ function createConsole(logger) {
   };
 }
 
-function createRestrictedRequire() {
+function isBlockedHostname(hostname) {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+
+  if (host === "metadata.google.internal" || host === "metadata.goog") {
+    return true;
+  }
+
+  const ipv4Match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ipv4Match) {
+    return false;
+  }
+
+  const octets = ipv4Match.slice(1).map(Number);
+  if (octets.some((octet) => octet > 255)) {
+    return true;
+  }
+
+  const [a, b] = octets;
+  if (a === 10) return true;
+  if (a === 0) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  return false;
+}
+
+function resolveRequestUrl(config) {
+  const target = config.url;
+  if (typeof target !== "string" || target.length === 0) {
+    throw new Error("axios request URL is required");
+  }
+
+  if (/^https?:\/\//i.test(target)) {
+    return new URL(target);
+  }
+
+  const base = config.baseURL;
+  if (typeof base !== "string" || base.length === 0) {
+    throw new Error(`axios request URL must be absolute: ${target}`);
+  }
+
+  return new URL(target, base);
+}
+
+function screenRequestUrl(url, log) {
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(`Request blocked: unsupported protocol ${url.protocol}`);
+  }
+
+  if (isBlockedHostname(url.hostname)) {
+    const message = `Request blocked: ${url.href}`;
+    log.warn({ url: url.href, hostname: url.hostname }, message);
+    throw new Error(message);
+  }
+}
+
+/**
+ * @param {import("pino").Logger} log
+ */
+function createScreenedAxios(log) {
+  const instance = axios.create();
+  instance.interceptors.request.use((config) => {
+    const url = resolveRequestUrl(config);
+    screenRequestUrl(url, log);
+    return config;
+  });
+  return instance;
+}
+
+function createRestrictedRequire(screenedAxios) {
   return function restrictedRequire(id) {
     if (typeof id !== "string" || !ALLOWED_MODULES.has(id)) {
       throw new Error(`require(${JSON.stringify(id)}) is not allowed`);
+    }
+    if (id === "axios") {
+      return screenedAxios;
     }
     return hostRequire(id);
   };
@@ -199,11 +273,13 @@ function createRestrictedRequire() {
  */
 function createScriptSandbox({ log, script, workflowName }) {
   const scriptLog = log.child({ workflow: workflowName, script });
+  const $axios = createScreenedAxios(scriptLog);
   const sandbox = {
     ...pickBuiltins(),
     log: scriptLog,
     console: createConsole(scriptLog),
-    require: createRestrictedRequire(),
+    $axios,
+    require: createRestrictedRequire($axios),
   };
 
   vm.createContext(sandbox, {
