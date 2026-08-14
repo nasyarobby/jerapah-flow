@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import {
   LuActivity,
   LuCode,
+  LuDatabase,
   LuGitBranch,
   LuHouse,
   LuKey,
@@ -19,6 +20,7 @@ const links = [
   { to: "/scripts", label: "Scripts", icon: LuCode },
   { to: "/workflows", label: "Workflows", icon: LuGitBranch },
   { to: "/events", label: "Events", icon: LuActivity },
+  { to: "/kv", label: "KV", icon: LuDatabase },
 ];
 
 export function Layout({ user, children }) {

@@ -5,6 +5,10 @@ scripts:
       url: "https://selfh.st/rss/"
       outputVar: item
       jsonata: items[0]
+  - script: fingerprint.js
+    config:
+      key: selfhst-latest
+      jsonata: "data.item.guid ? data.item.guid : data.item.link"
   - script: jsonata.js
     config:
       expression: |

@@ -257,6 +257,80 @@ export async function kvList(namespace, opts = {}) {
   return items;
 }
 
+function escapeLike(value) {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
+async function pruneExpiredKv() {
+  await db("script_state")
+    .whereNotNull("expires_at")
+    .andWhere("expires_at", "<=", nowIso())
+    .del();
+}
+
+/**
+ * @param {{
+ *   namespace?: string,
+ *   q?: string,
+ *   limit?: number,
+ *   offset?: number,
+ * }} [opts]
+ */
+export async function kvQuery(opts = {}) {
+  await pruneExpiredKv();
+
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100);
+  const offset = Math.max(Number(opts.offset) || 0, 0);
+
+  let q = db("script_state");
+  if (opts.namespace) {
+    assertNamespace(opts.namespace);
+    q = q.where({ namespace: opts.namespace });
+  }
+  if (typeof opts.q === "string" && opts.q.length > 0) {
+    const like = `%${escapeLike(opts.q)}%`;
+    q = q.where(function likeSearch() {
+      this.whereRaw("key LIKE ? ESCAPE '\\'", [like]).orWhereRaw(
+        "value LIKE ? ESCAPE '\\'",
+        [like],
+      );
+    });
+  }
+
+  const countRow = await q.clone().count({ count: "*" }).first();
+  const total = Number(countRow?.count ?? 0);
+
+  const rows = await q
+    .clone()
+    .orderBy("updated_at", "desc")
+    .orderBy("namespace", "asc")
+    .orderBy("key", "asc")
+    .limit(limit)
+    .offset(offset);
+
+  return {
+    items: rows.map((row) => ({
+      namespace: row.namespace,
+      key: row.key,
+      value: deserializeKvValue(row.value),
+      updatedAt: row.updated_at,
+      expiresAt: row.expires_at ?? null,
+    })),
+    total,
+    limit,
+    offset,
+  };
+}
+
+/**
+ * @returns {Promise<string[]>}
+ */
+export async function kvNamespaces() {
+  await pruneExpiredKv();
+  const rows = await db("script_state").distinct("namespace").orderBy("namespace", "asc");
+  return rows.map((row) => row.namespace);
+}
+
 /**
  * @param {string} defaultNamespace
  */

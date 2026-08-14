@@ -1,3 +1,5 @@
+import jsonata from "jsonata";
+
 function ntfyHeaders(ctx) {
   const headers = {};
 
@@ -7,6 +9,32 @@ function ntfyHeaders(ctx) {
   }
 
   return headers;
+}
+
+function resolveFingerprintKey(config) {
+  const fingerprint = config?.fingerprint;
+  if (fingerprint === true) return "fingerprint:ntfy";
+  if (typeof fingerprint === "string" && fingerprint.length > 0) return fingerprint;
+  return null;
+}
+
+function defaultFingerprintSource(ctx) {
+  return {
+    title: ctx.data?.title,
+    message: ctx.data?.message,
+    attach: ctx.data?.attach,
+    filename: ctx.data?.filename,
+    contentType: ctx.data?.contentType,
+  };
+}
+
+async function resolveFingerprintValue(ctx) {
+  const expr = ctx.config?.fingerprintJsonata;
+  if (typeof expr === "string" && expr.length > 0) {
+    const expression = jsonata(expr);
+    return await expression.evaluate(ctx);
+  }
+  return defaultFingerprintSource(ctx);
 }
 
 async function ntfy(ctx) {
@@ -24,6 +52,35 @@ async function ntfy(ctx) {
     },
     "ntfy incoming context",
   );
+
+  const fingerprintKey = resolveFingerprintKey(ctx.config);
+  /** @type {{ hash: string, previousAt: string | null, ageMs: number | null } | null} */
+  let fp = null;
+
+  if (fingerprintKey) {
+    const source = await resolveFingerprintValue(ctx);
+    const checked = await $fingerprint.check(fingerprintKey, source, {
+      maxAge: ctx.config?.fingerprintMaxAge,
+    });
+    if (!checked.changed) {
+      log.info(
+        {
+          key: fingerprintKey,
+          fingerprint: checked.hash,
+          ageMs: checked.ageMs,
+        },
+        "ntfy: skipped, fingerprint unchanged",
+      );
+      return {
+        sent: "false",
+        skipped: true,
+        fingerprint: checked.hash,
+        fingerprintAt: checked.previousAt,
+        fingerprintAge: checked.ageMs,
+      };
+    }
+    fp = checked;
+  }
 
   const headers = ntfyHeaders(ctx);
   const ntfyUrl = ctx.config?.url || "https://ntfy.sh/scrunner";
@@ -47,22 +104,29 @@ async function ntfy(ctx) {
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
     });
-    return { sent: "true" };
+  } else {
+    if (ctx.data?.attach) {
+      log.info("ntfy: setting attach %s", ctx.data.attach);
+      headers.Attach = ctx.data.attach;
+    }
+
+    const truncatedMessage = ctx.data?.message?.substring(0, 100);
+    log.info("ntfy sending message to %s", ntfyUrl);
+    log.info("ntfy messsage: %s", truncatedMessage);
+
+    await $axios.post(ntfyUrl, ctx.data?.message || "Hello from scrunner", {
+      headers,
+    });
   }
 
-  if (ctx.data?.attach) {
-    log.info("ntfy: setting attach %s", ctx.data.attach);
-    headers.Attach = ctx.data.attach;
+  /** @type {Record<string, unknown>} */
+  const sent = { sent: "true" };
+  if (fingerprintKey && fp) {
+    const stored = await $fingerprint.remember(fingerprintKey, fp.hash);
+    sent.fingerprint = stored.hash;
+    sent.fingerprintAt = stored.at;
   }
-
-  const truncatedMessage = ctx.data?.message?.substring(0, 100);
-  log.info("ntfy sending message to %s", ntfyUrl);
-  log.info("ntfy messsage: %s", truncatedMessage);
-
-  await $axios.post(ntfyUrl, ctx.data?.message || "Hello from scrunner", {
-    headers,
-  });
-  return { sent: "true" };
+  return sent;
 }
 
 ntfy.meta = {
@@ -72,6 +136,21 @@ ntfy.meta = {
       type: "string",
       default: "https://ntfy.sh/scrunner",
       description: "ntfy topic URL",
+    },
+    fingerprint: {
+      type: "string",
+      required: false,
+      description: "true or a KV key; skip send when the payload fingerprint is unchanged",
+    },
+    fingerprintJsonata: {
+      type: "string",
+      required: false,
+      description: "JSONata against ctx; default hashes title, message, attach, filename, contentType",
+    },
+    fingerprintMaxAge: {
+      type: "string",
+      required: false,
+      description: "Optional age limit (e.g. 24h, 7d, or milliseconds)",
     },
   },
   input: {
@@ -87,7 +166,7 @@ ntfy.meta = {
   },
   example: {
     data: { title: "Hello", message: "Hello from scrunner" },
-    config: { url: "https://ntfy.sh/scrunner" },
+    config: { url: "https://ntfy.sh/scrunner", fingerprint: true },
   },
 };
 

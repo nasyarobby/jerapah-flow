@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import axios from "axios";
 import pino from "pino";
 import { createKvApi } from "./kv-store.js";
+import { createFingerprintApi } from "./script-fingerprint.js";
 import { SCRIPTS_DIR } from "./paths.js";
 import { isSecret, Secret, unwrapSecretsDeep } from "./secret-value.js";
 import { getSecretPlaintext } from "./secrets-store.js";
@@ -342,6 +343,7 @@ function createScriptSandbox({
   const scriptLog = log.child({ workflow: workflowName, script });
   const $axios = createScreenedAxios(scriptLog);
   const $kv = createKvApi(workflowName);
+  const $fingerprint = createFingerprintApi($kv);
   const $secrets = createSecretsApi(owner);
   const sandbox = {
     ...pickBuiltins(),
@@ -349,6 +351,7 @@ function createScriptSandbox({
     console: createConsole(scriptLog),
     $axios,
     $kv,
+    $fingerprint,
     $secrets,
     $workflows,
     require: createRestrictedRequire($axios),

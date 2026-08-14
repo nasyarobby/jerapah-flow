@@ -12,6 +12,7 @@ import { WorkflowsPage } from "./pages/WorkflowsPage.jsx";
 import { WorkflowEditPage, WorkflowNewPage } from "./pages/WorkflowEditPage.jsx";
 import { EventsPage } from "./pages/EventsPage.jsx";
 import { EventDetailPage } from "./pages/EventDetailPage.jsx";
+import { KvPage } from "./pages/KvPage.jsx";
 import { UsersPage } from "./pages/UsersPage.jsx";
 import { SecretsPage } from "./pages/SecretsPage.jsx";
 
@@ -57,6 +58,7 @@ export function App() {
         <Route path="/workflows/:owner/:file/edit" element={<WorkflowEditPage />} />
         <Route path="/events" element={<EventsPage />} />
         <Route path="/events/:id" element={<EventDetailPage />} />
+        <Route path="/kv" element={<KvPage />} />
         {user.role === "admin" ? (
           <>
             <Route path="/users" element={<UsersPage />} />

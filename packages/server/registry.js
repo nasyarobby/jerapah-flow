@@ -260,6 +260,36 @@ export function createRegistry(server) {
     );
   }
 
+  function isSkipRemaining(result) {
+    return (
+      result != null &&
+      typeof result === "object" &&
+      !Array.isArray(result) &&
+      /** @type {{ skipRemaining?: unknown }} */ (result).skipRemaining === true
+    );
+  }
+
+  /**
+   * @param {import("./workflow-parse.js").CompiledStep} parsed
+   * @param {number} index
+   * @param {unknown} ctx
+   * @param {string} runId
+   * @param {import("pino").Logger} runLog
+   * @param {string} reason
+   */
+  async function markStepSkipped(parsed, index, ctx, runId, runLog, reason) {
+    const script = parsed.kind === "set" ? SET_STEP_SCRIPT : parsed.script;
+    const step = await store.startStep({
+      runId,
+      index,
+      script,
+      config: parsed.config,
+    });
+    const stepLog = runLog.child({ stepId: step.id, script });
+    stepLog.debug({ reason }, "step skipped");
+    await store.finishStep(step.id, "skipped", ctx, reason);
+  }
+
   /**
    * @param {import("./workflow-parse.js").CompiledScripts} compiled
    * @param {{ data?: unknown }} ctx
@@ -271,7 +301,8 @@ export function createRegistry(server) {
    */
   async function runLinearSteps(compiled, ctx, runId, runLog, key, owner, depth) {
     let next = ctx;
-    for (const index of compiled.order) {
+    for (let i = 0; i < compiled.order.length; i++) {
+      const index = compiled.order[i];
       const parsed = compiled.steps[index];
       next = await runCompiledStep(
         parsed,
@@ -283,6 +314,20 @@ export function createRegistry(server) {
         owner,
         depth,
       );
+      if (isSkipRemaining(next)) {
+        for (let j = i + 1; j < compiled.order.length; j++) {
+          const laterIndex = compiled.order[j];
+          await markStepSkipped(
+            compiled.steps[laterIndex],
+            laterIndex,
+            next,
+            runId,
+            runLog,
+            "skipRemaining",
+          );
+        }
+        break;
+      }
     }
     return next;
   }
@@ -317,6 +362,20 @@ export function createRegistry(server) {
       );
       if (parsed.id) {
         outputsById.set(parsed.id, last);
+      }
+      if (isSkipRemaining(last)) {
+        for (let j = orderIndex + 1; j < compiled.order.length; j++) {
+          const laterParsed = compiled.steps[compiled.order[j]];
+          await markStepSkipped(
+            laterParsed,
+            j,
+            last,
+            runId,
+            runLog,
+            "skipRemaining",
+          );
+        }
+        break;
       }
     }
     return last;
@@ -389,7 +448,7 @@ export function createRegistry(server) {
         const whenResult = await evaluateJsonata(parsed.when, ctx);
         if (!isJsonataTruthy(whenResult)) {
           stepLog.debug({ when: parsed.when }, "step skipped");
-          await store.finishStep(step.id, "skipped", ctx);
+          await store.finishStep(step.id, "skipped", ctx, "when condition");
           return ctx;
         }
       }

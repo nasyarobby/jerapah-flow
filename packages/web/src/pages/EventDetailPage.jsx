@@ -98,7 +98,7 @@ export function EventDetailPage() {
                 <th>Script</th>
                 <th>Status</th>
                 <th>Duration</th>
-                <th>Error</th>
+                <th>Detail</th>
                 <th></th>
               </tr>
             </thead>
@@ -119,7 +119,13 @@ export function EventDetailPage() {
                     <StatusBadge status={s.status} />
                   </td>
                   <td>{s.duration_ms != null ? `${s.duration_ms}ms` : "—"}</td>
-                  <td className="text-error text-xs">{s.error || ""}</td>
+                  <td
+                    className={
+                      s.status === "skipped" ? "opacity-60 text-xs" : "text-error text-xs"
+                    }
+                  >
+                    {s.error || ""}
+                  </td>
                   <td className="text-right">
                     <button
                       type="button"
