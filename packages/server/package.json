@@ -21,6 +21,7 @@
     "jsonata": "^2.2.2",
     "knex": "^3.3.0",
     "node-cron": "^4.6.0",
+    "node-html-parser": "^9.0.1",
     "pino": "^10.3.1",
     "pino-roll": "^4.0.0",
     "yaml": "^2.9.0"

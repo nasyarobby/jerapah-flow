@@ -3,3 +3,4 @@ scripts:
   - test.yaml
   - manual-trigger.yaml
   - cron-example.yaml
+  - fetch-devto.yaml

@@ -7,7 +7,7 @@ import { SCRIPTS_DIR } from "./paths.js";
 
 const hostRequire = createRequire(import.meta.url);
 
-const ALLOWED_MODULES = new Set(["axios", "jsonata"]);
+const ALLOWED_MODULES = new Set(["axios", "jsonata", "node-html-parser"]);
 
 const BUILTIN_NAMES = [
   "Infinity",
