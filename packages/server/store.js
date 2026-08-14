@@ -190,7 +190,19 @@ export async function listRuns(filters = {}) {
   const limit = Math.min(Math.max(filters.limit ?? 50, 1), 200);
   let q = db("workflow_runs").select("*").orderBy("started_at", "desc");
   if (filters.owner) q = q.where("owner", filters.owner);
-  if (filters.workflow) q = q.where("workflow", filters.workflow);
+  if (filters.workflow) {
+    const key = String(filters.workflow);
+    if (key.includes("*")) {
+      const pattern = key
+        .replaceAll("\\", "\\\\")
+        .replaceAll("%", "\\%")
+        .replaceAll("_", "\\_")
+        .replaceAll("*", "%");
+      q = q.whereRaw("workflow LIKE ? ESCAPE '\\'", [pattern]);
+    } else {
+      q = q.where("workflow", key);
+    }
+  }
   if (filters.status) q = q.where("status", filters.status);
   if (filters.before) q = q.where("started_at", "<", filters.before);
   const rows = await q.limit(limit);

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { LuActivity, LuPencil, LuPlay, LuPlus, LuRefreshCw, LuTrash2 } from "react-icons/lu";
+import { LuActivity, LuPencil, LuPlay, LuPlus, LuRefreshCw, LuTrash2, LuTriangleAlert } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import {
   useDeleteWorkflow,
   useReregisterWorkflows,
   useRunWorkflow,
+  useSetWorkflowEnabled,
   useWorkflows,
 } from "../api/hooks.js";
 import { formatTime, WorkflowStatusBadge } from "../lib/format.jsx";
@@ -19,6 +20,7 @@ export function WorkflowsPage() {
   const [runError, setRunError] = useState(null);
   const del = useDeleteWorkflow();
   const run = useRunWorkflow();
+  const setEnabled = useSetWorkflowEnabled();
   const reregister = useReregisterWorkflows();
 
   if (editParam) {
@@ -57,6 +59,10 @@ export function WorkflowsPage() {
 
   const runningKey =
     run.isPending && run.variables ? `${run.variables.owner}/${run.variables.file}` : null;
+  const togglingKey =
+    setEnabled.isPending && setEnabled.variables
+      ? `${setEnabled.variables.owner}/${setEnabled.variables.file}`
+      : null;
 
   return (
     <div className="space-y-4">
@@ -89,6 +95,9 @@ export function WorkflowsPage() {
       ) : null}
 
       {runError ? <p className="text-error text-sm">{runError}</p> : null}
+      {setEnabled.isError ? (
+        <p className="text-error text-sm">{errorMessage(setEnabled.error)}</p>
+      ) : null}
 
       {isLoading ? (
         <span className="loading loading-spinner" />
@@ -116,6 +125,14 @@ export function WorkflowsPage() {
                     >
                       {w.name}
                     </Link>
+                    {!w.registered ? (
+                      <span
+                        className="text-warning ml-1 inline-flex align-middle"
+                        title="Not listed in registers.yaml"
+                      >
+                        <LuTriangleAlert className="size-3.5" />
+                      </span>
+                    ) : null}
                   </td>
                   <td className="font-mono text-xs">{w.owner}</td>
                   <td>
@@ -127,6 +144,21 @@ export function WorkflowsPage() {
                   <td className="whitespace-nowrap">{formatTime(w.lastInvokedAt)}</td>
                   <td>{w.invocationCount}</td>
                   <td className="text-right whitespace-nowrap">
+                    <label className="inline-flex items-center mr-1" title={w.enabled ? "Disable" : "Enable"}>
+                      <input
+                        type="checkbox"
+                        className="toggle toggle-xs"
+                        checked={Boolean(w.enabled)}
+                        disabled={Boolean(w.loadError) || togglingKey === w.key}
+                        onChange={() =>
+                          setEnabled.mutate({
+                            owner: w.owner,
+                            file: w.file,
+                            enabled: !w.enabled,
+                          })
+                        }
+                      />
+                    </label>
                     <button
                       type="button"
                       className="btn btn-ghost btn-xs"

@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { parse as parseYaml } from "yaml";
-import { LuArrowLeft, LuSave } from "react-icons/lu";
+import { LuArrowLeft, LuPause, LuPlay, LuSave } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
-import { useOwners, useSaveWorkflow, useWorkflow } from "../api/hooks.js";
+import {
+  useOwners,
+  useRunWorkflow,
+  useSaveWorkflow,
+  useSetWorkflowEnabled,
+  useWorkflow,
+} from "../api/hooks.js";
 import { CodeEditor } from "../components/CodeEditor.jsx";
 import { MermaidDiagram } from "../components/MermaidDiagram.jsx";
 import { workflowToFlowchart } from "../lib/workflow-mermaid.js";
@@ -44,6 +50,15 @@ function WorkflowEditorLayout({
   saveError,
   saveSuccess,
   formId,
+  onRun,
+  runPending,
+  runDisabled,
+  runError,
+  onToggleEnabled,
+  enabled,
+  enablePending,
+  enableDisabled,
+  enableError,
   children,
 }) {
   return (
@@ -54,6 +69,38 @@ function WorkflowEditorLayout({
         </Link>
         <h1 className="truncate text-xl font-semibold">{title}</h1>
         <div className="flex-1" />
+        {onToggleEnabled ? (
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={enablePending || enableDisabled}
+            onClick={onToggleEnabled}
+          >
+            {enablePending ? (
+              <span className="loading loading-spinner loading-xs" />
+            ) : enabled ? (
+              <LuPause className="size-4" />
+            ) : (
+              <LuPlay className="size-4" />
+            )}
+            {enabled ? "Disable" : "Enable"}
+          </button>
+        ) : null}
+        {onRun ? (
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={runPending || runDisabled}
+            onClick={onRun}
+          >
+            {runPending ? (
+              <span className="loading loading-spinner loading-xs" />
+            ) : (
+              <LuPlay className="size-4" />
+            )}
+            Run
+          </button>
+        ) : null}
         <button
           type="submit"
           form={formId}
@@ -67,6 +114,12 @@ function WorkflowEditorLayout({
       {children}
       {saveError ? (
         <p className="text-error text-sm shrink-0">{saveError}</p>
+      ) : null}
+      {runError ? (
+        <p className="text-error text-sm shrink-0">{runError}</p>
+      ) : null}
+      {enableError ? (
+        <p className="text-error text-sm shrink-0">{enableError}</p>
       ) : null}
       {saveSuccess ? (
         <p className="text-success text-sm shrink-0">Workflow saved</p>
@@ -164,14 +217,32 @@ export function WorkflowNewPage() {
 }
 
 export function WorkflowEditPage() {
+  const navigate = useNavigate();
   const { owner: rawOwner, file: rawFile } = useParams();
   const owner = decodeURIComponent(rawOwner ?? "");
   const file = decodeURIComponent(rawFile ?? "");
   const existing = useWorkflow(owner, file);
   const save = useSaveWorkflow();
+  const run = useRunWorkflow();
+  const setEnabled = useSetWorkflowEnabled();
   const [content, setContent] = useState("");
   const [contentReady, setContentReady] = useState(false);
   const { parsed, parseError, mermaid } = useYamlPreview(content);
+
+  function onRun() {
+    run.mutate(
+      { owner, file },
+      {
+        onSuccess: (data) => {
+          if (data?.runId) navigate(`/events/${data.runId}`);
+        },
+        onError: (err) => {
+          const runId = err?.response?.data?.runId;
+          if (runId) navigate(`/events/${runId}`);
+        },
+      },
+    );
+  }
 
   useEffect(() => {
     if (existing.isLoading) return;
@@ -214,6 +285,21 @@ export function WorkflowEditPage() {
       saveDisabled={!contentReady}
       saveError={save.isError ? errorMessage(save.error) : null}
       saveSuccess={save.isSuccess}
+      onRun={onRun}
+      runPending={run.isPending}
+      runDisabled={!contentReady || Boolean(parseError) || Boolean(existing.data?.loadError)}
+      runError={run.isError && !run.error?.response?.data?.runId ? errorMessage(run.error) : null}
+      onToggleEnabled={() =>
+        setEnabled.mutate({
+          owner,
+          file,
+          enabled: existing.data?.parsed?.enabled === false,
+        })
+      }
+      enabled={existing.data?.parsed?.enabled !== false}
+      enablePending={setEnabled.isPending}
+      enableDisabled={!contentReady || Boolean(existing.data?.parseError)}
+      enableError={setEnabled.isError ? errorMessage(setEnabled.error) : null}
     >
       <form id="workflow-edit-form" onSubmit={onSave} className="flex min-h-0 flex-1 flex-col">
         <WorkflowYamlAndDiagram

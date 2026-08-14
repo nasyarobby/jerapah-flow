@@ -175,6 +175,10 @@ export function createRegistry(server) {
           method,
           url,
           handler: async (req, reply) => {
+            const entry = workflows.get(key);
+            if (!entry || entry.workflow?.enabled === false) {
+              return reply.code(404).send({ error: "workflow disabled" });
+            }
             const result = await runWorkflow(
               key,
               { data: req.body },
@@ -434,6 +438,10 @@ export function createRegistry(server) {
     }
 
     const { owner, workflow } = entry;
+    if (workflow?.enabled === false && trigger.type !== "manual") {
+      log.debug({ workflow: key, trigger }, "skipping disabled workflow");
+      return { runId: null, status: "failed", error: "workflow disabled" };
+    }
     const run = await store.startRun({
       owner,
       workflow: key,

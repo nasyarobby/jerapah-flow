@@ -5,3 +5,4 @@ scripts:
   - fetch-devto.yaml
   - comic-monkeyuser-to-ntfy.yaml
   - time-and-comic-to-ntfy.yaml
+  - rss-selfhst-to-ntfy.yaml

@@ -164,6 +164,24 @@ export function useSaveWorkflow() {
   });
 }
 
+export function useSetWorkflowEnabled() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ owner, file, enabled }) =>
+      (
+        await api.patch(
+          `/workflows/${encodeURIComponent(owner)}/${encodeURIComponent(file)}`,
+          { enabled },
+        )
+      ).data,
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["workflows"] });
+      qc.invalidateQueries({ queryKey: ["workflows", vars.owner, vars.file] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
 export function useDeleteWorkflow() {
   const qc = useQueryClient();
   return useMutation({

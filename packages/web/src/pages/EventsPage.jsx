@@ -25,7 +25,7 @@ export function EventsPage() {
       <div className="flex flex-col sm:flex-row gap-2">
         <input
           className="input input-sm w-full sm:max-w-sm"
-          placeholder="workflow key"
+          placeholder="workflow key (* wildcard)"
           value={workflow}
           onChange={(e) => update("workflow", e.target.value)}
         />

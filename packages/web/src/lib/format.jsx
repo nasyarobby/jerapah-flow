@@ -21,26 +21,59 @@ export function StatusBadge({ status }) {
 
 /** Config load + last-run health for the workflows list. */
 export function WorkflowStatusBadge({ workflow }) {
-  if (workflow.loadError) {
-    return (
-      <span className="badge badge-error badge-sm" title={workflow.loadError}>
-        broken
-      </span>
+  const badges = [];
+
+  if (!workflow.registered) {
+    badges.push(
+      <span
+        key="unregistered"
+        className="badge badge-warning badge-sm"
+        title="Not listed in registers.yaml; HTTP/cron triggers are not loaded"
+      >
+        unregistered
+      </span>,
     );
   }
-  if (!workflow.enabled) {
-    return <span className="badge badge-ghost badge-sm">disabled</span>;
+
+  if (workflow.loadError) {
+    badges.push(
+      <span key="broken" className="badge badge-error badge-sm" title={workflow.loadError}>
+        broken
+      </span>,
+    );
+  } else if (!workflow.enabled) {
+    badges.push(
+      <span key="disabled" className="badge badge-ghost badge-sm">
+        disabled
+      </span>,
+    );
+  } else if (workflow.lastStatus === "failed") {
+    badges.push(
+      <span key="failed" className="badge badge-error badge-sm">
+        failed
+      </span>,
+    );
+  } else if (workflow.lastStatus === "running") {
+    badges.push(
+      <span key="running" className="badge badge-warning badge-sm">
+        running
+      </span>,
+    );
+  } else if (workflow.lastStatus === "success") {
+    badges.push(
+      <span key="working" className="badge badge-success badge-sm">
+        working
+      </span>,
+    );
+  } else if (workflow.registered) {
+    badges.push(
+      <span key="never" className="badge badge-ghost badge-sm">
+        never run
+      </span>,
+    );
   }
-  if (workflow.lastStatus === "failed") {
-    return <span className="badge badge-error badge-sm">failed</span>;
-  }
-  if (workflow.lastStatus === "running") {
-    return <span className="badge badge-warning badge-sm">running</span>;
-  }
-  if (workflow.lastStatus === "success") {
-    return <span className="badge badge-success badge-sm">working</span>;
-  }
-  return <span className="badge badge-ghost badge-sm">never run</span>;
+
+  return <span className="inline-flex flex-wrap gap-1">{badges}</span>;
 }
 
 export function levelName(level) {

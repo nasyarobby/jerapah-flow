@@ -191,6 +191,43 @@ export default function workflowsPluginFactory(registry) {
       return reply.code(existed ? 200 : 201).send({ owner, file });
     });
 
+    fastify.patch("/workflows/:owner/:file", async (req, reply) => {
+      const { owner, file } = /** @type {{ owner: string, file: string }} */ (
+        req.params
+      );
+      try {
+        fsStore.assertOwner(owner);
+        fsStore.assertWorkflowFile(file);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({ error: err.message });
+      }
+      const body = /** @type {{ enabled?: unknown }} */ (req.body ?? {});
+      if (typeof body.enabled !== "boolean") {
+        return reply.code(400).send({ error: "enabled boolean is required" });
+      }
+      const content = fsStore.readWorkflowYaml(owner, file);
+      if (content == null) {
+        return reply.code(404).send({ error: "workflow not found" });
+      }
+      const doc = yaml.parseDocument(content);
+      if (doc.errors?.length) {
+        const msg = doc.errors[0]?.message ?? "invalid yaml";
+        return reply.code(400).send({ error: msg });
+      }
+      const parsed = doc.toJSON();
+      if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return reply.code(400).send({ error: "workflow yaml must be an object" });
+      }
+      if (body.enabled) {
+        doc.delete("enabled");
+      } else {
+        doc.set("enabled", false);
+      }
+      fsStore.writeWorkflowYaml(owner, file, String(doc));
+      registry.reregister();
+      return { owner, file, enabled: body.enabled };
+    });
+
     fastify.delete("/workflows/:owner/:file", async (req, reply) => {
       const { owner, file } = /** @type {{ owner: string, file: string }} */ (
         req.params
@@ -221,6 +258,17 @@ export default function workflowsPluginFactory(registry) {
         return reply.code(err.statusCode ?? 400).send({ error: err.message });
       }
       const key = `${owner}/${file}`;
+      if (fsStore.readWorkflowYaml(owner, file) == null) {
+        return reply.code(404).send({ error: "workflow not found" });
+      }
+      const registered = fsStore.readRegisters(owner);
+      if (!registered.includes(file)) {
+        registered.push(file);
+        fsStore.writeRegisters(owner, registered);
+        registry.reregister();
+      } else if (!registry.workflows.has(key) && !registry.loadErrors.has(key)) {
+        registry.reregister();
+      }
       if (!registry.workflows.has(key)) {
         return reply.code(404).send({
           error: registry.loadErrors.get(key) ?? "workflow not loaded",
