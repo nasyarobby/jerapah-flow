@@ -6,6 +6,7 @@ import {
   getHttpAuthByName,
   upsertHttpAuth,
   deleteHttpAuth,
+  revealHttpAuthLiterals,
 } from "../../http-auths-store.js";
 import { getHttpPageByName } from "../../http-pages-store.js";
 
@@ -15,6 +16,20 @@ import { getHttpPageByName } from "../../http-pages-store.js";
 export default async function httpAuthsPlugin(fastify) {
   fastify.get("/http-auths", async () => {
     return { auths: await listHttpAuths() };
+  });
+
+  fastify.get("/http-auths/:name/reveal", async (req, reply) => {
+    const { name } = /** @type {{ name: string }} */ (req.params);
+    try {
+      assertAuthName(name);
+    } catch (err) {
+      return reply.code(err.statusCode ?? 400).send({ error: err.message });
+    }
+    const revealed = await revealHttpAuthLiterals(name);
+    if (!revealed) {
+      return reply.code(404).send({ error: "auth not found" });
+    }
+    return revealed;
   });
 
   fastify.get("/http-auths/:name", async (req, reply) => {

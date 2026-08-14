@@ -383,3 +383,8 @@ export function useDeleteHttpAuth() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["http-auths"] }),
   });
 }
+
+/** Fetch plaintext literals only (not encrypted secrets). */
+export async function fetchHttpAuthLiterals(name) {
+  return (await api.get(`/http-auths/${encodeURIComponent(name)}/reveal`)).data;
+}

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { LuPencil, LuPlus, LuTrash2, LuX } from "react-icons/lu";
+import { LuEye, LuEyeOff, LuPencil, LuPlus, LuTrash2, LuX } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import {
+  fetchHttpAuthLiterals,
   useDeleteHttpAuth,
   useHttpAuths,
   useHttpPages,
@@ -13,7 +14,7 @@ function emptyCred(source = "literal") {
   return { source, value: "", kv: "", namespace: "", secret: "" };
 }
 
-function credFromPublic(field) {
+function credFromPublic(field, literalValue) {
   if (!field || field.source === "missing") return emptyCred("literal");
   if (field.source === "kv") {
     return {
@@ -33,7 +34,17 @@ function credFromPublic(field) {
       secret: field.secret ?? "",
     };
   }
-  // literal — already set; keep marker so we don't require re-entry on edit
+  // literal — prefer revealed value when available
+  if (typeof literalValue === "string") {
+    return {
+      source: "literal",
+      value: literalValue,
+      kv: "",
+      namespace: "",
+      secret: "",
+      keep: true,
+    };
+  }
   return {
     source: "literal",
     value: "",
@@ -59,17 +70,9 @@ function toApiField(cred, { required = true } = {}) {
   return null;
 }
 
-function sourceLabel(field) {
-  if (!field || field.source === "missing") return "—";
-  if (field.source === "kv") {
-    return field.namespace ? `kv:${field.namespace}/${field.kv}` : `kv:${field.kv}`;
-  }
-  if (field.source === "secret") return `secret:${field.secret}`;
-  if (field.source === "literal") return "literal";
-  return "—";
-}
+function CredentialFields({ label, cred, onChange, allowEmpty, masked }) {
+  const [show, setShow] = useState(false);
 
-function CredentialFields({ label, cred, onChange, allowEmpty }) {
   return (
     <div className="space-y-1 border-base-300 border rounded-box p-3">
       <label className="label py-0">{label}</label>
@@ -84,17 +87,34 @@ function CredentialFields({ label, cred, onChange, allowEmpty }) {
       </select>
       {cred.source === "literal" ? (
         <>
-          <input
-            type="password"
-            className="input input-sm w-full"
-            value={cred.value}
-            onChange={(e) => onChange({ ...cred, value: e.target.value, keep: false })}
-            placeholder={cred.keep ? "(unchanged — leave blank to keep)" : ""}
-            required={!allowEmpty && !cred.keep}
-            autoComplete="new-password"
-          />
-          {cred.keep ? (
-            <p className="text-xs opacity-60">A value is already set. Enter a new one to replace it.</p>
+          <div className="flex gap-1 items-center">
+            <input
+              type={masked && !show ? "password" : "text"}
+              className="input input-sm w-full font-mono"
+              value={cred.value}
+              onChange={(e) => onChange({ ...cred, value: e.target.value, keep: false })}
+              placeholder={
+                cred.keep && !cred.value ? "(unchanged — leave blank to keep)" : ""
+              }
+              required={!allowEmpty && !cred.keep && !cred.value}
+              autoComplete="off"
+            />
+            {masked ? (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm btn-square"
+                title={show ? "Hide" : "Reveal"}
+                aria-label={show ? "Hide value" : "Reveal value"}
+                onClick={() => setShow((v) => !v)}
+              >
+                {show ? <LuEyeOff className="size-4" /> : <LuEye className="size-4" />}
+              </button>
+            ) : null}
+          </div>
+          {cred.keep && !cred.value ? (
+            <p className="text-xs opacity-60">
+              A value is already set. Enter a new one to replace it.
+            </p>
           ) : null}
         </>
       ) : null}
@@ -116,16 +136,154 @@ function CredentialFields({ label, cred, onChange, allowEmpty }) {
         </div>
       ) : null}
       {cred.source === "secret" ? (
-        <input
-          className="input input-sm w-full font-mono"
-          placeholder="secret name"
-          value={cred.secret}
-          onChange={(e) => onChange({ ...cred, secret: e.target.value })}
-          required
-          pattern="[A-Za-z0-9._-]+"
-        />
+        <>
+          <input
+            className="input input-sm w-full font-mono"
+            placeholder="secret name"
+            value={cred.secret}
+            onChange={(e) => onChange({ ...cred, secret: e.target.value })}
+            required
+            pattern="[A-Za-z0-9._-]+"
+          />
+          <p className="text-xs opacity-60">
+            Encrypted secret — value is never shown here. Manage it on the Secrets page.
+          </p>
+        </>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * List cell: literals show *** with reveal; secrets never reveal; kv shows ref only.
+ */
+function CredDisplay({ field, fieldKey, authName, cache, onRevealed }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  if (!field || field.source === "missing") {
+    return <span className="opacity-50">—</span>;
+  }
+
+  if (field.source === "secret") {
+    return (
+      <span className="font-mono text-xs" title="Encrypted; cannot reveal">
+        secret:{field.secret}
+      </span>
+    );
+  }
+
+  if (field.source === "kv") {
+    const ref = field.namespace
+      ? `kv:${field.namespace}/${field.kv}`
+      : `kv:${field.kv}`;
+    return <span className="font-mono text-xs">{ref}</span>;
+  }
+
+  // literal
+  const revealed = cache?.[fieldKey];
+  const shown = open && typeof revealed === "string";
+
+  async function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    if (typeof revealed === "string") {
+      setOpen(true);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchHttpAuthLiterals(authName);
+      onRevealed?.(data.literals ?? {});
+      setOpen(true);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-xs">
+      <span>{shown ? revealed : "***"}</span>
+      <button
+        type="button"
+        className="btn btn-ghost btn-xs btn-square"
+        title={shown ? "Hide" : "Reveal"}
+        aria-label={shown ? "Hide value" : "Reveal value"}
+        disabled={loading}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggle();
+        }}
+      >
+        {loading ? (
+          <span className="loading loading-spinner loading-xs" />
+        ) : shown ? (
+          <LuEyeOff className="size-3.5" />
+        ) : (
+          <LuEye className="size-3.5" />
+        )}
+      </button>
+      {error ? <span className="text-error text-[10px]">{error}</span> : null}
+    </span>
+  );
+}
+
+function CredentialsCell({ auth, cache, onRevealed }) {
+  const cfg = auth.config ?? {};
+  if (auth.type === "bearer") {
+    return (
+      <CredDisplay
+        field={cfg.token}
+        fieldKey="token"
+        authName={auth.name}
+        cache={cache}
+        onRevealed={onRevealed}
+      />
+    );
+  }
+  if (auth.type === "basic") {
+    return (
+      <span className="inline-flex flex-wrap gap-x-3 gap-y-1 items-center">
+        <span className="inline-flex items-center gap-1">
+          <span className="opacity-60 text-xs">user</span>
+          <CredDisplay
+            field={cfg.user}
+            fieldKey="user"
+            authName={auth.name}
+            cache={cache}
+            onRevealed={onRevealed}
+          />
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="opacity-60 text-xs">pass</span>
+          <CredDisplay
+            field={cfg.password}
+            fieldKey="password"
+            authName={auth.name}
+            cache={cache}
+            onRevealed={onRevealed}
+          />
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex flex-wrap gap-x-2 gap-y-1 items-center">
+      <span className="font-mono text-xs opacity-70">{cfg.header ?? "?"}</span>
+      <CredDisplay
+        field={cfg.value}
+        fieldKey="value"
+        authName={auth.name}
+        cache={cache}
+        onRevealed={onRevealed}
+      />
+    </span>
   );
 }
 
@@ -149,23 +307,38 @@ export function AuthProfilesPage() {
   const [mode, setMode] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  /** @type {[Record<string, Record<string, string>>, Function]} */
+  const [revealCache, setRevealCache] = useState({});
+  const [editLoading, setEditLoading] = useState(false);
 
   function openAdd() {
     setMode("add");
     setForm(emptyForm());
   }
 
-  function openEdit(a) {
-    setMode("edit");
+  async function openEdit(a) {
+    setEditLoading(true);
+    /** @type {Record<string, string>} */
+    let literals = {};
+    try {
+      const data = await fetchHttpAuthLiterals(a.name);
+      literals = data.literals ?? {};
+      setRevealCache((prev) => ({ ...prev, [a.name]: literals }));
+    } catch {
+      // keep empty; form still works with keep markers
+    } finally {
+      setEditLoading(false);
+    }
     const cfg = a.config ?? {};
+    setMode("edit");
     setForm({
       name: a.name,
       type: a.type,
-      token: credFromPublic(cfg.token),
-      user: credFromPublic(cfg.user),
-      password: credFromPublic(cfg.password),
+      token: credFromPublic(cfg.token, literals.token),
+      user: credFromPublic(cfg.user, literals.user),
+      password: credFromPublic(cfg.password, literals.password),
       header: cfg.header ?? "",
-      value: credFromPublic(cfg.value),
+      value: credFromPublic(cfg.value, literals.value),
       unauthorized_status: a.unauthorized_status ?? "",
       unauthorized_response: a.unauthorized_response ?? "",
     });
@@ -204,17 +377,17 @@ export function AuthProfilesPage() {
           form.unauthorized_status === "" ? null : Number(form.unauthorized_status),
         unauthorized_response: form.unauthorized_response || null,
       },
-      { onSuccess: closeForm },
+      {
+        onSuccess: () => {
+          setRevealCache((prev) => {
+            const next = { ...prev };
+            delete next[form.name];
+            return next;
+          });
+          closeForm();
+        },
+      },
     );
-  }
-
-  function summarize(a) {
-    const cfg = a.config ?? {};
-    if (a.type === "bearer") return sourceLabel(cfg.token);
-    if (a.type === "basic") {
-      return `user=${sourceLabel(cfg.user)} pass=${sourceLabel(cfg.password)}`;
-    }
-    return `${cfg.header ?? "?"} = ${sourceLabel(cfg.value)}`;
   }
 
   return (
@@ -253,13 +426,22 @@ export function AuthProfilesPage() {
                 <tr key={a.id} className="hover">
                   <td className="font-mono">{a.name}</td>
                   <td>{a.type}</td>
-                  <td className="font-mono text-xs">{summarize(a)}</td>
+                  <td>
+                    <CredentialsCell
+                      auth={a}
+                      cache={revealCache[a.name]}
+                      onRevealed={(literals) =>
+                        setRevealCache((prev) => ({ ...prev, [a.name]: literals }))
+                      }
+                    />
+                  </td>
                   <td className="whitespace-nowrap">{formatTime(a.updated_at)}</td>
                   <td className="text-right whitespace-nowrap">
                     <button
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Edit"
+                      disabled={editLoading}
                       onClick={() => openEdit(a)}
                     >
                       <LuPencil className="size-4" />
@@ -337,6 +519,7 @@ export function AuthProfilesPage() {
                 cred={form.password}
                 onChange={(password) => setForm({ ...form, password })}
                 allowEmpty
+                masked
               />
             </>
           ) : null}

@@ -233,6 +233,24 @@ export async function getHttpAuthInternal(name) {
   };
 }
 
+/**
+ * Return only plaintext literal credential fields (not KV refs or encrypted secrets).
+ * @param {string} name
+ * @returns {Promise<{ name: string, type: string, literals: Record<string, string> } | null>}
+ */
+export async function revealHttpAuthLiterals(name) {
+  const internal = await getHttpAuthInternal(name);
+  if (!internal) return null;
+  /** @type {Record<string, string>} */
+  const literals = {};
+  const cfg = internal.config ?? {};
+  for (const key of ["token", "user", "password", "value"]) {
+    const v = cfg[key];
+    if (typeof v === "string") literals[key] = v;
+  }
+  return { name: internal.name, type: internal.type, literals };
+}
+
 export async function listHttpAuths() {
   const rows = await db("http_auths").select("*").orderBy("name", "asc");
   return rows.map((r) => publicAuth(r));
