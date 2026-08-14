@@ -1,12 +1,3 @@
-function sanitize(label) {
-  const cleaned = String(label ?? "")
-    .replace(/[^A-Za-z0-9]+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_|_$/g, "")
-    .slice(0, 48);
-  return cleaned || "node";
-}
-
 function parseStep(step) {
   if (typeof step === "string") {
     return { script: step, id: null, needs: null };
@@ -32,27 +23,35 @@ function parentIdsFromNeeds(needs) {
   return [];
 }
 
-export function workflowToArchitecture(parsed) {
+function mermaidLabel(text) {
+  return String(text ?? "")
+    .replace(/"/g, "#quot;")
+    .replace(/[\[\]]/g, " ")
+    .trim() || "node";
+}
+
+function triggerLabel(t) {
+  const type = String(t?.type ?? "").toLowerCase();
+  if (type === "cron") return `cron ${t.schedule ?? ""}`.trim();
+  const method = t?.method ?? "POST";
+  const path = t?.path ?? "";
+  return `${method} ${path}`.trim();
+}
+
+export function workflowToFlowchart(parsed) {
   /** @type {Record<string, string>} */
   const scriptIds = {};
   if (!parsed || typeof parsed !== "object") {
     return { chart: "", scriptIds };
   }
 
-  const groupId = "wf";
-  const name = sanitize(parsed.name || "workflow");
-  const lines = ["architecture-beta", `    group ${groupId}[${name}]`];
+  const lines = ["flowchart LR"];
 
   const triggerIds = [];
   const triggers = Array.isArray(parsed.triggers) ? parsed.triggers : [];
   triggers.forEach((t, i) => {
     const id = `t${i}`;
-    const icon = t?.type === "cron" ? "cloud" : "internet";
-    const label =
-      t?.type === "cron"
-        ? `cron ${t.schedule ?? ""}`
-        : `${t?.method ?? "POST"} ${t?.path ?? ""}`;
-    lines.push(`    service ${id}(${icon})[${sanitize(label)}] in ${groupId}`);
+    lines.push(`  ${id}(["${mermaidLabel(triggerLabel(t))}"])`);
     triggerIds.push(id);
   });
 
@@ -74,9 +73,8 @@ export function workflowToArchitecture(parsed) {
 
   for (const s of parsedSteps) {
     scriptIds[s.mermaidId] = s.script;
-    lines.push(
-      `    service ${s.mermaidId}(server)[${sanitize(s.id || s.script)}] in ${groupId}`,
-    );
+    const label = s.id ? `${s.id}: ${s.script}` : s.script;
+    lines.push(`  ${s.mermaidId}["${mermaidLabel(label)}"]`);
   }
 
   if (dagMode) {
@@ -89,12 +87,12 @@ export function workflowToArchitecture(parsed) {
       }
       for (const pid of parents) {
         const from = idToMermaid[pid];
-        if (from) lines.push(`    ${from}:R -- L:${s.mermaidId}`);
+        if (from) lines.push(`  ${from} --> ${s.mermaidId}`);
       }
     }
     for (const tid of triggerIds) {
       for (const rid of roots) {
-        lines.push(`    ${tid}:R -- L:${rid}`);
+        lines.push(`  ${tid} --> ${rid}`);
       }
     }
   } else {
@@ -102,18 +100,18 @@ export function workflowToArchitecture(parsed) {
     let firstScript = null;
     for (const s of parsedSteps) {
       if (!firstScript) firstScript = s.mermaidId;
-      if (prev) lines.push(`    ${prev}:R -- L:${s.mermaidId}`);
+      if (prev) lines.push(`  ${prev} --> ${s.mermaidId}`);
       prev = s.mermaidId;
     }
     if (firstScript) {
       for (const tid of triggerIds) {
-        lines.push(`    ${tid}:R -- L:${firstScript}`);
+        lines.push(`  ${tid} --> ${firstScript}`);
       }
     }
   }
 
-  if (triggerIds.length >= 2) {
-    lines.push(`    align column ${triggerIds.join(" ")}`);
+  if (lines.length === 1) {
+    return { chart: "", scriptIds };
   }
 
   return { chart: lines.join("\n"), scriptIds };

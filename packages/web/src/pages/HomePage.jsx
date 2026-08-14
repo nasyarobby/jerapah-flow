@@ -70,7 +70,7 @@ export function HomePage() {
               <li key={w.key}>
                 <Link
                   className="link link-error"
-                  to={`/workflows?edit=${encodeURIComponent(w.owner)}/${encodeURIComponent(w.file)}`}
+                  to={`/workflows/${encodeURIComponent(w.owner)}/${encodeURIComponent(w.file)}/edit`}
                 >
                   {w.key}: {w.loadError}
                 </Link>
