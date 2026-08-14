@@ -1,7 +1,11 @@
 import yaml from "yaml";
 import * as store from "../../store.js";
 import * as fsStore from "../../fs-store.js";
-import { namespacedPath, parseScriptStep } from "../../workflow-parse.js";
+import {
+  compileWorkflowScripts,
+  namespacedPath,
+  parseScriptStep,
+} from "../../workflow-parse.js";
 
 function triggerSummary(owner, workflow) {
   if (!workflow || typeof workflow !== "object") return [];
@@ -160,11 +164,19 @@ export default function workflowsPluginFactory(registry) {
       if (typeof body.content !== "string") {
         return reply.code(400).send({ error: "content is required" });
       }
+      let parsed;
       try {
-        yaml.parse(body.content);
+        parsed = yaml.parse(body.content);
       } catch (err) {
         return reply.code(400).send({
           error: `invalid yaml: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+      try {
+        compileWorkflowScripts(parsed?.scripts);
+      } catch (err) {
+        return reply.code(400).send({
+          error: err instanceof Error ? err.message : String(err),
         });
       }
       const existed = fsStore.readWorkflowYaml(owner, file) != null;

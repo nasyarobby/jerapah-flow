@@ -29,7 +29,7 @@ function previewValue(value) {
   return { preview: `${json.slice(0, 500)}...`, truncated: true };
 }
 
-export default async function fetchHtml(ctx) {
+async function fetchHtml(ctx) {
   const url = ctx.config?.url;
   if (typeof url !== "string" || url.length === 0) {
     throw new Error("fetch-html: ctx.config.url is required");
@@ -83,3 +83,31 @@ export default async function fetchHtml(ctx) {
 
   return ctx;
 }
+
+fetchHtml.meta = {
+  description: "Fetch HTML and optionally select elements or transform with JSONata",
+  config: {
+    url: { type: "string", required: true, description: "Page URL" },
+    selector: { type: "string", required: false, description: "CSS selector" },
+    outputVar: {
+      type: "string",
+      required: false,
+      description: "Required when selector or jsonata is set",
+    },
+    jsonata: { type: "string", required: false, description: "JSONata applied to selector matches" },
+  },
+  input: {},
+  output: {
+    httpResponse: { type: "string", description: "Raw HTML" },
+  },
+  example: {
+    data: {},
+    config: {
+      url: "https://example.com/",
+      selector: "h1",
+      outputVar: "headings",
+    },
+  },
+};
+
+export default fetchHtml;

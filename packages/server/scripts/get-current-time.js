@@ -1,6 +1,6 @@
 // this script will get current time
 
-export default function getCurrentTime() {
+function getCurrentTime() {
     return {
         data: {
             datetime: new Date().toISOString(),
@@ -8,3 +8,19 @@ export default function getCurrentTime() {
         }
     }
 }
+
+getCurrentTime.meta = {
+  description: "Return the current time as ctx.data.datetime",
+  config: {},
+  input: {},
+  output: {
+    datetime: { type: "string", description: "ISO timestamp" },
+    processId: { type: "string" },
+  },
+  example: {
+    data: {},
+    config: {},
+  },
+};
+
+export default getCurrentTime;

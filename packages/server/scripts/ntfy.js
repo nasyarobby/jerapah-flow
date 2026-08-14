@@ -9,7 +9,7 @@ function ntfyHeaders(ctx) {
   return headers;
 }
 
-export default async function ntfy(ctx) {
+async function ntfy(ctx) {
   const file = ctx.data?.file;
   const hasFile = Buffer.isBuffer(file) || file instanceof Uint8Array;
 
@@ -64,3 +64,31 @@ export default async function ntfy(ctx) {
   });
   return { sent: "true" };
 }
+
+ntfy.meta = {
+  description: "Send a message or file to an ntfy topic",
+  config: {
+    url: {
+      type: "string",
+      default: "https://ntfy.sh/scrunner",
+      description: "ntfy topic URL",
+    },
+  },
+  input: {
+    title: { type: "string", required: false },
+    message: { type: "string", required: false },
+    attach: { type: "string", required: false, description: "Remote attachment URL" },
+    file: { type: "buffer", required: false, description: "Binary body to PUT" },
+    filename: { type: "string", required: false },
+    contentType: { type: "string", required: false },
+  },
+  output: {
+    sent: { type: "string", description: "Replaces the workflow context with { sent: \"true\" }" },
+  },
+  example: {
+    data: { title: "Hello", message: "Hello from scrunner" },
+    config: { url: "https://ntfy.sh/scrunner" },
+  },
+};
+
+export default ntfy;

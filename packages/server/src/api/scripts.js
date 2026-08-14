@@ -1,4 +1,8 @@
-import { clearScriptCache, runScriptSource } from "../../script-sandbox.js";
+import {
+  clearScriptCache,
+  inspectScriptSource,
+  instantiateScriptSource,
+} from "../../script-sandbox.js";
 import * as fsStore from "../../fs-store.js";
 import { createDryRunLogger, safeSerialize } from "./dry-run-logger.js";
 
@@ -11,7 +15,15 @@ export default function scriptsPluginFactory(registry) {
    */
   return async function scriptsPlugin(fastify) {
     fastify.get("/scripts", async () => {
-      return { scripts: fsStore.listScriptFiles() };
+      const scripts = fsStore.listScriptFiles().map((name) => {
+        const content = fsStore.readScript(name);
+        const inspected =
+          content == null
+            ? { meta: null, metaError: "script not found" }
+            : inspectScriptSource(name, content);
+        return { name, ...inspected };
+      });
+      return { scripts };
     });
 
     fastify.get("/scripts/:name", async (req, reply) => {
@@ -23,7 +35,7 @@ export default function scriptsPluginFactory(registry) {
       }
       const content = fsStore.readScript(name);
       if (content == null) return reply.code(404).send({ error: "script not found" });
-      return { name, content };
+      return { name, content, ...inspectScriptSource(name, content) };
     });
 
     fastify.put("/scripts/:name", async (req, reply) => {
@@ -40,7 +52,10 @@ export default function scriptsPluginFactory(registry) {
       const existed = fsStore.readScript(name) != null;
       fsStore.writeScript(name, body.content);
       clearScriptCache();
-      return reply.code(existed ? 200 : 201).send({ name });
+      return reply.code(existed ? 200 : 201).send({
+        name,
+        ...inspectScriptSource(name, body.content),
+      });
     });
 
     fastify.delete("/scripts/:name", async (req, reply) => {
@@ -86,24 +101,29 @@ export default function scriptsPluginFactory(registry) {
       const started = Date.now();
 
       try {
-        const output = await runScriptSource(name, body.content, ctx, {
+        const { fn, meta, metaError } = instantiateScriptSource(name, body.content, {
           log,
           workflowName: "dry-run",
         });
+        const output = await fn(ctx);
         return {
           status: "success",
           output: safeSerialize(output),
           error: null,
           logs,
           durationMs: Date.now() - started,
+          meta,
+          metaError,
         };
       } catch (err) {
+        const inspected = inspectScriptSource(name, body.content);
         return {
           status: "failed",
           output: null,
           error: err instanceof Error ? err.message : String(err),
           logs,
           durationMs: Date.now() - started,
+          ...inspected,
         };
       }
     });

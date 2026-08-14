@@ -1,6 +1,19 @@
-export const NEW_SCRIPT_TEMPLATE = `export default async function main(ctx) {
+export const NEW_SCRIPT_TEMPLATE = `async function main(ctx) {
   return ctx;
 }
+
+main.meta = {
+  description: "",
+  config: {},
+  input: {},
+  output: {},
+  example: {
+    data: {},
+    config: {},
+  },
+};
+
+export default main;
 `;
 
 export const DEFAULT_INPUT_CONTEXT = `{
@@ -22,4 +35,29 @@ export function prettyJson(value) {
   } catch {
     return String(value);
   }
+}
+
+function defaultsFromFields(fields) {
+  if (fields == null || typeof fields !== "object" || Array.isArray(fields)) return {};
+  /** @type {Record<string, unknown>} */
+  const out = {};
+  for (const [key, spec] of Object.entries(fields)) {
+    if (spec && typeof spec === "object" && "default" in spec) {
+      out[key] = spec.default;
+    }
+  }
+  return out;
+}
+
+export function contextFromMeta(meta) {
+  if (meta?.example && typeof meta.example === "object" && !Array.isArray(meta.example)) {
+    return {
+      data: "data" in meta.example ? meta.example.data : {},
+      config: "config" in meta.example ? meta.example.config ?? {} : {},
+    };
+  }
+  return {
+    data: defaultsFromFields(meta?.input),
+    config: defaultsFromFields(meta?.config),
+  };
 }

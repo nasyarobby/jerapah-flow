@@ -9,11 +9,12 @@ import {
 } from "../api/hooks.js";
 import { CodeEditor } from "../components/CodeEditor.jsx";
 import { LogViewer } from "../components/LogViewer.jsx";
+import { ScriptMetaPanel } from "../components/ScriptMetaPanel.jsx";
 import { StatusBadge } from "../lib/format.jsx";
 import {
   DEFAULT_INPUT_CONTEXT,
   NEW_SCRIPT_TEMPLATE,
-  normalizeScriptName,
+  contextFromMeta,
   prettyJson,
 } from "../lib/script.js";
 
@@ -29,6 +30,7 @@ export function ScriptDryRunPage() {
 
   const [content, setContent] = useState("");
   const [inputJson, setInputJson] = useState(DEFAULT_INPUT_CONTEXT);
+  const [inputTouched, setInputTouched] = useState(false);
   const [outputJson, setOutputJson] = useState("");
   const [logs, setLogs] = useState([]);
   const [runStatus, setRunStatus] = useState(null);
@@ -56,6 +58,14 @@ export function ScriptDryRunPage() {
   const backHref = `/scripts/${encodeURIComponent(name)}/edit`;
 
   const lastRun = dryRun.data;
+  const meta = lastRun?.meta ?? existing.data?.meta ?? null;
+  const metaError = lastRun?.metaError ?? existing.data?.metaError ?? null;
+
+  useEffect(() => {
+    if (inputTouched) return;
+    if (!existing.data?.meta) return;
+    setInputJson(prettyJson(contextFromMeta(existing.data.meta)));
+  }, [existing.data?.meta, inputTouched]);
 
   useEffect(() => {
     if (!lastRun) return;
@@ -170,7 +180,10 @@ export function ScriptDryRunPage() {
             <CodeEditor
               language="json"
               value={inputJson}
-              onChange={setInputJson}
+              onChange={(value) => {
+                setInputTouched(true);
+                setInputJson(value);
+              }}
               height="100%"
             />
           </div>
@@ -207,6 +220,15 @@ export function ScriptDryRunPage() {
           </div>
         </section>
       </div>
+
+      <details className="collapse collapse-arrow shrink-0 border border-base-300 bg-base-100">
+        <summary className="collapse-title min-h-0 py-2 text-sm font-semibold">
+          Input / output
+        </summary>
+        <div className="collapse-content">
+          <ScriptMetaPanel meta={meta} metaError={metaError} />
+        </div>
+      </details>
 
       <LogViewer logs={logs} className="h-48 shrink-0 lg:h-56" />
     </div>

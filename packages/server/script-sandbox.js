@@ -3,6 +3,7 @@ import path from "path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import axios from "axios";
+import pino from "pino";
 import { createKvApi } from "./kv-store.js";
 import { SCRIPTS_DIR } from "./paths.js";
 
@@ -298,6 +299,78 @@ function compileScriptSource(source, filename) {
   return new vm.Script(wrapScriptSource(source, filename), { filename });
 }
 
+const inspectLog = pino({ level: "silent" });
+
+/**
+ * @param {unknown} fn
+ * @returns {{ meta: Record<string, unknown> | null, metaError: string | null }}
+ */
+export function extractScriptMeta(fn) {
+  if (typeof fn !== "function") {
+    return { meta: null, metaError: "default export must be a function" };
+  }
+  if (!("meta" in fn) || fn.meta == null) {
+    return { meta: null, metaError: null };
+  }
+  try {
+    const serialized = JSON.parse(JSON.stringify(fn.meta));
+    if (serialized == null || typeof serialized !== "object" || Array.isArray(serialized)) {
+      return { meta: null, metaError: "script.meta must be a plain object" };
+    }
+    return { meta: serialized, metaError: null };
+  } catch (err) {
+    return {
+      meta: null,
+      metaError: err instanceof Error ? err.message : "script.meta could not be serialized",
+    };
+  }
+}
+
+/**
+ * @param {import("node:vm").Script} compiled
+ * @param {{ log: import("pino").Logger, script: string, workflowName: string }} opts
+ */
+function instantiateCompiled(compiled, { log, script, workflowName }) {
+  const sandbox = createScriptSandbox({ log, script, workflowName });
+  return compiled.runInContext(sandbox);
+}
+
+/**
+ * Compile source and return the default-export function plus extracted meta.
+ * Does not call the script.
+ *
+ * @param {string} script
+ * @param {string} source
+ * @param {{ log?: import("pino").Logger, workflowName?: string }} [opts]
+ */
+export function instantiateScriptSource(script, source, opts = {}) {
+  const compiled = compileScriptSource(source, script);
+  const fn = instantiateCompiled(compiled, {
+    log: opts.log ?? inspectLog,
+    script,
+    workflowName: opts.workflowName ?? "inspect",
+  });
+  return { fn, ...extractScriptMeta(fn) };
+}
+
+/**
+ * Evaluate module-level code and read `defaultExport.meta` without calling the script.
+ *
+ * @param {string} script
+ * @param {string} source
+ */
+export function inspectScriptSource(script, source) {
+  try {
+    const { meta, metaError } = instantiateScriptSource(script, source);
+    return { meta, metaError };
+  } catch (err) {
+    return {
+      meta: null,
+      metaError: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 function loadCompiledScript(script) {
   const filePath = path.join(SCRIPTS_DIR, script);
   const { mtimeMs } = fs.statSync(filePath);
@@ -321,8 +394,7 @@ function loadCompiledScript(script) {
  */
 export async function runScript(script, ctx, { log, workflowName }) {
   const compiled = loadCompiledScript(script);
-  const sandbox = createScriptSandbox({ log, script, workflowName });
-  const fn = compiled.runInContext(sandbox);
+  const fn = instantiateCompiled(compiled, { log, script, workflowName });
   return await fn(ctx);
 }
 
@@ -335,8 +407,6 @@ export async function runScript(script, ctx, { log, workflowName }) {
  * @param {{ log: import("pino").Logger, workflowName: string }} opts
  */
 export async function runScriptSource(script, source, ctx, { log, workflowName }) {
-  const compiled = compileScriptSource(source, script);
-  const sandbox = createScriptSandbox({ log, script, workflowName });
-  const fn = compiled.runInContext(sandbox);
+  const { fn } = instantiateScriptSource(script, source, { log, workflowName });
   return await fn(ctx);
 }

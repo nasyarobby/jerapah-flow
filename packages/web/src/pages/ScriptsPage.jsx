@@ -34,16 +34,28 @@ export function ScriptsPage() {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Description</th>
                 <th className="w-28" />
               </tr>
             </thead>
             <tbody>
-              {scripts.map((s) => (
-                <tr key={s} className="hover">
+              {scripts.map((s) => {
+                const name = typeof s === "string" ? s : s.name;
+                const description = typeof s === "string" ? "" : s.meta?.description;
+                const metaError = typeof s === "string" ? null : s.metaError;
+                return (
+                <tr key={name} className="hover">
                   <td className="font-mono">
-                    <Link className="link" to={`/scripts/${encodeURIComponent(s)}/edit`}>
-                      {s}
+                    <Link className="link" to={`/scripts/${encodeURIComponent(name)}/edit`}>
+                      {name}
                     </Link>
+                  </td>
+                  <td className="max-w-xl truncate text-sm opacity-80">
+                    {metaError ? (
+                      <span className="text-error">{metaError}</span>
+                    ) : (
+                      description || "—"
+                    )}
                   </td>
                   <td className="text-right whitespace-nowrap">
                     <button
@@ -51,13 +63,13 @@ export function ScriptsPage() {
                       className="btn btn-ghost btn-xs"
                       title="Dry run"
                       onClick={() =>
-                        navigate(`/scripts/${encodeURIComponent(s)}/dry-run`)
+                        navigate(`/scripts/${encodeURIComponent(name)}/dry-run`)
                       }
                     >
                       <LuPlay className="size-4" />
                     </button>
                     <Link
-                      to={`/scripts/${encodeURIComponent(s)}/edit`}
+                      to={`/scripts/${encodeURIComponent(name)}/edit`}
                       className="btn btn-ghost btn-xs"
                       title="Edit"
                     >
@@ -67,13 +79,14 @@ export function ScriptsPage() {
                       type="button"
                       className="btn btn-ghost btn-xs text-error"
                       title="Delete"
-                      onClick={() => setConfirmDelete(s)}
+                      onClick={() => setConfirmDelete(name)}
                     >
                       <LuTrash2 className="size-4" />
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

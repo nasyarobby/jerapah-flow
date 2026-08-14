@@ -4,6 +4,7 @@ import { LuArrowLeft, LuPlay, LuSave } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import { useSaveScript, useScript } from "../api/hooks.js";
 import { CodeEditor } from "../components/CodeEditor.jsx";
+import { ScriptMetaPanel } from "../components/ScriptMetaPanel.jsx";
 import { NEW_SCRIPT_TEMPLATE, normalizeScriptName } from "../lib/script.js";
 
 export function ScriptNewPage() {
@@ -156,6 +157,15 @@ export function ScriptEditPage() {
       <form id="script-edit-form" onSubmit={onSave} className="min-h-0 flex-1">
         <CodeEditor language="javascript" value={content} onChange={setContent} height="100%" />
       </form>
+
+      <details className="collapse collapse-arrow shrink-0 border border-base-300 bg-base-100">
+        <summary className="collapse-title min-h-0 py-2 text-sm font-semibold">
+          Input / output
+        </summary>
+        <div className="collapse-content">
+          <ScriptMetaPanel meta={existing.data?.meta} metaError={existing.data?.metaError} />
+        </div>
+      </details>
 
       {save.isError ? (
         <p className="text-error text-sm shrink-0">{errorMessage(save.error)}</p>

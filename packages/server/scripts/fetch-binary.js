@@ -37,7 +37,7 @@ function resolveUrl(ctx) {
   return null;
 }
 
-export default async function fetchBinary(ctx) {
+async function fetchBinary(ctx) {
   ensureDataObject(ctx);
 
   const url = resolveUrl(ctx);
@@ -68,3 +68,29 @@ export default async function fetchBinary(ctx) {
 
   return ctx;
 }
+
+fetchBinary.meta = {
+  description: "Download a binary URL into ctx.data as a Buffer",
+  config: {
+    url: { type: "string", required: false, description: "Direct download URL" },
+    urlVar: { type: "string", required: false, description: "Key in ctx.data that holds the URL" },
+    outputVar: { type: "string", default: "file", description: "ctx.data key for the Buffer" },
+    filename: { type: "string", required: false, description: "Override saved filename" },
+  },
+  input: {
+    attach: { type: "string", required: false, description: "Fallback URL" },
+    url: { type: "string", required: false, description: "Fallback URL" },
+    filename: { type: "string", required: false },
+  },
+  output: {
+    file: { type: "buffer", description: "Downloaded bytes (or ctx.config.outputVar)" },
+    filename: { type: "string" },
+    contentType: { type: "string" },
+  },
+  example: {
+    data: { attach: "https://example.com/image.png" },
+    config: { outputVar: "file" },
+  },
+};
+
+export default fetchBinary;

@@ -1,7 +1,7 @@
 scripts:
   - time-to-ntfy-example.yaml
   - test.yaml
-  - manual-trigger.yaml
   - cron-example.yaml
   - fetch-devto.yaml
   - comic-monkeyuser-to-ntfy.yaml
+  - time-and-comic-to-ntfy.yaml

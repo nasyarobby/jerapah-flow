@@ -6,7 +6,12 @@ import { WORKFLOWS_DIR } from "./paths.js";
 import { log } from "./logger.js";
 import * as store from "./store.js";
 import { clearScriptCache, runScript } from "./script-sandbox.js";
-import { namespacedPath, parseScriptStep } from "./workflow-parse.js";
+import {
+  compileWorkflowScripts,
+  mergeStepData,
+  namespacedPath,
+  parseScriptStep,
+} from "./workflow-parse.js";
 import * as fsStore from "./fs-store.js";
 
 /**
@@ -68,6 +73,7 @@ export function createRegistry(server) {
         try {
           const workflowData = fs.readFileSync(filePath, "utf8");
           const workflow = yaml.parse(workflowData);
+          compileWorkflowScripts(workflow?.scripts);
           workflows.set(key, { owner, file, workflow });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -193,6 +199,83 @@ export function createRegistry(server) {
   }
 
   /**
+   * @param {import("./workflow-parse.js").CompiledScripts} compiled
+   * @param {{ data?: unknown }} ctx
+   * @param {string} runId
+   * @param {import("pino").Logger} runLog
+   * @param {string} key
+   */
+  async function runLinearSteps(compiled, ctx, runId, runLog, key) {
+    let next = ctx;
+    for (const index of compiled.order) {
+      const parsed = compiled.steps[index];
+      next = await executeStep(parsed, next, index, runId, runLog, key);
+    }
+    return next;
+  }
+
+  /**
+   * @param {import("./workflow-parse.js").CompiledScripts} compiled
+   * @param {{ data?: unknown }} ctx
+   * @param {string} runId
+   * @param {import("pino").Logger} runLog
+   * @param {string} key
+   */
+  async function runDagSteps(compiled, ctx, runId, runLog, key) {
+    const triggerData = ctx.data;
+    /** @type {Map<string, unknown>} */
+    const outputsById = new Map();
+    let last = ctx;
+
+    for (const [orderIndex, stepIndex] of compiled.order.entries()) {
+      const parsed = compiled.steps[stepIndex];
+      const data = mergeStepData(parsed, outputsById, triggerData);
+      last = await executeStep(
+        parsed,
+        { ...ctx, data },
+        orderIndex,
+        runId,
+        runLog,
+        key,
+      );
+      if (parsed.id) {
+        outputsById.set(parsed.id, last);
+      }
+    }
+    return last;
+  }
+
+  /**
+   * @param {import("./workflow-parse.js").CompiledStep} parsed
+   * @param {{ data?: unknown, config?: unknown }} ctx
+   * @param {number} index
+   * @param {string} runId
+   * @param {import("pino").Logger} runLog
+   * @param {string} key
+   */
+  async function executeStep(parsed, ctx, index, runId, runLog, key) {
+    const { script, config } = parsed;
+    const step = await store.startStep({
+      runId,
+      index,
+      script,
+      config,
+    });
+    const stepLog = runLog.child({ stepId: step.id, script });
+    try {
+      const result = await runScript(script, { ...ctx, config }, {
+        log: stepLog,
+        workflowName: key,
+      });
+      await store.finishStep(step.id, "success", result);
+      return result;
+    } catch (err) {
+      await store.finishStep(step.id, "failed", null, err);
+      throw err;
+    }
+  }
+
+  /**
    * @param {string} key
    * @param {{ data?: unknown }} context
    * @param {{ type: string, detail?: string | null }} trigger
@@ -221,25 +304,11 @@ export function createRegistry(server) {
     };
 
     try {
-      for (const [index, rawStep] of (workflow.scripts ?? []).entries()) {
-        const { script, config } = parseScriptStep(rawStep);
-        const step = await store.startStep({
-          runId: run.id,
-          index,
-          script,
-          config,
-        });
-        const stepLog = runLog.child({ stepId: step.id, script });
-        try {
-          ctx = await runScript(script, { ...ctx, config }, {
-            log: stepLog,
-            workflowName: key,
-          });
-          await store.finishStep(step.id, "success", ctx);
-        } catch (err) {
-          await store.finishStep(step.id, "failed", null, err);
-          throw err;
-        }
+      const compiled = compileWorkflowScripts(workflow.scripts);
+      if (compiled.dagMode) {
+        ctx = await runDagSteps(compiled, ctx, run.id, runLog, key);
+      } else {
+        ctx = await runLinearSteps(compiled, ctx, run.id, runLog, key);
       }
       await store.finishRun(run.id, "success", ctx);
       return { runId: run.id, status: "success", result: ctx };

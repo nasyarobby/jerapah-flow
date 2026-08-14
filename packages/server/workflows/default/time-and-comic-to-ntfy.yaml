@@ -1,0 +1,37 @@
+name: time and comic to ntfy
+description: >
+  Fan-in from two scripts (current time + monkeyuser comic), then send to ntfy.
+scripts:
+  - id: time
+    script: get-current-time.js
+
+  - id: comic
+    script: fetch-html.js
+    config:
+      url: "https://www.monkeyuser.com/"
+      outputVar: "httpResponse"
+      selector: ".comic img"
+      jsonata: |
+        {"url": "https://www.monkeyuser.com" & [attributes.src][0], "title": [attributes.title][0]}
+
+  - id: compose
+    script: jsonata.js
+    needs: [time, comic]
+    config:
+      expression: |
+        {"data": {
+          "title": comic.httpResponse.title,
+          "message": time.datetime & " " & comic.httpResponse.title,
+          "attach": comic.httpResponse.url
+        }}
+
+  - id: notify
+    script: ntfy.js
+    needs: [compose]
+    config:
+      url: https://ntfy.sh/scrunner
+
+triggers:
+  - type: HTTP
+    method: POST
+    path: /time-and-comic

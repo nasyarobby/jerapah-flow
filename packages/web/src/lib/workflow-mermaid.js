@@ -8,9 +8,28 @@ function sanitize(label) {
 }
 
 function parseStep(step) {
-  if (typeof step === "string") return step;
-  if (step?.script) return step.script;
+  if (typeof step === "string") {
+    return { script: step, id: null, needs: null };
+  }
+  if (step?.script) {
+    return {
+      script: step.script,
+      id: typeof step.id === "string" && step.id ? step.id : null,
+      needs: step.needs ?? null,
+    };
+  }
   return null;
+}
+
+function parentIdsFromNeeds(needs) {
+  if (needs == null) return null;
+  if (Array.isArray(needs)) {
+    return needs.filter((x) => typeof x === "string" && x.length > 0);
+  }
+  if (typeof needs === "object") {
+    return Object.values(needs).filter((x) => typeof x === "string" && x.length > 0);
+  }
+  return [];
 }
 
 export function workflowToArchitecture(parsed) {
@@ -38,27 +57,61 @@ export function workflowToArchitecture(parsed) {
   });
 
   const scripts = Array.isArray(parsed.scripts) ? parsed.scripts : [];
-  let prev = null;
-  let firstScript = null;
+  const parsedSteps = [];
   scripts.forEach((step, i) => {
-    const script = parseStep(step);
-    if (!script) return;
-    const id = `s${i}`;
-    scriptIds[id] = script;
-    lines.push(`    service ${id}(server)[${sanitize(script)}] in ${groupId}`);
-    if (!firstScript) firstScript = id;
-    if (prev) lines.push(`    ${prev}:R -- L:${id}`);
-    prev = id;
+    const parsedStep = parseStep(step);
+    if (!parsedStep) return;
+    parsedSteps.push({ ...parsedStep, mermaidId: `s${i}` });
   });
 
-  // All triggers point at the first script (not chained to each other).
-  if (firstScript) {
+  const dagMode = parsedSteps.some((s) => s.needs != null);
+
+  /** @type {Record<string, string>} */
+  const idToMermaid = {};
+  for (const s of parsedSteps) {
+    if (s.id) idToMermaid[s.id] = s.mermaidId;
+  }
+
+  for (const s of parsedSteps) {
+    scriptIds[s.mermaidId] = s.script;
+    lines.push(
+      `    service ${s.mermaidId}(server)[${sanitize(s.id || s.script)}] in ${groupId}`,
+    );
+  }
+
+  if (dagMode) {
+    const roots = [];
+    for (const s of parsedSteps) {
+      const parents = parentIdsFromNeeds(s.needs);
+      if (!parents || parents.length === 0) {
+        roots.push(s.mermaidId);
+        continue;
+      }
+      for (const pid of parents) {
+        const from = idToMermaid[pid];
+        if (from) lines.push(`    ${from}:R -- L:${s.mermaidId}`);
+      }
+    }
     for (const tid of triggerIds) {
-      lines.push(`    ${tid}:R -- L:${firstScript}`);
+      for (const rid of roots) {
+        lines.push(`    ${tid}:R -- L:${rid}`);
+      }
+    }
+  } else {
+    let prev = null;
+    let firstScript = null;
+    for (const s of parsedSteps) {
+      if (!firstScript) firstScript = s.mermaidId;
+      if (prev) lines.push(`    ${prev}:R -- L:${s.mermaidId}`);
+      prev = s.mermaidId;
+    }
+    if (firstScript) {
+      for (const tid of triggerIds) {
+        lines.push(`    ${tid}:R -- L:${firstScript}`);
+      }
     }
   }
 
-  // Keep multiple triggers in one column so they don't overlap.
   if (triggerIds.length >= 2) {
     lines.push(`    align column ${triggerIds.join(" ")}`);
   }
