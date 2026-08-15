@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { LuArrowLeft, LuFilter } from "react-icons/lu";
 import { useRun } from "../api/hooks.js";
 import { LogViewer } from "../components/LogViewer.jsx";
@@ -22,8 +22,18 @@ function isEditableScript(s) {
 
 export function EventDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { data: run, isLoading, error } = useRun(id);
   const [stepFilters, setStepFilters] = useState([]);
+
+  function goBack() {
+    const idx = window.history.state?.idx;
+    if (typeof idx === "number" && idx > 0) {
+      navigate(-1);
+      return;
+    }
+    navigate("/events");
+  }
 
   const steps = run?.steps ?? [];
   const logs = run?.logs ?? [];
@@ -53,9 +63,9 @@ export function EventDetailPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Link to="/events" className="btn btn-ghost btn-sm btn-square" aria-label="Back">
+        <button type="button" className="btn btn-ghost btn-sm btn-square" aria-label="Back" onClick={goBack}>
           <LuArrowLeft className="size-4" />
-        </Link>
+        </button>
         <h1 className="text-xl font-semibold truncate">{run.workflow_name || run.workflow}</h1>
         <StatusBadge status={run.status} />
       </div>

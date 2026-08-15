@@ -230,6 +230,7 @@ async function sendEmail(ctx) {
 
 sendEmail.meta = {
   description: "Send an email via SMTP (nodemailer); plain text, HTML, or both",
+  previewConfigKey: "from",
   config: {
     service: {
       type: "string",

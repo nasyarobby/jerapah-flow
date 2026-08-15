@@ -35,7 +35,8 @@ export function WorkflowVisualEditor({
   extraChrome,
   showTest,
   savedYaml,
-  testKey,
+  testOpen,
+  onTestClose,
 }) {
   const [tab, setTab] = useState("scripts");
   const [lastEdited, setLastEdited] = useState("yaml");
@@ -185,7 +186,8 @@ export function WorkflowVisualEditor({
           defaultData={defaultData}
           disabled={Boolean(testDisabledReason)}
           disabledReason={testDisabledReason}
-          testKey={testKey}
+          open={testOpen}
+          onClose={onTestClose}
         />
       ) : null}
     </>

@@ -11,6 +11,7 @@ async function jsonataFn(ctx) {
 
 jsonataFn.meta = {
   description: "Evaluate a JSONata expression against ctx.data and return the result as the next context",
+  previewConfigKey: "expression",
   config: {
     expression: { type: "string", required: true, description: "JSONata expression" },
   },

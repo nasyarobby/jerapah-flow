@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { LuGripVertical, LuMaximize2, LuMinimize2, LuPencil, LuPlay, LuTrash2 } from "react-icons/lu";
+import { LuChevronDown, LuGripVertical, LuMaximize2, LuMinimize2, LuPlay, LuTrash2 } from "react-icons/lu";
 import { useDryRunScript, useScript } from "../../api/hooks.js";
 import { errorMessage } from "../../api/client.js";
 import { CodeEditor } from "../CodeEditor.jsx";
 import { LogViewer } from "../LogViewer.jsx";
-import { ScriptMetaPanel } from "../ScriptMetaPanel.jsx";
 import { StatusBadge } from "../../lib/format.jsx";
 import { contextFromMeta, prettyJson } from "../../lib/script.js";
 import { ConfigFields } from "./ConfigFields.jsx";
-import { FieldLabel } from "./FieldHelp.jsx";
+import { ConfigTooltip, configValueText, FieldLabel, previewConfigValue, SchemaTooltip } from "./FieldHelp.jsx";
 
 export function ScriptCard({
   step,
@@ -35,24 +33,32 @@ export function ScriptCard({
     opacity: isDragging ? 0.6 : 1,
   };
   const [tryOpen, setTryOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const listed = scriptsByName?.get(step.script);
   const meta = listed?.meta ?? null;
-  const metaError = listed?.metaError ?? null;
 
   const duplicateId =
     step.id && otherSteps.some((s) => s.id === step.id && s.uiId !== step.uiId);
+  const preview = previewConfigValue(step.config, meta?.previewConfigKey);
+  const previewFull = configValueText(step.config, meta?.previewConfigKey);
+  const baseName = step.kind === "set" ? `set:${step.as || "…"}` : step.script || "untitled";
+  const titleFull = previewFull ? `${baseName} (${previewFull})` : baseName;
+  const setConfig =
+    step.kind === "set" ? { as: step.as ?? "", expression: step.expression ?? "" } : null;
 
   return (
     <article
       ref={setNodeRef}
       style={style}
-      className="card bg-base-100 border border-primary"
+      className={`card bg-base-100 border border-primary ${
+        isDragging ? "z-40" : "z-0 hover:z-30 focus-within:z-30"
+      }`}
     >
-      <div className="card-body gap-3 p-4">
-        <div className="flex items-start gap-2">
+      <div className={`card-body gap-3 ${expanded ? "p-4" : "p-3"}`}>
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            className="btn btn-ghost btn-xs btn-square mt-0.5 cursor-grab active:cursor-grabbing"
+            className="btn btn-ghost btn-xs btn-square cursor-grab active:cursor-grabbing"
             aria-label={`Drag step ${index + 1}`}
             disabled={disabled}
             {...attributes}
@@ -60,39 +66,52 @@ export function ScriptCard({
           >
             <LuGripVertical className="size-4 opacity-60" />
           </button>
-          <div className="min-w-0 flex-1">
-            <h3 className="card-title text-base font-mono">
-              {step.kind === "set" ? `set:${step.as || "…"}` : step.script || "untitled"}
-            </h3>
-            {step.id ? <span className="badge badge-ghost badge-sm font-mono">{step.id}</span> : null}
-            {step.kind === "script" && meta?.description ? (
+          <button
+            type="button"
+            className="min-w-0 flex-1 text-left"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <h3 className="card-title min-w-0 flex-1 text-base font-mono" title={titleFull}>
+                <span className="min-w-0 truncate">{baseName}</span>
+                {!expanded && preview ? (
+                  <span
+                    className="badge badge-secondary badge-sm max-w-[min(16rem,45%)] shrink-0 truncate font-mono font-normal"
+                    title={previewFull}
+                  >
+                    {preview}
+                  </span>
+                ) : null}
+              </h3>
+              {step.id ? (
+                <span className="badge badge-ghost badge-sm font-mono shrink-0">{step.id}</span>
+              ) : null}
+            </div>
+            {expanded && step.kind === "script" && meta?.description ? (
               <p className="text-sm opacity-70 mt-1">{meta.description}</p>
             ) : null}
-            {step.kind === "set" ? (
+            {expanded && step.kind === "set" ? (
               <p className="text-sm opacity-70 mt-1">Assign a JSONata result onto the context</p>
             ) : null}
-          </div>
+          </button>
+          {step.kind === "script" ? (
+            <SchemaTooltip label="Input" fields={meta?.input} />
+          ) : null}
+          {!expanded ? (
+            <ConfigTooltip config={step.kind === "set" ? setConfig : (step.config ?? {})} />
+          ) : null}
           <div className="card-actions shrink-0">
             {step.kind === "script" && step.script ? (
-              <>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-xs"
-                  title="Try"
-                  disabled={disabled}
-                  onClick={() => setTryOpen(true)}
-                >
-                  <LuPlay className="size-4" />
-                  Try
-                </button>
-                <Link
-                  to={`/scripts/${encodeURIComponent(step.script)}/edit`}
-                  className="btn btn-ghost btn-xs"
-                  title="Edit script"
-                >
-                  <LuPencil className="size-4" />
-                </Link>
-              </>
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs"
+                title="Try"
+                disabled={disabled}
+                onClick={() => setTryOpen(true)}
+              >
+                <LuPlay className="size-4" />
+                Try
+              </button>
             ) : null}
             <button
               type="button"
@@ -103,89 +122,91 @@ export function ScriptCard({
             >
               <LuTrash2 className="size-4" />
             </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs btn-square"
+              title={expanded ? "Collapse" : "Expand"}
+              aria-expanded={expanded}
+              onClick={() => setExpanded((v) => !v)}
+            >
+              <LuChevronDown className={`size-4 opacity-70 transition-transform ${expanded ? "rotate-180" : ""}`} />
+            </button>
           </div>
         </div>
 
-        {step.kind === "script" && (meta?.input || meta?.output) ? (
-          <details className="collapse collapse-arrow bg-base-200">
-            <summary className="collapse-title min-h-0 py-2 text-sm font-semibold">
-              Input / output
-            </summary>
-            <div className="collapse-content">
-              <ScriptMetaPanel meta={meta} metaError={metaError} />
-            </div>
-          </details>
-        ) : null}
-
-        {step.kind === "set" ? (
-          <div className="space-y-2">
-            <FieldLabel name="as" required description="Context field to write (not data or config)" />
-            <input
-              className="input input-sm w-full font-mono"
-              value={step.as ?? ""}
-              disabled={disabled}
-              onChange={(e) => onChange({ ...step, as: e.target.value })}
-            />
-            <FieldLabel name="expression" required description="JSONata evaluated against ctx" />
-            <textarea
-              className="textarea textarea-sm w-full min-h-24 font-mono text-xs"
-              value={step.expression ?? ""}
-              disabled={disabled}
-              onChange={(e) => onChange({ ...step, expression: e.target.value })}
-            />
-          </div>
-        ) : (
-          <ConfigFields
-            script={step.script}
-            config={step.config}
-            meta={meta}
-            disabled={disabled}
-            workflows={workflows}
-            owner={owner}
-            excludeFile={excludeFile}
-            onChange={(config) => onChange({ ...step, config })}
-          />
-        )}
-
-        <details className="collapse collapse-arrow bg-base-200">
-          <summary className="collapse-title min-h-0 py-2 text-sm font-semibold">Advanced</summary>
-          <div className="collapse-content space-y-2">
-            <label className="form-control">
-              <span className="label py-0 text-sm">id</span>
-              <input
-                className={`input input-sm font-mono ${duplicateId ? "input-error" : ""}`}
-                value={step.id ?? ""}
+        {expanded ? (
+          <>
+            {step.kind === "set" ? (
+              <div className="space-y-2">
+                <FieldLabel name="as" required description="Context field to write (not data or config)" />
+                <input
+                  className="input input-sm w-full font-mono"
+                  value={step.as ?? ""}
+                  disabled={disabled}
+                  onChange={(e) => onChange({ ...step, as: e.target.value })}
+                />
+                <FieldLabel name="expression" required description="JSONata evaluated against ctx" />
+                <textarea
+                  className="textarea textarea-sm w-full min-h-24 font-mono text-xs"
+                  value={step.expression ?? ""}
+                  disabled={disabled}
+                  onChange={(e) => onChange({ ...step, expression: e.target.value })}
+                />
+              </div>
+            ) : (
+              <ConfigFields
+                script={step.script}
+                config={step.config}
+                meta={meta}
                 disabled={disabled}
-                onChange={(e) => onChange({ ...step, id: e.target.value })}
-                placeholder="optional step id"
-              />
-              {duplicateId ? (
-                <span className="text-error text-xs">Duplicate step id</span>
-              ) : null}
-            </label>
-            {step.kind === "set" ? null : (
-              <NeedsEditor
-                step={step}
-                otherSteps={otherSteps}
-                disabled={disabled}
-                onChange={onChange}
+                workflows={workflows}
+                owner={owner}
+                excludeFile={excludeFile}
+                onChange={(config) => onChange({ ...step, config })}
               />
             )}
-            <label className="form-control">
-              <span className="label py-0 text-sm">when</span>
-              <input
-                className="input input-sm w-full font-mono"
-                value={step.when ?? ""}
-                disabled={disabled || Boolean(step.needs)}
-                onChange={(e) => onChange({ ...step, when: e.target.value })}
-                placeholder="JSONata; skip if false (linear only)"
-              />
-              {step.needs ? (
-                <span className="text-xs opacity-60">when is not allowed when needs is set</span>
-              ) : null}
-            </label>
-          </div>
-        </details>
+
+            <details className="collapse collapse-arrow bg-base-200">
+              <summary className="collapse-title min-h-0 py-2 text-sm font-semibold">Advanced</summary>
+              <div className="collapse-content space-y-2">
+                <label className="form-control">
+                  <span className="label py-0 text-sm">id</span>
+                  <input
+                    className={`input input-sm font-mono ${duplicateId ? "input-error" : ""}`}
+                    value={step.id ?? ""}
+                    disabled={disabled}
+                    onChange={(e) => onChange({ ...step, id: e.target.value })}
+                    placeholder="optional step id"
+                  />
+                  {duplicateId ? (
+                    <span className="text-error text-xs">Duplicate step id</span>
+                  ) : null}
+                </label>
+                {step.kind === "set" ? null : (
+                  <NeedsEditor
+                    step={step}
+                    otherSteps={otherSteps}
+                    disabled={disabled}
+                    onChange={onChange}
+                  />
+                )}
+                <label className="form-control">
+                  <span className="label py-0 text-sm">when</span>
+                  <input
+                    className="input input-sm w-full font-mono"
+                    value={step.when ?? ""}
+                    disabled={disabled || Boolean(step.needs)}
+                    onChange={(e) => onChange({ ...step, when: e.target.value })}
+                    placeholder="JSONata; skip if false (linear only)"
+                  />
+                  {step.needs ? (
+                    <span className="text-xs opacity-60">when is not allowed when needs is set</span>
+                  ) : null}
+                </label>
+              </div>
+            </details>
+          </>
+        ) : null}
       </div>
       {tryOpen ? (
         <ScriptTryDialog

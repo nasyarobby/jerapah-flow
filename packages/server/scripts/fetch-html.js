@@ -86,6 +86,7 @@ async function fetchHtml(ctx) {
 
 fetchHtml.meta = {
   description: "Fetch HTML and optionally select elements or transform with JSONata",
+  previewConfigKey: "url",
   config: {
     url: { type: "string", required: true, description: "Page URL" },
     selector: { type: "string", required: false, description: "CSS selector" },

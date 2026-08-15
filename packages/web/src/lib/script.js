@@ -4,6 +4,7 @@ export const NEW_SCRIPT_TEMPLATE = `async function main(ctx) {
 
 main.meta = {
   description: "",
+  previewConfigKey: "",
   config: {},
   input: {},
   output: {},

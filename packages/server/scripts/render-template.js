@@ -79,6 +79,7 @@ async function renderTemplate(ctx) {
 renderTemplate.meta = {
   description:
     "Render an HTML template from Responses (kind: template) with Mustache and return html + plain-text fallback",
+  previewConfigKey: "template",
   config: {
     template: {
       type: "string",

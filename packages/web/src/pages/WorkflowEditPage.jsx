@@ -152,7 +152,7 @@ export function WorkflowEditPage() {
   const [content, setContent] = useState("");
   const [savedYaml, setSavedYaml] = useState("");
   const [contentReady, setContentReady] = useState(false);
-  const [testKey, setTestKey] = useState(0);
+  const [testOpen, setTestOpen] = useState(false);
 
   useEffect(() => {
     if (existing.isLoading) return;
@@ -192,17 +192,20 @@ export function WorkflowEditPage() {
     );
   }
 
-  const yamlOk = !parseWorkflowYaml(content).parseError;
+  const parsedDoc = parseWorkflowYaml(content);
+  const yamlOk = !parsedDoc.parseError;
+  const workflowName = parsedDoc.doc?.name?.trim();
+  const pageTitle = workflowName ? `${workflowName} (${file})` : file;
 
   return (
     <WorkflowEditorLayout
-      title={`${owner}/${file}`}
+      title={pageTitle}
       savePending={save.isPending}
       saveDisabled={!contentReady}
       saveError={save.isError ? errorMessage(save.error) : null}
       saveSuccess={save.isSuccess}
       onSave={onSave}
-      onTest={() => setTestKey((k) => k + 1)}
+      onTest={() => setTestOpen(true)}
       onToggleEnabled={() =>
         setEnabled.mutate({
           owner,
@@ -223,7 +226,8 @@ export function WorkflowEditPage() {
           file={file}
           savedYaml={savedYaml}
           showTest
-          testKey={testKey}
+          testOpen={testOpen}
+          onTestClose={() => setTestOpen(false)}
         />
       </div>
     </WorkflowEditorLayout>

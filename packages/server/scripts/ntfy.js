@@ -131,6 +131,7 @@ async function ntfy(ctx) {
 
 ntfy.meta = {
   description: "Send a message or file to an ntfy topic",
+  previewConfigKey: "url",
   config: {
     url: {
       type: "string",

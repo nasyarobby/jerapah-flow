@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LuCopy, LuGripVertical, LuTrash2 } from "react-icons/lu";
+import { LuChevronDown, LuCopy, LuGripVertical, LuTrash2 } from "react-icons/lu";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import cronstrue from "cronstrue";
@@ -26,14 +26,21 @@ export function TriggerCard({
     opacity: isDragging ? 0.6 : 1,
   };
   const type = trigger.type;
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <article ref={setNodeRef} style={style} className="card bg-base-100 border border-primary">
-      <div className="card-body gap-3 p-4">
-        <div className="flex items-start gap-2">
+    <article
+      ref={setNodeRef}
+      style={style}
+      className={`card bg-base-100 border border-primary ${
+        isDragging ? "z-40" : "z-0 hover:z-30 focus-within:z-30"
+      }`}
+    >
+      <div className={`card-body gap-3 ${expanded ? "p-4" : "p-3"}`}>
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            className="btn btn-ghost btn-xs btn-square mt-0.5 cursor-grab active:cursor-grabbing"
+            className="btn btn-ghost btn-xs btn-square cursor-grab active:cursor-grabbing"
             aria-label={`Drag trigger ${index + 1}`}
             disabled={disabled}
             {...attributes}
@@ -41,9 +48,14 @@ export function TriggerCard({
           >
             <LuGripVertical className="size-4 opacity-60" />
           </button>
-          <div className="min-w-0 flex-1">
-            <h3 className="card-title text-base">{typeLabel(type)}</h3>
-          </div>
+          <button
+            type="button"
+            className="min-w-0 flex-1 text-left"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            <h3 className="card-title text-base inline">{typeLabel(type)}</h3>
+            <span className="ml-2 font-mono text-xs opacity-70">{triggerSummary(trigger, owner)}</span>
+          </button>
           <button
             type="button"
             className="btn btn-ghost btn-xs text-error"
@@ -53,32 +65,55 @@ export function TriggerCard({
           >
             <LuTrash2 className="size-4" />
           </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs btn-square"
+            title={expanded ? "Collapse" : "Expand"}
+            aria-expanded={expanded}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            <LuChevronDown className={`size-4 opacity-70 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </button>
         </div>
-        {type === "HTTP" ? (
-          <HttpFields
-            trigger={trigger}
-            owner={owner}
-            disabled={disabled}
-            onChange={onChange}
-            auths={auths}
-            pages={pages}
-          />
-        ) : null}
-        {type === "cron" ? (
-          <CronFields trigger={trigger} disabled={disabled} onChange={onChange} />
-        ) : null}
-        {type === "workflow" ? (
-          <p className="text-sm opacity-80">
-            Other workflows can call this one with <span className="font-mono">trigger-workflow.js</span>.
-            No extra fields.
-          </p>
-        ) : null}
-        {type !== "HTTP" && type !== "cron" && type !== "workflow" ? (
-          <p className="text-sm opacity-70">Unknown trigger type. Edit it in the YAML tab.</p>
+        {expanded ? (
+          <>
+            {type === "HTTP" ? (
+              <HttpFields
+                trigger={trigger}
+                owner={owner}
+                disabled={disabled}
+                onChange={onChange}
+                auths={auths}
+                pages={pages}
+              />
+            ) : null}
+            {type === "cron" ? (
+              <CronFields trigger={trigger} disabled={disabled} onChange={onChange} />
+            ) : null}
+            {type === "workflow" ? (
+              <p className="text-sm opacity-80">
+                Other workflows can call this one with <span className="font-mono">trigger-workflow.js</span>.
+                No extra fields.
+              </p>
+            ) : null}
+            {type !== "HTTP" && type !== "cron" && type !== "workflow" ? (
+              <p className="text-sm opacity-70">Unknown trigger type. Edit it in the YAML tab.</p>
+            ) : null}
+          </>
         ) : null}
       </div>
     </article>
   );
+}
+
+function triggerSummary(trigger, owner) {
+  const type = trigger?.type;
+  if (type === "HTTP") {
+    return `${trigger.method || "POST"} ${namespacedPath(owner || "owner", trigger.path || "/")}`;
+  }
+  if (type === "cron") return trigger.schedule || "";
+  if (type === "workflow") return "callable";
+  return "";
 }
 
 function typeLabel(type) {

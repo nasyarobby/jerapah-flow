@@ -71,6 +71,7 @@ async function fetchBinary(ctx) {
 
 fetchBinary.meta = {
   description: "Download a binary URL into ctx.data as a Buffer",
+  previewConfigKey: "url",
   config: {
     url: { type: "string", required: false, description: "Direct download URL" },
     urlVar: { type: "string", required: false, description: "Key in ctx.data that holds the URL" },

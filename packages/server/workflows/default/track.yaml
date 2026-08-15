@@ -30,3 +30,4 @@ triggers:
   - type: HTTP
     method: GET
     path: /new
+enabled: false

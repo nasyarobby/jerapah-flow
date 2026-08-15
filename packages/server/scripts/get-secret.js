@@ -22,6 +22,7 @@ async function getSecret(ctx) {
 getSecret.meta = {
   description:
     "Load a named secret for this workflow owner into ctx.data. The value is wrapped and redacted in logs.",
+  previewConfigKey: "name",
   config: {
     name: {
       type: "string",

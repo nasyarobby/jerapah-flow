@@ -56,6 +56,7 @@ async function fingerprint(ctx) {
 fingerprint.meta = {
   description:
     "Hash a value, compare it to the last stored fingerprint, and skip remaining steps when unchanged",
+  previewConfigKey: "key",
   config: {
     key: {
       type: "string",
