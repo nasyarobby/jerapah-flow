@@ -12,7 +12,13 @@ import { getSecretPlaintext } from "./secrets-store.js";
 
 const hostRequire = createRequire(import.meta.url);
 
-const ALLOWED_MODULES = new Set(["axios", "jsonata", "node-html-parser", "rss-parser"]);
+const ALLOWED_MODULES = new Set([
+  "axios",
+  "jsonata",
+  "node-html-parser",
+  "nodemailer",
+  "rss-parser",
+]);
 
 const BUILTIN_NAMES = [
   "Infinity",
