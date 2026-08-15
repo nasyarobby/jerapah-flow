@@ -116,6 +116,7 @@ async function fetchHttp(ctx) {
 fetchHttp.meta = {
   description: "Fetch a URL and store the response body.",
   previewConfigKey: "url",
+  tags: ["HTTP"],
   config: {
     url: { type: "string", required: true, description: "Request URL" },
     method: {

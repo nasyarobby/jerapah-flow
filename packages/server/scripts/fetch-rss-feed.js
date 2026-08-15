@@ -69,6 +69,7 @@ async function fetchRssFeed(ctx) {
 fetchRssFeed.meta = {
   description: "Fetch an RSS/Atom feed and optionally transform it with JSONata",
   previewConfigKey: "url",
+  tags: ["RSS"],
   config: {
     url: { type: "string", required: false, description: "Feed URL (or pass data.url)" },
     outputVar: {

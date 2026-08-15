@@ -4,6 +4,7 @@ import { LuArrowLeft, LuPlay, LuSave } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import { useSaveScript, useScript } from "../api/hooks.js";
 import { CodeEditor } from "../components/CodeEditor.jsx";
+import { ScriptIcon } from "../components/ScriptIcon.jsx";
 import { ScriptMetaPanel } from "../components/ScriptMetaPanel.jsx";
 import { NEW_SCRIPT_TEMPLATE, normalizeScriptName } from "../lib/script.js";
 
@@ -137,6 +138,7 @@ export function ScriptEditPage() {
         <Link to="/scripts" className="btn btn-ghost btn-sm btn-square" aria-label="Back">
           <LuArrowLeft className="size-4" />
         </Link>
+        <ScriptIcon name={name} hasIcon={existing.data?.hasIcon} className="size-8 shrink-0" />
         <h1 className="truncate font-mono text-xl font-semibold">{name}</h1>
         <div className="flex-1" />
         <button type="button" className="btn btn-outline btn-sm" onClick={openDryRun}>

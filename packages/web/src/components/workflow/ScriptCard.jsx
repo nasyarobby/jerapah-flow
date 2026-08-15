@@ -10,6 +10,7 @@ import { StatusBadge } from "../../lib/format.jsx";
 import { contextFromMeta, prettyJson } from "../../lib/script.js";
 import { ConfigFields } from "./ConfigFields.jsx";
 import { ConfigTooltip, configValueText, FieldLabel, previewConfigValue, SchemaTooltip } from "./FieldHelp.jsx";
+import { ScriptIcon } from "../ScriptIcon.jsx";
 
 export function ScriptCard({
   step,
@@ -66,6 +67,9 @@ export function ScriptCard({
           >
             <LuGripVertical className="size-4 opacity-60" />
           </button>
+          {step.kind === "script" && step.script ? (
+            <ScriptIcon name={step.script} hasIcon={listed?.hasIcon} className="size-8 shrink-0" />
+          ) : null}
           <button
             type="button"
             className="min-w-0 flex-1 text-left"
@@ -76,7 +80,7 @@ export function ScriptCard({
                 <span className="min-w-0 truncate">{baseName}</span>
                 {!expanded && preview ? (
                   <span
-                    className="badge badge-secondary badge-sm max-w-[min(16rem,45%)] shrink-0 truncate font-mono font-normal"
+                    className="badge badge-secondary badge-sm shrink-0 truncate font-mono font-normal"
                     title={previewFull}
                   >
                     {preview}

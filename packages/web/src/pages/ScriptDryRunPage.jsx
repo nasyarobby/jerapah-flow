@@ -10,6 +10,7 @@ import {
 } from "../api/hooks.js";
 import { CodeEditor } from "../components/CodeEditor.jsx";
 import { LogViewer } from "../components/LogViewer.jsx";
+import { ScriptIcon } from "../components/ScriptIcon.jsx";
 import { ScriptMetaPanel } from "../components/ScriptMetaPanel.jsx";
 import { StatusBadge } from "../lib/format.jsx";
 import {
@@ -133,6 +134,7 @@ export function ScriptDryRunPage() {
         <Link to={backHref} className="btn btn-ghost btn-sm btn-square" aria-label="Back">
           <LuArrowLeft className="size-4" />
         </Link>
+        <ScriptIcon name={name} hasIcon={existing.data?.hasIcon} className="size-8 shrink-0" />
         <h1 className="truncate font-mono text-lg font-semibold">{name}</h1>
         <span className="badge badge-ghost badge-sm">dry run</span>
         {runStatus ? <StatusBadge status={runStatus} /> : null}

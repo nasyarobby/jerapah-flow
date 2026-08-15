@@ -29,6 +29,7 @@ triggerWorkflow.meta = {
   description:
     "Fire-and-forget another workflow by YAML name (same owner). Destination must declare triggers: [{ type: workflow }]. Optionally reshape ctx.data with JSONata before sending.",
   previewConfigKey: "name",
+  tags: ["trigger"],
   config: {
     name: {
       type: "string",

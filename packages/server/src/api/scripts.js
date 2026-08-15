@@ -1,3 +1,4 @@
+import fs from "fs";
 import {
   clearScriptCache,
   inspectScriptSource,
@@ -21,9 +22,25 @@ export default function scriptsPluginFactory(registry) {
           content == null
             ? { meta: null, metaError: "script not found" }
             : inspectScriptSource(name, content);
-        return { name, ...inspected };
+        return { name, hasIcon: fsStore.scriptHasIcon(name), ...inspected };
       });
       return { scripts };
+    });
+
+    fastify.get("/scripts/:name/icon", async (req, reply) => {
+      const { name } = /** @type {{ name: string }} */ (req.params);
+      try {
+        fsStore.assertScriptName(name);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({ error: err.message });
+      }
+      const icon = fsStore.resolveScriptIcon(name);
+      if (icon == null) return reply.code(404).send({ error: "icon not found" });
+      const body = fs.readFileSync(icon.filePath);
+      return reply
+        .type(icon.contentType)
+        .header("Cache-Control", "private, max-age=60")
+        .send(body);
     });
 
     fastify.get("/scripts/:name", async (req, reply) => {
@@ -35,7 +52,7 @@ export default function scriptsPluginFactory(registry) {
       }
       const content = fsStore.readScript(name);
       if (content == null) return reply.code(404).send({ error: "script not found" });
-      return { name, content, ...inspectScriptSource(name, content) };
+      return { name, content, hasIcon: fsStore.scriptHasIcon(name), ...inspectScriptSource(name, content) };
     });
 
     fastify.put("/scripts/:name", async (req, reply) => {

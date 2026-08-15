@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useScripts } from "../../api/hooks.js";
+import { ScriptIcon } from "../ScriptIcon.jsx";
+import { scriptTags } from "../../lib/script.js";
 
 export function AddScriptDialog({ open, onClose, onPick }) {
   const { data: scripts = [], isLoading } = useScripts();
@@ -12,12 +14,15 @@ export function AddScriptDialog({ open, onClose, onPick }) {
       description: typeof s === "string" ? "" : s.meta?.description ?? "",
       meta: typeof s === "string" ? null : s.meta,
       metaError: typeof s === "string" ? null : s.metaError,
+      hasIcon: typeof s === "string" ? undefined : s.hasIcon,
+      tags: typeof s === "string" ? [] : scriptTags(s.meta),
     }));
     if (!term) return list;
     return list.filter(
       (s) =>
         s.name.toLowerCase().includes(term) ||
-        s.description.toLowerCase().includes(term),
+        s.description.toLowerCase().includes(term) ||
+        s.tags.some((t) => t.toLowerCase().includes(term)),
     );
   }, [scripts, q]);
 
@@ -61,9 +66,12 @@ export function AddScriptDialog({ open, onClose, onPick }) {
                     setQ("");
                   }}
                 >
-                  <span className="font-mono">{s.name}</span>
-                  <span className="text-xs opacity-70 line-clamp-2">
-                    {s.metaError ? s.metaError : s.description || "No description"}
+                  <ScriptIcon name={s.name} hasIcon={s.hasIcon} className="size-8 shrink-0" />
+                  <span className="min-w-0">
+                    <span className="font-mono">{s.name}</span>
+                    <span className="text-xs opacity-70 line-clamp-2 block">
+                      {s.metaError ? s.metaError : s.description || "No description"}
+                    </span>
                   </span>
                 </button>
               </li>

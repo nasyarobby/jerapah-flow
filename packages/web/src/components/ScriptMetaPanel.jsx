@@ -1,3 +1,6 @@
+import { scriptTags } from "../lib/script.js";
+import { TagBadge } from "./TagBadge.jsx";
+
 function FieldTable({ title, fields }) {
   const entries = Object.entries(fields ?? {});
   if (entries.length === 0) return null;
@@ -56,9 +59,18 @@ export function ScriptMetaPanel({ meta, metaError, className = "" }) {
     );
   }
 
+  const tags = scriptTags(meta);
+
   return (
     <div className={`space-y-3 ${className}`}>
       {meta.description ? <p className="text-sm">{meta.description}</p> : null}
+      {tags.length ? (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((tag) => (
+            <TagBadge key={tag} tag={tag} />
+          ))}
+        </div>
+      ) : null}
       <div className="grid gap-3 md:grid-cols-3">
         <FieldTable title="Config" fields={meta.config} />
         <FieldTable title="Input (data)" fields={meta.input} />
