@@ -21,6 +21,31 @@ pnpm dev
 
 The first account created becomes **admin**. Later accounts are created from Users.
 
+## Script contract
+
+Each script is `async function main(ctx)` and **must** return:
+
+```js
+{ output, context?, skipRemaining? }
+```
+
+| Field | Meaning |
+|---|---|
+| `ctx.data` | This step’s input (trigger payload, previous `output`, or DAG `needs`) |
+| `ctx.context` | Run clipboard (plain object, default `{}`) |
+| `ctx.config` | This step’s YAML config |
+| `output` | Becomes the **next** step’s `data` |
+| `context` | Next snapshot of the bag. Omitted → keep incoming |
+| `skipRemaining` | Stop later steps. Sibling of `output`/`context`, not inside `output` |
+
+Returning the full `ctx` is an error. Mutating `ctx.data` or `ctx.context` does not persist unless returned.
+
+YAML **SET** evaluates JSONata against the full `ctx`; the result is `output` (the next step’s data). `jsonata.js` does the same.
+
+DAG `needs` assemble this step’s `data` from upstream **outputs**. Independent steps in the same wave share a context snapshot; sibling writes to the same context key fail the run.
+
+Optional `script.meta.reads = "ctx"` documents expression hosts. `meta.input` / `meta.output` / `meta.context` describe `data`, the return pipe, and clipboard keys.
+
 ## Scripts
 
 | Command | Description |

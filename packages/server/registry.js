@@ -15,6 +15,13 @@ import {
   namespacedPath,
   parseScriptStep,
 } from "./workflow-parse.js";
+import {
+  chainCtx,
+  mergeContextWave,
+  normalizeContext,
+  normalizeStepResult,
+  storedEnvelope,
+} from "./step-result.js";
 import * as fsStore from "./fs-store.js";
 import {
   checkHttpAuth,
@@ -327,24 +334,15 @@ export function createRegistry(server) {
     );
   }
 
-  function isSkipRemaining(result) {
-    return (
-      result != null &&
-      typeof result === "object" &&
-      !Array.isArray(result) &&
-      /** @type {{ skipRemaining?: unknown }} */ (result).skipRemaining === true
-    );
-  }
-
   /**
    * @param {import("./workflow-parse.js").CompiledStep} parsed
    * @param {number} index
-   * @param {unknown} ctx
+   * @param {import("./step-result.js").StepResult} last
    * @param {string} runId
    * @param {import("pino").Logger} runLog
    * @param {string} reason
    */
-  async function markStepSkipped(parsed, index, ctx, runId, runLog, reason) {
+  async function markStepSkipped(parsed, index, last, runId, runLog, reason) {
     const script = parsed.kind === "set" ? SET_STEP_SCRIPT : parsed.script;
     const step = await store.startStep({
       runId,
@@ -354,12 +352,12 @@ export function createRegistry(server) {
     });
     const stepLog = runLog.child({ stepId: step.id, script });
     stepLog.debug({ reason }, "step skipped");
-    await store.finishStep(step.id, "skipped", ctx, reason);
+    await store.finishStep(step.id, "skipped", storedEnvelope(last), reason);
   }
 
   /**
    * @param {import("./workflow-parse.js").CompiledScripts} compiled
-   * @param {{ data?: unknown }} ctx
+   * @param {{ data?: unknown, context?: Record<string, unknown> }} ctx
    * @param {string} runId
    * @param {import("pino").Logger} runLog
    * @param {string} key
@@ -367,11 +365,17 @@ export function createRegistry(server) {
    * @param {number} depth
    */
   async function runLinearSteps(compiled, ctx, runId, runLog, key, owner, depth) {
-    let next = ctx;
+    /** @type {import("./step-result.js").StepResult} */
+    let last = {
+      output: ctx.data,
+      context: normalizeContext(ctx.context),
+      skipRemaining: false,
+    };
+    let next = { data: ctx.data, context: last.context };
     for (let i = 0; i < compiled.order.length; i++) {
       const index = compiled.order[i];
       const parsed = compiled.steps[index];
-      next = await runCompiledStep(
+      last = await runCompiledStep(
         parsed,
         next,
         index,
@@ -381,13 +385,14 @@ export function createRegistry(server) {
         owner,
         depth,
       );
-      if (isSkipRemaining(next)) {
+      next = chainCtx(last);
+      if (last.skipRemaining) {
         for (let j = i + 1; j < compiled.order.length; j++) {
           const laterIndex = compiled.order[j];
           await markStepSkipped(
             compiled.steps[laterIndex],
             laterIndex,
-            next,
+            last,
             runId,
             runLog,
             "skipRemaining",
@@ -396,12 +401,12 @@ export function createRegistry(server) {
         break;
       }
     }
-    return next;
+    return last;
   }
 
   /**
    * @param {import("./workflow-parse.js").CompiledScripts} compiled
-   * @param {{ data?: unknown }} ctx
+   * @param {{ data?: unknown, context?: Record<string, unknown> }} ctx
    * @param {string} runId
    * @param {import("pino").Logger} runLog
    * @param {string} key
@@ -412,30 +417,91 @@ export function createRegistry(server) {
     const triggerData = ctx.data;
     /** @type {Map<string, unknown>} */
     const outputsById = new Map();
-    let last = ctx;
+    /** @type {Map<string, number>} */
+    const idToIndex = new Map();
+    for (const step of compiled.steps) {
+      if (step.id) idToIndex.set(step.id, step.index);
+    }
 
-    for (const [orderIndex, stepIndex] of compiled.order.entries()) {
-      const parsed = compiled.steps[stepIndex];
-      const data = mergeStepData(parsed, outputsById, triggerData);
-      last = await runCompiledStep(
-        parsed,
-        { ...ctx, data },
-        orderIndex,
-        runId,
-        runLog,
-        key,
-        owner,
-        depth,
-      );
-      if (parsed.id) {
-        outputsById.set(parsed.id, last);
+    const remaining = new Set(compiled.steps.map((s) => s.index));
+    const completed = new Set();
+    let context = normalizeContext(ctx.context);
+    /** @type {import("./step-result.js").StepResult} */
+    let last = {
+      output: ctx.data,
+      context,
+      skipRemaining: false,
+    };
+    let execIndex = 0;
+
+    /**
+     * @param {import("./workflow-parse.js").CompiledStep} step
+     */
+    function needsMet(step) {
+      if (step.needsKind === "none" || step.needs.length === 0) return true;
+      return step.needs.every((edge) => completed.has(idToIndex.get(edge.from)));
+    }
+
+    while (remaining.size) {
+      const wave = compiled.steps
+        .filter((s) => remaining.has(s.index) && needsMet(s))
+        .sort((a, b) => a.index - b.index);
+      if (wave.length === 0) {
+        throw new Error("Workflow has a cycle");
       }
-      if (isSkipRemaining(last)) {
-        for (let j = orderIndex + 1; j < compiled.order.length; j++) {
-          const laterParsed = compiled.steps[compiled.order[j]];
+
+      const snapshot = { ...context };
+      /** @type {Array<{ id: string, context: unknown }>} */
+      const patches = [];
+      let skipRest = false;
+
+      for (const parsed of wave) {
+        remaining.delete(parsed.index);
+        const index = execIndex;
+        execIndex += 1;
+        if (skipRest) {
           await markStepSkipped(
-            laterParsed,
-            j,
+            parsed,
+            index,
+            last,
+            runId,
+            runLog,
+            "skipRemaining",
+          );
+          continue;
+        }
+        const data = mergeStepData(parsed, outputsById, triggerData);
+        last = await runCompiledStep(
+          parsed,
+          { data, context: { ...snapshot } },
+          index,
+          runId,
+          runLog,
+          key,
+          owner,
+          depth,
+        );
+        if (parsed.id) {
+          outputsById.set(parsed.id, last.output);
+        }
+        patches.push({
+          id: parsed.id ?? String(parsed.index),
+          context: last.context,
+        });
+        if (last.skipRemaining) skipRest = true;
+      }
+
+      context = mergeContextWave(snapshot, patches);
+      last = { ...last, context };
+
+      if (skipRest) {
+        for (const later of compiled.steps.filter((s) => remaining.has(s.index))) {
+          remaining.delete(later.index);
+          const index = execIndex;
+          execIndex += 1;
+          await markStepSkipped(
+            later,
+            index,
             last,
             runId,
             runLog,
@@ -444,7 +510,10 @@ export function createRegistry(server) {
         }
         break;
       }
+
+      for (const parsed of wave) completed.add(parsed.index);
     }
+
     return last;
   }
 
@@ -483,13 +552,14 @@ export function createRegistry(server) {
 
   /**
    * @param {import("./workflow-parse.js").CompiledStep} parsed
-   * @param {{ data?: unknown, config?: unknown }} ctx
+   * @param {{ data?: unknown, context?: unknown, config?: unknown }} ctx
    * @param {number} index
    * @param {string} runId
    * @param {import("pino").Logger} runLog
    * @param {string} key
    * @param {string} owner
    * @param {number} depth
+   * @returns {Promise<import("./step-result.js").StepResult>}
    */
   async function runCompiledStep(
     parsed,
@@ -503,6 +573,12 @@ export function createRegistry(server) {
   ) {
     const script = parsed.kind === "set" ? SET_STEP_SCRIPT : parsed.script;
     const config = parsed.config;
+    const incomingContext = normalizeContext(ctx.context);
+    const stepCtx = {
+      data: ctx.data,
+      context: incomingContext,
+      config,
+    };
     const step = await store.startStep({
       runId,
       index,
@@ -512,29 +588,36 @@ export function createRegistry(server) {
     const stepLog = runLog.child({ stepId: step.id, script });
     try {
       if (parsed.when) {
-        const whenResult = await evaluateJsonata(parsed.when, ctx);
+        const whenResult = await evaluateJsonata(parsed.when, stepCtx);
         if (!isJsonataTruthy(whenResult)) {
           stepLog.debug({ when: parsed.when }, "step skipped");
-          await store.finishStep(step.id, "skipped", ctx, "when condition");
-          return ctx;
+          const skipped = {
+            output: stepCtx.data,
+            context: incomingContext,
+            skipRemaining: false,
+          };
+          await store.finishStep(step.id, "skipped", storedEnvelope(skipped), "when condition");
+          return skipped;
         }
       }
       if (parsed.kind === "set") {
-        if (ctx == null || typeof ctx !== "object" || Array.isArray(ctx)) {
-          throw new Error("set requires an object context");
-        }
-        const value = await evaluateJsonata(parsed.expression, ctx);
-        const result = { ...ctx, [parsed.as]: value };
-        await store.finishStep(step.id, "success", result);
+        const value = await evaluateJsonata(parsed.expression, stepCtx);
+        const result = {
+          output: value,
+          context: incomingContext,
+          skipRemaining: false,
+        };
+        await store.finishStep(step.id, "success", storedEnvelope(result));
         return result;
       }
-      const result = await runScript(script, { ...ctx, config }, {
+      const raw = await runScript(script, stepCtx, {
         log: stepLog,
         workflowName: key,
         owner,
         $workflows: createWorkflowsApi(owner, key, runId, depth),
       });
-      await store.finishStep(step.id, "success", result);
+      const result = normalizeStepResult(raw, incomingContext, script);
+      await store.finishStep(step.id, "success", storedEnvelope(result));
       return result;
     } catch (err) {
       await store.finishStep(step.id, "failed", null, err);
@@ -544,7 +627,7 @@ export function createRegistry(server) {
 
   /**
    * @param {string} key
-   * @param {{ data?: unknown }} context
+   * @param {{ data?: unknown, context?: unknown }} context
    * @param {{ type: string, detail?: string | null }} trigger
    * @param {{
    *   parentRunId?: string | null,
@@ -580,8 +663,8 @@ export function createRegistry(server) {
     runLog.debug(detach ? "running workflow (detached)" : "running workflow");
 
     const initialCtx = {
-      ...context,
       data: context.data ?? workflow.data ?? null,
+      context: normalizeContext(context.context),
     };
 
     const execute = async () => {
@@ -609,8 +692,8 @@ export function createRegistry(server) {
             depth,
           );
         }
-        await store.finishRun(run.id, "success", ctx);
-        return { runId: run.id, status: "success", result: ctx };
+        await store.finishRun(run.id, "success", storedEnvelope(ctx));
+        return { runId: run.id, status: "success", result: storedEnvelope(ctx) };
       } catch (err) {
         runLog.error({ err }, "workflow failed");
         await store.finishRun(run.id, "failed", null, err);

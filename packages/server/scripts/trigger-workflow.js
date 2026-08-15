@@ -1,5 +1,12 @@
 import jsonata from "jsonata";
 
+function passContext(ctx) {
+  if (ctx?.context != null && typeof ctx.context === "object" && !Array.isArray(ctx.context)) {
+    return { ...ctx.context };
+  }
+  return {};
+}
+
 async function triggerWorkflow(ctx) {
   const name = ctx.config?.name;
   if (typeof name !== "string" || name.length === 0) {
@@ -9,27 +16,23 @@ async function triggerWorkflow(ctx) {
   let data = ctx.data;
   const expression = ctx.config?.expression;
   if (typeof expression === "string" && expression.length > 0) {
-    const result = jsonata(expression).evaluate(ctx.data);
+    const result = jsonata(expression).evaluate(ctx);
     data = await result;
   }
 
   const started = await $workflows.trigger(name, data);
-  const triggered = { name, runId: started?.runId ?? null };
-
-  const base =
-    ctx != null && typeof ctx === "object" && !Array.isArray(ctx) ? { ...ctx } : {};
-
-  if (base.data != null && typeof base.data === "object" && !Array.isArray(base.data)) {
-    return { ...base, data: { ...base.data, triggered } };
-  }
-  return { ...base, triggered };
+  return {
+    output: { name, runId: started?.runId ?? null },
+    context: passContext(ctx),
+  };
 }
 
 triggerWorkflow.meta = {
   description:
-    "Fire-and-forget another workflow by YAML name (same owner). Destination must declare triggers: [{ type: workflow }]. Optionally reshape ctx.data with JSONata before sending.",
+    "Fire-and-forget another workflow by YAML name (same owner). Destination must declare triggers: [{ type: workflow }]. Optionally reshape the destination input with JSONata against full ctx.",
   previewConfigKey: "name",
   tags: ["trigger"],
+  reads: "ctx",
   config: {
     name: {
       type: "string",
@@ -40,15 +43,13 @@ triggerWorkflow.meta = {
       type: "string",
       required: false,
       description:
-        "Optional JSONata expression evaluated against ctx.data; result becomes the destination run input",
+        "Optional JSONata expression evaluated against ctx; result becomes the destination run input",
     },
   },
   input: {},
   output: {
-    triggered: {
-      type: "object",
-      description: "Record of the kicked-off run ({ name, runId }); under data when data is an object",
-    },
+    name: { type: "string", description: "Destination workflow name" },
+    runId: { type: "string", description: "Started run id (null if the destination failed to start)" },
   },
   example: {
     data: {
@@ -58,7 +59,7 @@ triggerWorkflow.meta = {
     config: {
       name: "notify-comic",
       expression:
-        '{ "title": title, "message": title, "attach": url }',
+        '{ "title": data.title, "message": data.title, "attach": data.url }',
     },
   },
 };

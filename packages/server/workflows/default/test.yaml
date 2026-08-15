@@ -3,7 +3,7 @@ scripts:
   - get-current-time.js
   - script: jsonata.js
     config: 
-      expression: '{"data": {"message": datetime & " " & processId}}'
+      expression: '{"message": data.datetime & " " & data.processId}'
   - ntfy.js
 triggers:
   - type: HTTP

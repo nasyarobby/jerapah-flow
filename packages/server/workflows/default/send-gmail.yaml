@@ -14,18 +14,16 @@ scripts:
     config:
       expression: |
         {
-          "data": {
-            "to": $exists(to) ? to : "nasyarobby@gmail.com",
-            "from": from,
-            "subject": subject,
-            "text": $exists(text) ? text : ($exists(body) ? body : message),
-            "html": html,
-            "cc": cc,
-            "bcc": bcc,
-            "replyTo": replyTo,
-            "priority": priority,
-            "headers": headers
-          }
+          "to": $exists(data.to) ? data.to : "nasyarobby@gmail.com",
+          "from": data.from,
+          "subject": data.subject,
+          "text": $exists(data.text) ? data.text : ($exists(data.body) ? data.body : data.message),
+          "html": data.html,
+          "cc": data.cc,
+          "bcc": data.bcc,
+          "replyTo": data.replyTo,
+          "priority": data.priority,
+          "headers": data.headers
         }
   - script: send-email.js
     config:

@@ -10,7 +10,11 @@ scripts:
   - script: jsonata.js
     config:
       expression: |
-        {"data": {"title": httpResponse.title, "message": httpResponse.title, "attach": httpResponse.url}}
+        {
+          "title": data.httpResponse.title,
+          "message": data.httpResponse.title,
+          "attach": data.httpResponse.url
+        }
   - fetch-binary.js
   - script: ntfy.js
     config:

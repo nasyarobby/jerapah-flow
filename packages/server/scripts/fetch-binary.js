@@ -1,7 +1,15 @@
-function ensureDataObject(ctx) {
-  if (ctx.data == null || typeof ctx.data !== "object" || Array.isArray(ctx.data)) {
-    ctx.data = {};
+function passContext(ctx) {
+  if (ctx?.context != null && typeof ctx.context === "object" && !Array.isArray(ctx.context)) {
+    return { ...ctx.context };
   }
+  return {};
+}
+
+function mergeData(data) {
+  if (data != null && typeof data === "object" && !Array.isArray(data)) {
+    return { ...data };
+  }
+  return {};
 }
 
 function filenameFromUrl(url) {
@@ -38,8 +46,6 @@ function resolveUrl(ctx) {
 }
 
 async function fetchBinary(ctx) {
-  ensureDataObject(ctx);
-
   const url = resolveUrl(ctx);
   if (!url) {
     throw new Error(
@@ -55,27 +61,32 @@ async function fetchBinary(ctx) {
   const response = await $axios.get(url, { responseType: "arraybuffer" });
   const file = Buffer.from(response.data ?? []);
   const contentType = String(response.headers?.["content-type"] ?? "application/octet-stream");
-  const filename = ctx.config?.filename || ctx.data.filename || filenameFromUrl(url);
+  const filename = ctx.config?.filename || ctx.data?.filename || filenameFromUrl(url);
 
-  ctx.data[outputVar] = file;
-  ctx.data.filename = filename;
-  ctx.data.contentType = contentType;
+  const extra = {
+    [outputVar]: file,
+    filename,
+    contentType,
+  };
 
   log.info(
     { outputVar, filename, contentType, length: file.length },
     "fetch-binary: saved",
   );
 
-  return ctx;
+  return {
+    output: { ...mergeData(ctx.data), ...extra },
+    context: { ...passContext(ctx), ...extra },
+  };
 }
 
 fetchBinary.meta = {
-  description: "Download a binary URL into ctx.data as a Buffer",
+  description: "Download a binary URL and add the Buffer to output (keeps previous data fields)",
   previewConfigKey: "url",
   config: {
     url: { type: "string", required: false, description: "Direct download URL" },
     urlVar: { type: "string", required: false, description: "Key in ctx.data that holds the URL" },
-    outputVar: { type: "string", default: "file", description: "ctx.data key for the Buffer" },
+    outputVar: { type: "string", default: "file", description: "output key for the Buffer" },
     filename: { type: "string", required: false, description: "Override saved filename" },
   },
   input: {
@@ -84,6 +95,11 @@ fetchBinary.meta = {
     filename: { type: "string", required: false },
   },
   output: {
+    file: { type: "buffer", description: "Downloaded bytes (or ctx.config.outputVar)" },
+    filename: { type: "string" },
+    contentType: { type: "string" },
+  },
+  context: {
     file: { type: "buffer", description: "Downloaded bytes (or ctx.config.outputVar)" },
     filename: { type: "string" },
     contentType: { type: "string" },

@@ -218,13 +218,19 @@ async function sendEmail(ctx) {
   log.info({ messageId: info.messageId }, "send-email: message sent");
 
   return {
-    sent: true,
-    messageId: info.messageId ?? null,
-    from,
-    to,
-    cc: cc ?? null,
-    bcc: bcc ?? null,
-    subject,
+    output: {
+      sent: true,
+      messageId: info.messageId ?? null,
+      from,
+      to,
+      cc: cc ?? null,
+      bcc: bcc ?? null,
+      subject,
+    },
+    context:
+      ctx.context != null && typeof ctx.context === "object" && !Array.isArray(ctx.context)
+        ? ctx.context
+        : {},
   };
 }
 

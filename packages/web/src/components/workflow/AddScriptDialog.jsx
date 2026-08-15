@@ -49,7 +49,9 @@ export function AddScriptDialog({ open, onClose, onPick }) {
               }}
             >
               <span className="font-semibold">Set (JSONata)</span>
-              <span className="text-xs opacity-70">Assign a JSONata result to a variable</span>
+              <span className="text-xs opacity-70">
+                JSONata over ctx; result becomes the next step’s data
+              </span>
             </button>
           </li>
           {isLoading ? (

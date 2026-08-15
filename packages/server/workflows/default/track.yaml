@@ -16,10 +16,8 @@ scripts:
     config:
       expression: |
         {
-          "data": {
-            "title": httpResponse.customer_name,
-            "message": httpResponse.customer_name & " : " & httpResponse.status
-          }
+          "title": data.httpResponse.customer_name,
+          "message": data.httpResponse.customer_name & " : " & data.httpResponse.status
         }
   - script: ntfy.js
     config:

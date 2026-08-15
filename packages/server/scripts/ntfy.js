@@ -1,5 +1,12 @@
 import jsonata from "jsonata";
 
+function passContext(ctx) {
+  if (ctx?.context != null && typeof ctx.context === "object" && !Array.isArray(ctx.context)) {
+    return { ...ctx.context };
+  }
+  return {};
+}
+
 function ntfyHeaders(ctx) {
   const headers = {};
 
@@ -72,11 +79,14 @@ async function ntfy(ctx) {
         "ntfy: skipped, fingerprint unchanged",
       );
       return {
-        sent: "false",
-        skipped: true,
-        fingerprint: checked.hash,
-        fingerprintAt: checked.previousAt,
-        fingerprintAge: checked.ageMs,
+        output: {
+          sent: "false",
+          skipped: true,
+          fingerprint: checked.hash,
+          fingerprintAt: checked.previousAt,
+          fingerprintAge: checked.ageMs,
+        },
+        context: passContext(ctx),
       };
     }
     fp = checked;
@@ -126,7 +136,7 @@ async function ntfy(ctx) {
     sent.fingerprint = stored.hash;
     sent.fingerprintAt = stored.at;
   }
-  return sent;
+  return { output: sent, context: passContext(ctx) };
 }
 
 ntfy.meta = {
@@ -147,7 +157,7 @@ ntfy.meta = {
     fingerprintJsonata: {
       type: "string",
       required: false,
-      description: "JSONata against ctx; default hashes title, message, attach, filename, contentType",
+      description: "JSONata against full ctx; default hashes data title, message, attach, filename, contentType",
     },
     fingerprintMaxAge: {
       type: "string",
@@ -163,8 +173,9 @@ ntfy.meta = {
     filename: { type: "string", required: false },
     contentType: { type: "string", required: false },
   },
+  reads: "ctx",
   output: {
-    sent: { type: "string", description: "Replaces the workflow context with { sent: \"true\" }" },
+    sent: { type: "string", description: '"true" when sent, "false" when fingerprint skipped' },
   },
   example: {
     data: { title: "Hello", message: "Hello from jerapah-flow" },

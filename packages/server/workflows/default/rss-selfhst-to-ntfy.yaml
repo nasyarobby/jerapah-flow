@@ -13,11 +13,9 @@ scripts:
     config:
       expression: |
         {
-          "data": {
-            "title": item.title,
-            "message": item.contentSnippet & "\n" & item.link,
-            "attach": item.mediaContent.url ? item.mediaContent.url : (item.mediaContent.$ ? item.mediaContent.$.url : undefined)
-          }
+          "title": data.item.title,
+          "message": data.item.contentSnippet & "\n" & data.item.link,
+          "attach": data.item.mediaContent.url ? data.item.mediaContent.url : (data.item.mediaContent.$ ? data.item.mediaContent.$.url : undefined)
         }
   - script: ntfy.js
     config:

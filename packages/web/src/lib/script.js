@@ -1,5 +1,5 @@
 export const NEW_SCRIPT_TEMPLATE = `async function main(ctx) {
-  return ctx;
+  return { output: ctx.data ?? null, context: ctx.context ?? {} };
 }
 
 main.meta = {
@@ -9,8 +9,10 @@ main.meta = {
   config: {},
   input: {},
   output: {},
+  context: {},
   example: {
     data: {},
+    context: {},
     config: {},
   },
 };
@@ -20,6 +22,7 @@ export default main;
 
 export const DEFAULT_INPUT_CONTEXT = `{
   "data": {},
+  "context": {},
   "config": {}
 }
 `;
@@ -33,6 +36,10 @@ export function normalizeScriptName(name) {
 export function scriptTags(meta) {
   if (!Array.isArray(meta?.tags)) return [];
   return meta.tags.map((t) => String(t).trim()).filter(Boolean);
+}
+
+export function scriptReadsCtx(meta) {
+  return meta?.reads === "ctx";
 }
 
 const TAG_PALETTE = [
@@ -94,11 +101,13 @@ export function contextFromMeta(meta) {
   if (meta?.example && typeof meta.example === "object" && !Array.isArray(meta.example)) {
     return {
       data: "data" in meta.example ? meta.example.data : {},
+      context: "context" in meta.example ? meta.example.context ?? {} : {},
       config: "config" in meta.example ? meta.example.config ?? {} : {},
     };
   }
   return {
     data: defaultsFromFields(meta?.input),
+    context: defaultsFromFields(meta?.context),
     config: defaultsFromFields(meta?.config),
   };
 }

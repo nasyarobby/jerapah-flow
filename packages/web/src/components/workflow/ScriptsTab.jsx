@@ -62,7 +62,8 @@ export function ScriptsTab({
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
       <div className="flex shrink-0 items-center justify-between">
         <p className="text-sm opacity-70">
-          Steps run top to bottom (or by needs in DAG mode). Drag the handle to reorder.
+          Steps run top to bottom. In DAG mode, <span className="font-mono">needs</span> selects
+          upstream outputs as this step’s data; context is shared per wave.
         </p>
         <button
           type="button"

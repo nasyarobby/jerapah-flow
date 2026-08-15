@@ -76,7 +76,9 @@ export function ScriptDryRunPage() {
     setRunStatus(lastRun.status);
     setLogs(lastRun.logs ?? []);
     if (lastRun.status === "success") {
-      setOutputJson(prettyJson(lastRun.output));
+      const envelope = { output: lastRun.output, context: lastRun.context };
+      if (lastRun.skipRemaining) envelope.skipRemaining = true;
+      setOutputJson(prettyJson(envelope));
     } else {
       setOutputJson(prettyJson({ error: lastRun.error ?? "run failed" }));
     }
@@ -97,10 +99,11 @@ export function ScriptDryRunPage() {
       throw new Error(err instanceof Error ? err.message : "invalid JSON");
     }
     if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error('input context must be a JSON object with "data" and/or "config"');
+      throw new Error('input must be a JSON object with "data", "context", and/or "config"');
     }
     return {
       data: "data" in parsed ? parsed.data : null,
+      context: "context" in parsed ? parsed.context : {},
       config: "config" in parsed ? parsed.config : null,
     };
   }
@@ -119,6 +122,7 @@ export function ScriptDryRunPage() {
       name,
       content,
       data: ctx.data,
+      context: ctx.context,
       config: ctx.config,
       owner,
     });
@@ -229,7 +233,7 @@ export function ScriptDryRunPage() {
         </section>
 
         <section className="flex min-h-0 flex-col gap-1">
-          <h2 className="shrink-0 text-sm font-semibold opacity-70">Output</h2>
+          <h2 className="shrink-0 text-sm font-semibold opacity-70">Result (output + context)</h2>
           <div className="min-h-0 flex-1">
             <CodeEditor
               language="json"

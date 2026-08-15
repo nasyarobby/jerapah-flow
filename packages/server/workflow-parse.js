@@ -1,8 +1,5 @@
 import jsonata from "jsonata";
 
-const AS_IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const RESERVED_AS = new Set(["data", "config"]);
-
 export const SET_STEP_SCRIPT = "set";
 
 /**
@@ -12,7 +9,6 @@ export const SET_STEP_SCRIPT = "set";
  *   script: string,
  *   config: unknown | null,
  *   expression?: undefined,
- *   as?: undefined,
  *   id: string | null,
  *   needsKind: "none" | "list" | "map",
  *   needs: NeedEdge[],
@@ -21,11 +17,10 @@ export const SET_STEP_SCRIPT = "set";
  * @typedef {{
  *   kind: "set",
  *   script: typeof SET_STEP_SCRIPT,
- *   config: { expression: string, as: string },
+ *   config: { expression: string },
  *   expression: string,
- *   as: string,
  *   id: string | null,
- *   needsKind: "none",
+ *   needsKind: "none" | "list" | "map",
  *   needs: NeedEdge[],
  *   when: string | null,
  * }} ParsedSetStep
@@ -163,9 +158,6 @@ export function compileWorkflowScripts(scripts) {
   if (dagMode) {
     for (const step of steps) {
       const who = step.id ?? String(step.index);
-      if (step.kind === "set") {
-        throw new Error(`set steps are not allowed in DAG workflows (step ${who})`);
-      }
       if (step.when) {
         throw new Error(`when is not allowed in DAG workflows (step ${who})`);
       }
@@ -227,13 +219,10 @@ export function compileWorkflowScripts(scripts) {
 }
 
 /**
- * Prefer a script return's `.data`; otherwise treat the whole return as data.
+ * Upstream DAG output stored in outputsById (already the pipe value).
  * @param {unknown} result
  */
-export function extractStepData(result) {
-  if (result && typeof result === "object" && !Array.isArray(result) && "data" in result) {
-    return result.data;
-  }
+export function extractStepOutput(result) {
   return result ?? null;
 }
 
@@ -248,12 +237,12 @@ export function mergeStepData(step, outputsById, triggerData) {
     return triggerData;
   }
   if (step.needsKind === "list" && step.needs.length === 1) {
-    return extractStepData(outputsById.get(step.needs[0].from));
+    return extractStepOutput(outputsById.get(step.needs[0].from));
   }
   /** @type {Record<string, unknown>} */
   const data = {};
   for (const { alias, from } of step.needs) {
-    data[alias] = extractStepData(outputsById.get(from));
+    data[alias] = extractStepOutput(outputsById.get(from));
   }
   return data;
 }
@@ -263,34 +252,24 @@ export function mergeStepData(step, outputsById, triggerData) {
  * @returns {ParsedSetStep}
  */
 function parseSetStep(step) {
-  if (step.needs != null) {
-    throw new Error("needs is not allowed on set steps");
-  }
   const spec = step.set;
   if (spec == null || typeof spec !== "object" || Array.isArray(spec)) {
     throw new Error(`Invalid set step: ${JSON.stringify(step)}`);
   }
   const expression = spec.expression;
-  const as = spec.as;
   if (typeof expression !== "string" || !expression.trim()) {
     throw new Error("set.expression is required");
   }
-  if (typeof as !== "string" || !AS_IDENT.test(as)) {
-    throw new Error(`Invalid set.as: ${JSON.stringify(as)}`);
-  }
-  if (RESERVED_AS.has(as)) {
-    throw new Error(`set.as "${as}" is reserved`);
-  }
   compileJsonata(expression, "set.expression");
+  const { needsKind, needs } = parseNeeds(step.needs);
   return {
     kind: "set",
     script: SET_STEP_SCRIPT,
-    config: { expression, as },
+    config: { expression },
     expression,
-    as,
     id: parseOptionalId(step.id),
-    needsKind: "none",
-    needs: [],
+    needsKind,
+    needs,
     when: parseWhen(step.when),
   };
 }

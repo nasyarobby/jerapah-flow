@@ -1,9 +1,10 @@
 const HTTP_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 
-function ensureDataObject(ctx) {
-  if (ctx.data == null || typeof ctx.data !== "object" || Array.isArray(ctx.data)) {
-    ctx.data = {};
+function passContext(ctx) {
+  if (ctx?.context != null && typeof ctx.context === "object" && !Array.isArray(ctx.context)) {
+    return { ...ctx.context };
   }
+  return {};
 }
 
 function isPlainObject(value) {
@@ -40,7 +41,6 @@ function normalizeHeaders(value, label) {
       headers[key] = String(val);
       continue;
     }
-    // Secret wrappers are unwrapped by $axios; do not String() them.
     if (typeof val === "object") {
       headers[key] = val;
       continue;
@@ -88,8 +88,6 @@ async function fetchHttp(ctx) {
   const headers = resolveHeaders(ctx);
   const body = resolveBody(ctx);
 
-  ensureDataObject(ctx);
-
   /** @type {Record<string, unknown>} */
   const request = { url, method, headers };
   if (body.present && method !== "HEAD") {
@@ -103,14 +101,16 @@ async function fetchHttp(ctx) {
     "fetch-http: fetch complete",
   );
 
-  ctx.data.httpResponse = response.data;
-  ctx.data.httpStatus = response.status;
+  const output = {
+    httpResponse: response.data,
+    httpStatus: response.status,
+  };
   log.info(
-    { status: ctx.data.httpStatus, length: responseSize(ctx.data.httpResponse) },
+    { status: output.httpStatus, length: responseSize(output.httpResponse) },
     "fetch-http: saved httpResponse",
   );
 
-  return ctx;
+  return { output, context: { ...passContext(ctx), ...output } };
 }
 
 fetchHttp.meta = {
@@ -153,6 +153,10 @@ fetchHttp.meta = {
   output: {
     httpResponse: { type: "any", description: "Response body as returned by the server" },
     httpStatus: { type: "number", description: "HTTP status code" },
+  },
+  context: {
+    httpResponse: { type: "any", description: "Same as output.httpResponse" },
+    httpStatus: { type: "number", description: "Same as output.httpStatus" },
   },
   example: {
     data: {},

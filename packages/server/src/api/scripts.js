@@ -6,6 +6,7 @@ import {
 } from "../../script-sandbox.js";
 import * as fsStore from "../../fs-store.js";
 import { createDryRunLogger, safeSerialize } from "./dry-run-logger.js";
+import { normalizeStepResult } from "../../step-result.js";
 
 /**
  * @param {{ referencedScripts: () => Set<string> }} registry
@@ -102,7 +103,7 @@ export default function scriptsPluginFactory(registry) {
         return reply.code(err.statusCode ?? 400).send({ error: err.message });
       }
 
-      const body = /** @type {{ content?: string, data?: unknown, config?: unknown, owner?: string }} */ (
+      const body = /** @type {{ content?: string, data?: unknown, context?: unknown, config?: unknown, owner?: string }} */ (
         req.body ?? {}
       );
       if (typeof body.content !== "string") {
@@ -118,8 +119,13 @@ export default function scriptsPluginFactory(registry) {
         }
       }
 
+      const incomingContext =
+        body.context != null && typeof body.context === "object" && !Array.isArray(body.context)
+          ? body.context
+          : {};
       const ctx = {
         data: body.data ?? null,
+        context: incomingContext,
         config: body.config ?? null,
       };
 
@@ -132,10 +138,13 @@ export default function scriptsPluginFactory(registry) {
           workflowName: "dry-run",
           owner,
         });
-        const output = await fn(ctx);
+        const raw = await fn(ctx);
+        const result = normalizeStepResult(raw, incomingContext, name);
         return {
           status: "success",
-          output: safeSerialize(output),
+          output: safeSerialize(result.output),
+          context: safeSerialize(result.context),
+          skipRemaining: result.skipRemaining,
           error: null,
           logs,
           durationMs: Date.now() - started,
@@ -147,6 +156,8 @@ export default function scriptsPluginFactory(registry) {
         return {
           status: "failed",
           output: null,
+          context: null,
+          skipRemaining: false,
           error: err instanceof Error ? err.message : String(err),
           logs,
           durationMs: Date.now() - started,

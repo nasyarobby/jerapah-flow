@@ -19,11 +19,11 @@ scripts:
     needs: [time, comic]
     config:
       expression: |
-        {"data": {
-          "title": comic.httpResponse.title,
-          "message": time.datetime & " " & comic.httpResponse.title,
-          "attach": comic.httpResponse.url
-        }}
+        {
+          "title": data.comic.httpResponse.title,
+          "message": data.time.datetime & " " & data.comic.httpResponse.title,
+          "attach": data.comic.httpResponse.url
+        }
 
   - id: notify
     script: ntfy.js

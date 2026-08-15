@@ -107,11 +107,12 @@ export function useDeleteScript() {
 
 export function useDryRunScript() {
   return useMutation({
-    mutationFn: async ({ name, content, data, config, owner }) =>
+    mutationFn: async ({ name, content, data, context, config, owner }) =>
       (
         await api.post(`/scripts/${encodeURIComponent(name)}/dry-run`, {
           content,
           data,
+          context,
           config,
           owner,
         })

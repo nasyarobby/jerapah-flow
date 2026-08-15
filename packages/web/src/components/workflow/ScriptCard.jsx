@@ -42,10 +42,10 @@ export function ScriptCard({
     step.id && otherSteps.some((s) => s.id === step.id && s.uiId !== step.uiId);
   const preview = previewConfigValue(step.config, meta?.previewConfigKey);
   const previewFull = configValueText(step.config, meta?.previewConfigKey);
-  const baseName = step.kind === "set" ? `set:${step.as || "…"}` : step.script || "untitled";
+  const baseName = step.kind === "set" ? "set" : step.script || "untitled";
   const titleFull = previewFull ? `${baseName} (${previewFull})` : baseName;
   const setConfig =
-    step.kind === "set" ? { as: step.as ?? "", expression: step.expression ?? "" } : null;
+    step.kind === "set" ? { expression: step.expression ?? "" } : null;
 
   return (
     <article
@@ -95,7 +95,9 @@ export function ScriptCard({
               <p className="text-sm opacity-70 mt-1">{meta.description}</p>
             ) : null}
             {expanded && step.kind === "set" ? (
-              <p className="text-sm opacity-70 mt-1">Assign a JSONata result onto the context</p>
+              <p className="text-sm opacity-70 mt-1">
+                JSONata over ctx; result becomes the next step’s data
+              </p>
             ) : null}
           </button>
           {step.kind === "script" ? (
@@ -142,14 +144,11 @@ export function ScriptCard({
           <>
             {step.kind === "set" ? (
               <div className="space-y-2">
-                <FieldLabel name="as" required description="Context field to write (not data or config)" />
-                <input
-                  className="input input-sm w-full font-mono"
-                  value={step.as ?? ""}
-                  disabled={disabled}
-                  onChange={(e) => onChange({ ...step, as: e.target.value })}
+                <FieldLabel
+                  name="expression"
+                  required
+                  description="JSONata evaluated against ctx (data, context, config). Result becomes the next step's data."
                 />
-                <FieldLabel name="expression" required description="JSONata evaluated against ctx" />
                 <textarea
                   className="textarea textarea-sm w-full min-h-24 font-mono text-xs"
                   value={step.expression ?? ""}
@@ -186,14 +185,12 @@ export function ScriptCard({
                     <span className="text-error text-xs">Duplicate step id</span>
                   ) : null}
                 </label>
-                {step.kind === "set" ? null : (
-                  <NeedsEditor
-                    step={step}
-                    otherSteps={otherSteps}
-                    disabled={disabled}
-                    onChange={onChange}
-                  />
-                )}
+                <NeedsEditor
+                  step={step}
+                  otherSteps={otherSteps}
+                  disabled={disabled}
+                  onChange={onChange}
+                />
                 <label className="form-control">
                   <span className="label py-0 text-sm">when</span>
                   <input
@@ -244,7 +241,7 @@ function NeedsEditor({ step, otherSteps, disabled, onChange }) {
         disabled={disabled}
         onChange={(e) => setMode(e.target.value)}
       >
-        <option value="none">None (use previous step data)</option>
+        <option value="none">None (trigger data / previous output)</option>
         <option value="list">List of step ids</option>
         <option value="map">Map alias → step id</option>
       </select>
@@ -366,27 +363,44 @@ function needsMode(needs) {
 export function ScriptTryDialog({ script, config, meta, owner, onClose }) {
   const existing = useScript(script);
   const dryRun = useDryRunScript();
-  const defaultData = useMemo(() => prettyJson(contextFromMeta(meta).data ?? {}), [meta]);
+  const defaults = useMemo(() => contextFromMeta(meta), [meta]);
+  const defaultData = useMemo(() => prettyJson(defaults.data ?? {}), [defaults]);
+  const defaultContext = useMemo(() => prettyJson(defaults.context ?? {}), [defaults]);
   const [dataJson, setDataJson] = useState(defaultData);
+  const [contextJson, setContextJson] = useState(defaultContext);
   const [parseError, setParseError] = useState(null);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     setDataJson(defaultData);
-  }, [defaultData]);
+    setContextJson(defaultContext);
+  }, [defaultData, defaultContext]);
 
-  const outputJson = dryRun.data
-    ? prettyJson(dryRun.data.status === "success" ? dryRun.data.output : { error: dryRun.data.error })
+  const resultJson = dryRun.data
+    ? prettyJson(
+        dryRun.data.status === "success"
+          ? {
+              output: dryRun.data.output,
+              context: dryRun.data.context,
+              ...(dryRun.data.skipRemaining ? { skipRemaining: true } : {}),
+            }
+          : { error: dryRun.data.error },
+      )
     : "";
 
   function onRun() {
     setParseError(null);
     let data;
+    let context;
     try {
-      const parsed = JSON.parse(dataJson || "null");
-      data = parsed;
+      data = JSON.parse(dataJson || "null");
+      context = JSON.parse(contextJson || "{}");
     } catch (err) {
       setParseError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    if (context != null && (typeof context !== "object" || Array.isArray(context))) {
+      setParseError("context must be a JSON object");
       return;
     }
     if (!existing.data?.content) {
@@ -397,6 +411,7 @@ export function ScriptTryDialog({ script, config, meta, owner, onClose }) {
       name: script,
       content: existing.data.content,
       data,
+      context: context ?? {},
       config: config ?? {},
       owner,
     });
@@ -442,12 +457,18 @@ export function ScriptTryDialog({ script, config, meta, owner, onClose }) {
             </div>
           </div>
           <div className={expanded ? "min-h-0 flex-1 h-full" : "h-48"}>
+            <p className="text-xs opacity-60 mb-1">context</p>
+            <div className={expanded ? "h-[calc(100%-1.25rem)]" : "h-full"}>
+              <CodeEditor language="json" value={contextJson} onChange={setContextJson} height="100%" />
+            </div>
+          </div>
+          <div className={`md:col-span-2 ${expanded ? "min-h-0 flex-1 h-full" : "h-48"}`}>
             <p className="text-xs opacity-60 mb-1 flex items-center gap-2">
-              output
+              result (output + context)
               {dryRun.data?.status ? <StatusBadge status={dryRun.data.status} /> : null}
             </p>
             <div className={expanded ? "h-[calc(100%-1.25rem)]" : "h-full"}>
-              <CodeEditor language="json" value={outputJson} onChange={() => {}} readOnly height="100%" />
+              <CodeEditor language="json" value={resultJson} onChange={() => {}} readOnly height="100%" />
             </div>
           </div>
         </div>

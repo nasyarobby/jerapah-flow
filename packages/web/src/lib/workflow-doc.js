@@ -96,7 +96,6 @@ export function newSetStep() {
     uiId: nextUiId("step"),
     kind: "set",
     script: "set",
-    as: "value",
     expression: "",
     id: "",
     when: "",
@@ -187,11 +186,10 @@ function normalizeStep(step) {
       uiId,
       kind: "set",
       script: "set",
-      as: typeof spec.as === "string" ? spec.as : "",
       expression: typeof spec.expression === "string" ? spec.expression : "",
       id: typeof step.id === "string" ? step.id : "",
       when: typeof step.when === "string" ? step.when : "",
-      needs: null,
+      needs: step.needs ?? null,
     };
   }
   const known = new Set(["script", "config", "id", "when", "needs", "set"]);
@@ -254,9 +252,9 @@ function dumpStep(step) {
     if (step.id) out.id = step.id;
     out.set = {
       expression: step.expression ?? "",
-      as: step.as ?? "",
     };
     if (step.when) out.when = step.when;
+    if (step.needs != null && !isEmptyNeeds(step.needs)) out.needs = step.needs;
     return out;
   }
   /** @type {Record<string, unknown>} */

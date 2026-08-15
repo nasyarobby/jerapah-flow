@@ -92,7 +92,7 @@ export default async function (ctx) {
 const scriptOut = await runScriptSource(
   "fingerprint-smoke.js",
   script,
-  { data: { n: 1 } },
+  { data: { n: 1 }, context: {} },
   { log, workflowName: ns },
 );
 if (!scriptOut.changed) throw new Error("sandbox $fingerprint.claim should be new");

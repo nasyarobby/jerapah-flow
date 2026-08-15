@@ -1,15 +1,13 @@
 function parseStep(step) {
   if (typeof step === "string") {
-    return { kind: "script", script: step, id: null, needs: null, when: null, as: null };
+    return { kind: "script", script: step, id: null, needs: null, when: null };
   }
   if (step?.set) {
-    const as = typeof step.set?.as === "string" && step.set.as ? step.set.as : "set";
     return {
       kind: "set",
       script: null,
-      as,
       id: typeof step.id === "string" && step.id ? step.id : null,
-      needs: null,
+      needs: step.needs ?? null,
       when: typeof step.when === "string" && step.when ? step.when : null,
     };
   }
@@ -17,7 +15,6 @@ function parseStep(step) {
     return {
       kind: "script",
       script: step.script,
-      as: null,
       id: typeof step.id === "string" && step.id ? step.id : null,
       needs: step.needs ?? null,
       when: typeof step.when === "string" && step.when ? step.when : null,
@@ -55,7 +52,7 @@ function triggerLabel(t) {
 
 function stepLabel(s) {
   if (s.kind === "set") {
-    const base = s.id ? `${s.id}: set ${s.as}` : `set ${s.as}`;
+    const base = s.id ? `${s.id}: set` : "set";
     return s.when ? `${base} when: ${s.when}` : base;
   }
   const base = s.id ? `${s.id}: ${s.script}` : s.script;
