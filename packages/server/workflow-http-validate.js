@@ -2,7 +2,7 @@
  * Validate HTTP trigger auth / response fields on workflow save.
  */
 import { assertAuthType, getHttpAuthByName } from "./http-auths-store.js";
-import { getHttpPageByName } from "./http-pages-store.js";
+import { getHttpPageByName, assertHttpResponsePage } from "./http-pages-store.js";
 import { authLabel } from "./http-trigger-auth.js";
 
 /**
@@ -81,11 +81,7 @@ async function validatePageRef(pageName, label) {
     throw err;
   }
   const page = await getHttpPageByName(pageName);
-  if (!page) {
-    const err = new Error(`unknown response page "${pageName}"`);
-    err.statusCode = 400;
-    throw err;
-  }
+  assertHttpResponsePage(page, pageName, label);
 }
 
 /**

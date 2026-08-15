@@ -147,8 +147,11 @@ async function sendEmail(ctx) {
   }
 
   const text = ctx.data?.text ?? ctx.data?.body ?? ctx.data?.message;
-  if (typeof text !== "string" || text.length === 0) {
-    throw new Error("data.text is required (plain-text body)");
+  const html = ctx.data?.html;
+  const hasText = typeof text === "string" && text.length > 0;
+  const hasHtml = typeof html === "string" && html.length > 0;
+  if (!hasText && !hasHtml) {
+    throw new Error("data.text or data.html is required");
   }
 
   const cc = normalizeRecipients(ctx.data?.cc, "data.cc");
@@ -174,8 +177,9 @@ async function sendEmail(ctx) {
     from,
     to,
     subject,
-    text,
   };
+  if (hasText) mail.text = text;
+  if (hasHtml) mail.html = html;
   if (cc) mail.cc = cc;
   if (bcc) mail.bcc = bcc;
   if (replyTo) mail.replyTo = replyTo;
@@ -203,9 +207,10 @@ async function sendEmail(ctx) {
       cc: cc ?? null,
       bcc: bcc ? "[redacted]" : null,
       subjectLength: subject.length,
-      textLength: text.length,
+      textLength: hasText ? text.length : 0,
+      htmlLength: hasHtml ? html.length : 0,
     },
-    "send-email: sending plain-text message",
+    "send-email: sending message",
   );
 
   const info = await transporter.sendMail(mail);
@@ -224,7 +229,7 @@ async function sendEmail(ctx) {
 }
 
 sendEmail.meta = {
-  description: "Send a plain-text email via SMTP (nodemailer)",
+  description: "Send an email via SMTP (nodemailer); plain text, HTML, or both",
   config: {
     service: {
       type: "string",
@@ -387,8 +392,13 @@ sendEmail.meta = {
     subject: { type: "string", required: true, description: "Email subject" },
     text: {
       type: "string",
-      required: true,
+      required: false,
       description: "Plain-text body (aliases: body, message)",
+    },
+    html: {
+      type: "string",
+      required: false,
+      description: "HTML body (e.g. from render-template.js)",
     },
     priority: {
       type: "string",

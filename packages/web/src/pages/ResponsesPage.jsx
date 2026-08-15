@@ -13,7 +13,12 @@ const emptyForm = {
   content: "",
   mime: "html",
   status: 200,
+  kind: "response",
 };
+
+function kindLabel(kind) {
+  return kind === "template" ? "HTML template" : "HTTP response";
+}
 
 export function ResponsesPage() {
   const { data: pages = [], isLoading } = useHttpPages();
@@ -35,6 +40,8 @@ export function ResponsesPage() {
       content: p.content,
       mime: p.mime,
       status: p.status,
+      kind: p.kind ?? "response",
+      system: Boolean(p.system),
     });
   }
 
@@ -49,8 +56,9 @@ export function ResponsesPage() {
       {
         name: form.name,
         content: form.content,
-        mime: form.mime,
+        mime: form.kind === "template" ? "html" : form.mime,
         status: Number(form.status) || 200,
+        kind: form.kind,
       },
       { onSuccess: closeForm },
     );
@@ -66,8 +74,11 @@ export function ResponsesPage() {
         </button>
       </div>
       <p className="text-sm opacity-70">
-        Named HTML/JSON pages for HTTP trigger success or unauthorized responses. Reference them in
-        YAML as <code className="font-mono text-xs">response: name</code>.
+        Named HTML/JSON pages for HTTP trigger responses, or HTML templates for Mustache
+        rendering in workflows. HTTP responses use{" "}
+        <code className="font-mono text-xs">response: name</code>; templates use{" "}
+        <code className="font-mono text-xs">render-template.js</code> with{" "}
+        <code className="font-mono text-xs">config.template: name</code>.
       </p>
 
       {isLoading ? (
@@ -80,6 +91,7 @@ export function ResponsesPage() {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Kind</th>
                 <th>Mime</th>
                 <th>Status</th>
                 <th>Updated</th>
@@ -89,9 +101,15 @@ export function ResponsesPage() {
             <tbody>
               {pages.map((p) => (
                 <tr key={p.id} className="hover">
-                  <td className="font-mono">{p.name}</td>
+                  <td className="font-mono">
+                    {p.name}
+                    {p.system ? (
+                      <span className="badge badge-ghost badge-xs ml-2">system</span>
+                    ) : null}
+                  </td>
+                  <td>{kindLabel(p.kind ?? "response")}</td>
                   <td>{p.mime}</td>
-                  <td>{p.status}</td>
+                  <td>{p.kind === "template" ? "—" : p.status}</td>
                   <td className="whitespace-nowrap">{formatTime(p.updated_at)}</td>
                   <td className="text-right whitespace-nowrap">
                     <button
@@ -105,7 +123,8 @@ export function ResponsesPage() {
                     <button
                       type="button"
                       className="btn btn-ghost btn-xs text-error"
-                      title="Delete"
+                      title={p.system ? "System pages cannot be deleted" : "Delete"}
+                      disabled={p.system}
                       onClick={() => setConfirmDelete(p)}
                     >
                       <LuTrash2 className="size-4" />
@@ -125,7 +144,7 @@ export function ResponsesPage() {
         >
           <div className="flex items-center justify-between">
             <legend className="fieldset-legend">
-              {mode === "add" ? "New response page" : `Edit ${form.name}`}
+              {mode === "add" ? "New page" : `Edit ${form.name}`}
             </legend>
             <button
               type="button"
@@ -146,25 +165,52 @@ export function ResponsesPage() {
             title="Letters, numbers, dots, underscores, hyphens"
             disabled={mode === "edit"}
           />
-          <label className="label">Mime</label>
+          <label className="label">Kind</label>
           <select
             className="select w-full"
-            value={form.mime}
-            onChange={(e) => setForm({ ...form, mime: e.target.value })}
+            value={form.kind}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                kind: e.target.value,
+                mime: e.target.value === "template" ? "html" : form.mime,
+              })
+            }
+            disabled={mode === "edit" && form.system}
           >
-            <option value="html">html</option>
-            <option value="json">json</option>
+            <option value="response">HTTP response</option>
+            <option value="template">HTML template</option>
           </select>
-          <label className="label">HTTP status</label>
-          <input
-            type="number"
-            className="input w-full"
-            value={form.status}
-            onChange={(e) => setForm({ ...form, status: e.target.value })}
-            min={100}
-            max={599}
-            required
-          />
+          {form.kind === "template" ? (
+            <p className="text-xs opacity-70">
+              Templates use Mustache syntax (<code>{"{{title}}"}</code>,{" "}
+              <code>{"{{#items}}"}</code>) and are rendered by{" "}
+              <code className="font-mono">render-template.js</code>.
+            </p>
+          ) : null}
+          {form.kind === "response" ? (
+            <>
+              <label className="label">Mime</label>
+              <select
+                className="select w-full"
+                value={form.mime}
+                onChange={(e) => setForm({ ...form, mime: e.target.value })}
+              >
+                <option value="html">html</option>
+                <option value="json">json</option>
+              </select>
+              <label className="label">HTTP status</label>
+              <input
+                type="number"
+                className="input w-full"
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}
+                min={100}
+                max={599}
+                required
+              />
+            </>
+          ) : null}
           <label className="label">Content</label>
           <textarea
             className="textarea w-full font-mono text-sm min-h-40"
@@ -198,7 +244,7 @@ export function ResponsesPage() {
               <button
                 type="button"
                 className="btn btn-error"
-                disabled={del.isPending}
+                disabled={del.isPending || confirmDelete.system}
                 onClick={() =>
                   del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
                 }
