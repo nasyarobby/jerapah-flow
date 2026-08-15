@@ -395,7 +395,7 @@ function createScriptSandbox({
   };
 
   vm.createContext(sandbox, {
-    name: `scrunner:${workflowName}:${script}`,
+    name: `jerapah-flow:${workflowName}:${script}`,
     codeGeneration: { strings: false, wasm: false },
   });
 

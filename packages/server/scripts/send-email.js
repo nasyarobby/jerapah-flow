@@ -231,6 +231,7 @@ async function sendEmail(ctx) {
 sendEmail.meta = {
   description: "Send an email via SMTP (nodemailer); plain text, HTML, or both",
   previewConfigKey: "from",
+  tags: ["channel"],
   config: {
     service: {
       type: "string",
@@ -427,7 +428,7 @@ sendEmail.meta = {
       to: ["recipient@example.com", "other@example.com"],
       cc: "manager@example.com",
       bcc: "audit@example.com",
-      subject: "Hello from scrunner",
+      subject: "Hello from JerapahFlow",
       text: "This is a plain-text test message.",
     },
     config: {

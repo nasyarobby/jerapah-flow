@@ -4,7 +4,7 @@ description: |
 scripts:
   - script: ntfy.js
     config:
-      url: https://ntfy.sh/scrunner
+      url: https://ntfy.sh/jerapah-flow
 triggers:
   - type: cron
     schedule: "*/20 * * * *"

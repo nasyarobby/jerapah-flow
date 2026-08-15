@@ -21,7 +21,7 @@ scripts:
         }
   - script: ntfy.js
     config:
-      url: https://ntfy.sh/scrunner
+      url: https://ntfy.sh/jerapah-flow
 
 triggers:
   - type: HTTP

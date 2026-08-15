@@ -8,7 +8,7 @@ scripts:
       name: send-gmail
       expression: |
         {
-          "subject": "scrunner test",
+          "subject": "JerapahFlow test",
           "text": "Hello from test-send-gmail",
           "html": "<p>Hello from <strong>test-send-gmail</strong></p>"
         }

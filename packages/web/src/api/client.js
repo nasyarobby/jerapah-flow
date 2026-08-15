@@ -11,7 +11,7 @@ api.interceptors.response.use(
     const url = err.config?.url ?? "";
     const isAuthCall = url.includes("/auth/login") || url.includes("/auth/register") || url.includes("/auth/me") || url.includes("/auth/bootstrap");
     if (err.response?.status === 401 && !isAuthCall) {
-      window.dispatchEvent(new Event("scrunner:unauthorized"));
+      window.dispatchEvent(new Event("jerapah-flow:unauthorized"));
     }
     return Promise.reject(err);
   },

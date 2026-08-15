@@ -105,7 +105,7 @@ fs.mkdirSync(LOGS_DIR, { recursive: true });
 const rollingFile = pino.transport({
   target: "pino-roll",
   options: {
-    file: path.join(LOGS_DIR, "scrunner.log"),
+    file: path.join(LOGS_DIR, "jerapah-flow.log"),
     size: "10m",
     mkdir: true,
     limit: { count: 5 },
@@ -113,7 +113,7 @@ const rollingFile = pino.transport({
 });
 
 export const log = pino(
-  { level: process.env.SCRUNNER_LOG_LEVEL ?? "debug" },
+  { level: process.env.JERAPAH_FLOW_LOG_LEVEL ?? process.env.SCRUNNER_LOG_LEVEL ?? "debug" },
   pino.multistream([
     { level: "debug", stream: redactStream(process.stdout) },
     { level: "debug", stream: redactStream(rollingFile) },

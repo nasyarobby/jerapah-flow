@@ -1,11 +1,13 @@
-# scrunner
+# JerapahFlow
+
+![JerapahFlow](packages/web/src/theme/brand/wordmark.png)
 
 Workflow runner with a sandboxed script engine, SQLite run history, and an admin UI.
 
 ## Packages
 
-- `packages/server` — Fastify runner, HTTP/cron triggers, admin REST API
-- `packages/web` — React admin UI (Vite, DaisyUI, React Query)
+- `@jerapah-flow/server` (`packages/server`) — Fastify runner, HTTP/cron triggers, admin REST API
+- `@jerapah-flow/web` (`packages/web`) — React admin UI (Vite, DaisyUI, React Query)
 
 ## Setup
 
@@ -34,12 +36,12 @@ The first account created becomes **admin**. Later accounts are created from Use
 
 | Variable | Default | Notes |
 |---|---|---|
-| `SCRUNNER_JWT_SECRET` | `scrunner-dev-secret` (dev only) | **Required in production** |
-| `SCRUNNER_SECRETS_KEY` | `scrunner-dev-secrets-key` (dev only) | Master key for named secrets. **Required in production**. Changing it makes existing secrets unreadable. 64 hex chars are used as a raw AES-256 key; any other string is derived with scrypt. |
-| `SCRUNNER_DB_PATH` | `packages/server/data/scrunner.db` | SQLite file |
-| `SCRUNNER_LOG_LEVEL` | `debug` | Pino level |
-| `SCRUNNER_RETENTION_DAYS` | `30` | Run history prune |
-| `SCRUNNER_CORS_ORIGIN` | `http://localhost:5173` | Vite origin in dev |
+| `JERAPAH_FLOW_JWT_SECRET` | `scrunner-dev-secret` (dev only) | **Required in production**. `SCRUNNER_JWT_SECRET` is still accepted. |
+| `JERAPAH_FLOW_SECRETS_KEY` | `scrunner-dev-secrets-key` (dev only) | Master key for named secrets. **Required in production**. Changing it makes existing secrets unreadable. 64 hex chars are used as a raw AES-256 key; any other string is derived with scrypt. `SCRUNNER_SECRETS_KEY` is still accepted. |
+| `JERAPAH_FLOW_DB_PATH` | `packages/server/data/jerapah-flow.db` (or existing `scrunner.db`) | SQLite file. `SCRUNNER_DB_PATH` is still accepted. |
+| `JERAPAH_FLOW_LOG_LEVEL` | `debug` | Pino level |
+| `JERAPAH_FLOW_RETENTION_DAYS` | `30` | Run history prune |
+| `JERAPAH_FLOW_CORS_ORIGIN` | `http://localhost:5173` | Vite origin in dev |
 | `PORT` | `9000` | HTTP port |
 | `NODE_ENV` | — | Set `production` for secure cookies |
 
@@ -48,7 +50,7 @@ The first account created becomes **admin**. Later accounts are created from Use
 ```bash
 pnpm install
 pnpm build
-SCRUNNER_JWT_SECRET=... SCRUNNER_SECRETS_KEY=... NODE_ENV=production pnpm start
+JERAPAH_FLOW_JWT_SECRET=... JERAPAH_FLOW_SECRETS_KEY=... NODE_ENV=production pnpm start
 ```
 
 The server serves `packages/web/dist` when that folder exists.

@@ -29,7 +29,7 @@ scripts:
     script: ntfy.js
     needs: [compose]
     config:
-      url: https://ntfy.sh/scrunner
+      url: https://ntfy.sh/jerapah-flow
 
 triggers:
   - type: HTTP

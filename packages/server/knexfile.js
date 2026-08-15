@@ -2,7 +2,12 @@ import fs from "fs";
 import path from "path";
 import { DATA_DIR, SERVER_ROOT } from "./paths.js";
 
-const dbPath = process.env.SCRUNNER_DB_PATH ?? path.join(DATA_DIR, "scrunner.db");
+const defaultNew = path.join(DATA_DIR, "jerapah-flow.db");
+const defaultLegacy = path.join(DATA_DIR, "scrunner.db");
+const dbPath =
+  process.env.JERAPAH_FLOW_DB_PATH ??
+  process.env.SCRUNNER_DB_PATH ??
+  (fs.existsSync(defaultLegacy) && !fs.existsSync(defaultNew) ? defaultLegacy : defaultNew);
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
 /** @type {import("knex").Knex.Config} */

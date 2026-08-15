@@ -27,8 +27,8 @@ export function App() {
     function onUnauthorized() {
       qc.setQueryData(["me"], null);
     }
-    window.addEventListener("scrunner:unauthorized", onUnauthorized);
-    return () => window.removeEventListener("scrunner:unauthorized", onUnauthorized);
+    window.addEventListener("jerapah-flow:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("jerapah-flow:unauthorized", onUnauthorized);
   }, [qc]);
 
   const user = me.data?.user;

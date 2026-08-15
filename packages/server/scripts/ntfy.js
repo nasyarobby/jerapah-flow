@@ -83,7 +83,7 @@ async function ntfy(ctx) {
   }
 
   const headers = ntfyHeaders(ctx);
-  const ntfyUrl = ctx.config?.url || "https://ntfy.sh/scrunner";
+  const ntfyUrl = ctx.config?.url || "https://ntfy.sh/jerapah-flow";
 
   if (hasFile) {
     const filename = ctx.data?.filename || "attachment";
@@ -114,7 +114,7 @@ async function ntfy(ctx) {
     log.info("ntfy sending message to %s", ntfyUrl);
     log.info("ntfy messsage: %s", truncatedMessage);
 
-    await $axios.post(ntfyUrl, ctx.data?.message || "Hello from scrunner", {
+    await $axios.post(ntfyUrl, ctx.data?.message || "Hello from jerapah-flow", {
       headers,
     });
   }
@@ -132,10 +132,11 @@ async function ntfy(ctx) {
 ntfy.meta = {
   description: "Send a message or file to an ntfy topic",
   previewConfigKey: "url",
+  tags: ["channel"],
   config: {
     url: {
       type: "string",
-      default: "https://ntfy.sh/scrunner",
+      default: "https://ntfy.sh/jerapah-flow",
       description: "ntfy topic URL",
     },
     fingerprint: {
@@ -166,8 +167,8 @@ ntfy.meta = {
     sent: { type: "string", description: "Replaces the workflow context with { sent: \"true\" }" },
   },
   example: {
-    data: { title: "Hello", message: "Hello from scrunner" },
-    config: { url: "https://ntfy.sh/scrunner", fingerprint: true },
+    data: { title: "Hello", message: "Hello from jerapah-flow" },
+    config: { url: "https://ntfy.sh/jerapah-flow", fingerprint: true },
   },
 };
 
