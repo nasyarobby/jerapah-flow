@@ -235,7 +235,7 @@ sendEmail.meta = {
       type: "string",
       required: false,
       description:
-        "Well-known provider shortcut (e.g. gmail, outlook365, sendgrid). Alternative to host.",
+        "Nodemailer well-known service ID (e.g. Gmail, Outlook365, SendGrid). Sets host, port, and TLS. See https://nodemailer.com/smtp/well-known-services",
     },
     host: {
       type: "string",
@@ -430,9 +430,7 @@ sendEmail.meta = {
       text: "This is a plain-text test message.",
     },
     config: {
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
+      service: "Gmail",
       user: "smtp-login@gmail.com",
       from: "notifications@example.com",
       passwordSecret: "gmail_app_password",
