@@ -8,6 +8,7 @@ import {
   useSetWorkflowEnabled,
   useWorkflow,
 } from "../api/hooks.js";
+import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
 import { WorkflowVisualEditor } from "../components/workflow/WorkflowVisualEditor.jsx";
 import { NEW_WORKFLOW_YAML, parseWorkflowYaml } from "../lib/workflow-doc.js";
 
@@ -33,6 +34,7 @@ function WorkflowEditorLayout({
         <Link to={backTo} className="btn btn-ghost btn-sm btn-square" aria-label="Back">
           <LuArrowLeft className="size-4" />
         </Link>
+        <WorkflowFileIcon className="size-8 shrink-0" />
         <h1 className="truncate text-xl font-semibold">{title}</h1>
         <div className="flex-1" />
         {onToggleEnabled ? (

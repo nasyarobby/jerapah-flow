@@ -15,6 +15,7 @@ import {
   LuUsers,
 } from "react-icons/lu";
 import { useLogout } from "../api/hooks.js";
+import { brandMark } from "../theme/brand.js";
 import { useTheme } from "../theme.jsx";
 
 const links = [
@@ -57,7 +58,10 @@ export function Layout({ user, children }) {
               <LuMenu className="size-5" />
             </label>
           </div>
-          <div className="flex-1 px-2 text-lg font-semibold">scrunner</div>
+          <div className="flex flex-1 items-center gap-2 px-2 text-lg font-semibold">
+            <img src={brandMark} alt="" className="size-8 object-contain" />
+            JerapahFlow
+          </div>
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -87,7 +91,12 @@ export function Layout({ user, children }) {
       <div className="drawer-side z-20">
         <label htmlFor="nav-drawer" aria-label="Close menu" className="drawer-overlay" />
         <ul className="menu bg-base-200 min-h-full w-64 p-4">
-          <li className="menu-title">scrunner</li>
+          <li className="mb-2">
+            <div className="pointer-events-none flex items-center gap-2">
+              <img src={brandMark} alt="" className="size-8 object-contain" />
+              <span className="text-base font-semibold text-base-content">JerapahFlow</span>
+            </div>
+          </li>
           {navItems.map(({ to, label, icon: Icon, end }) => (
             <li key={to}>
               <NavLink to={to} end={end} onClick={closeDrawer}>

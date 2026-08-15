@@ -9,6 +9,7 @@ import {
   useSetWorkflowEnabled,
   useWorkflows,
 } from "../api/hooks.js";
+import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
 import { formatTime, WorkflowStatusBadge } from "../lib/format.jsx";
 
 export function WorkflowsPage() {
@@ -120,9 +121,10 @@ export function WorkflowsPage() {
                 <tr key={w.key} className="hover">
                   <td>
                     <Link
-                      className="link"
+                      className="link inline-flex items-center gap-2"
                       to={`/workflows/${encodeURIComponent(w.owner)}/${encodeURIComponent(w.file)}/edit`}
                     >
+                      <WorkflowFileIcon className="size-7 shrink-0" />
                       {w.name}
                     </Link>
                     {!w.registered ? (

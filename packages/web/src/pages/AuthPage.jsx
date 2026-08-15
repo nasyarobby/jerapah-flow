@@ -2,6 +2,7 @@ import { useState } from "react";
 import { LuLogIn, LuUserPlus } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import { useLogin, useRegister } from "../api/hooks.js";
+import { brandBanner } from "../theme/brand.js";
 
 export function AuthPage({ needsSetup }) {
   const login = useLogin();
@@ -25,6 +26,11 @@ export function AuthPage({ needsSetup }) {
         <legend className="fieldset-legend text-lg">
           {needsSetup ? "Create admin" : "Sign in"}
         </legend>
+        <img
+          src={brandBanner}
+          alt="JerapahFlow"
+          className="mb-2 w-full rounded-box bg-neutral object-contain"
+        />
         <label className="label" htmlFor="username">
           Username
         </label>
