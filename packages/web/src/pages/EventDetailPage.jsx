@@ -2,9 +2,9 @@ import { useMemo, useState, Fragment } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { LuArrowLeft, LuFilter } from "react-icons/lu";
 import { useRun } from "../api/hooks.js";
+import { JsonViewBlock } from "../components/JsonViewBlock.jsx";
 import { LogViewer } from "../components/LogViewer.jsx";
 import { formatTime, StatusBadge } from "../lib/format.jsx";
-import { prettyJson } from "../lib/script.js";
 
 function stepLabel(s) {
   if (s.script === "set") return "set";
@@ -17,22 +17,6 @@ function filterLabel(s) {
 
 function isEditableScript(s) {
   return Boolean(s.script) && s.script !== "set";
-}
-
-function JsonBlock({ title, value }) {
-  if (value == null || value === "") return null;
-  const text = prettyJson(value);
-  if (!text) return null;
-  return (
-    <details className="collapse collapse-arrow border border-base-300 bg-base-100">
-      <summary className="collapse-title min-h-0 py-2 text-sm font-semibold">{title}</summary>
-      <div className="collapse-content">
-        <pre className="max-h-80 overflow-auto rounded-box bg-base-200 p-3 font-mono text-xs">
-          {text}
-        </pre>
-      </div>
-    </details>
-  );
 }
 
 function envelopeParts(raw) {
@@ -128,9 +112,9 @@ export function EventDetailPage() {
       ) : null}
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <JsonBlock title="Run input (data)" value={run.input} />
-        <JsonBlock title="Run output" value={runParts.output} />
-        <JsonBlock title="Run context" value={runParts.context} />
+        <JsonViewBlock title="Run input (data)" value={run.input} />
+        <JsonViewBlock title="Run output" value={runParts.output} />
+        <JsonViewBlock title="Run context" value={runParts.context} />
       </div>
       {runParts.skipRemaining ? (
         <p className="text-sm opacity-70">This run stopped early (<span className="font-mono">skipRemaining</span>).</p>
@@ -201,8 +185,8 @@ export function EventDetailPage() {
                       <tr>
                         <td colSpan={6} className="bg-base-200">
                           <div className="grid gap-2 p-2 sm:grid-cols-2">
-                            <JsonBlock title="output" value={parts.output} />
-                            <JsonBlock title="context" value={parts.context} />
+                            <JsonViewBlock title="output" value={parts.output} />
+                            <JsonViewBlock title="context" value={parts.context} />
                           </div>
                         </td>
                       </tr>

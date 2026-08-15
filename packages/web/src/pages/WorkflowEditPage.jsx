@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { LuArrowLeft, LuPause, LuPlay, LuSave } from "react-icons/lu";
+import { LuArrowLeft, LuCopy, LuPause, LuPlay, LuSave } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import {
   useOwners,
@@ -8,6 +8,7 @@ import {
   useSetWorkflowEnabled,
   useWorkflow,
 } from "../api/hooks.js";
+import { DuplicateWorkflowDialog } from "../components/DuplicateWorkflowDialog.jsx";
 import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
 import { WorkflowVisualEditor } from "../components/workflow/WorkflowVisualEditor.jsx";
 import { NEW_WORKFLOW_YAML, parseWorkflowYaml } from "../lib/workflow-doc.js";
@@ -21,6 +22,7 @@ function WorkflowEditorLayout({
   saveSuccess,
   onSave,
   onTest,
+  onDuplicate,
   onToggleEnabled,
   enabled,
   enablePending,
@@ -58,6 +60,12 @@ function WorkflowEditorLayout({
           <button type="button" className="btn btn-sm" onClick={onTest}>
             <LuPlay className="size-4" />
             Test
+          </button>
+        ) : null}
+        {onDuplicate ? (
+          <button type="button" className="btn btn-sm" onClick={onDuplicate}>
+            <LuCopy className="size-4" />
+            Duplicate
           </button>
         ) : null}
         <button
@@ -145,6 +153,7 @@ export function WorkflowNewPage() {
 }
 
 export function WorkflowEditPage() {
+  const navigate = useNavigate();
   const { owner: rawOwner, file: rawFile } = useParams();
   const owner = decodeURIComponent(rawOwner ?? "");
   const file = decodeURIComponent(rawFile ?? "");
@@ -155,6 +164,18 @@ export function WorkflowEditPage() {
   const [savedYaml, setSavedYaml] = useState("");
   const [contentReady, setContentReady] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const routeKey = `${owner}/${file}`;
+  const [activeKey, setActiveKey] = useState(routeKey);
+
+  if (activeKey !== routeKey) {
+    setActiveKey(routeKey);
+    setContent("");
+    setSavedYaml("");
+    setContentReady(false);
+    setTestOpen(false);
+    setDuplicateOpen(false);
+  }
 
   useEffect(() => {
     if (existing.isLoading) return;
@@ -200,38 +221,54 @@ export function WorkflowEditPage() {
   const pageTitle = workflowName ? `${workflowName} (${file})` : file;
 
   return (
-    <WorkflowEditorLayout
-      title={pageTitle}
-      savePending={save.isPending}
-      saveDisabled={!contentReady}
-      saveError={save.isError ? errorMessage(save.error) : null}
-      saveSuccess={save.isSuccess}
-      onSave={onSave}
-      onTest={() => setTestOpen(true)}
-      onToggleEnabled={() =>
-        setEnabled.mutate({
-          owner,
-          file,
-          enabled: existing.data?.parsed?.enabled === false,
-        })
-      }
-      enabled={existing.data?.parsed?.enabled !== false}
-      enablePending={setEnabled.isPending}
-      enableDisabled={!contentReady || Boolean(existing.data?.parseError) || !yamlOk}
-      enableError={setEnabled.isError ? errorMessage(setEnabled.error) : null}
-    >
-      <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <WorkflowVisualEditor
-          yaml={content}
-          onYamlChange={setContent}
-          owner={owner}
-          file={file}
-          savedYaml={savedYaml}
-          showTest
-          testOpen={testOpen}
-          onTestClose={() => setTestOpen(false)}
+    <>
+      <WorkflowEditorLayout
+        title={pageTitle}
+        savePending={save.isPending}
+        saveDisabled={!contentReady}
+        saveError={save.isError ? errorMessage(save.error) : null}
+        saveSuccess={save.isSuccess}
+        onSave={onSave}
+        onTest={() => setTestOpen(true)}
+        onDuplicate={() => setDuplicateOpen(true)}
+        onToggleEnabled={() =>
+          setEnabled.mutate({
+            owner,
+            file,
+            enabled: existing.data?.parsed?.enabled === false,
+          })
+        }
+        enabled={existing.data?.parsed?.enabled !== false}
+        enablePending={setEnabled.isPending}
+        enableDisabled={!contentReady || Boolean(existing.data?.parseError) || !yamlOk}
+        enableError={setEnabled.isError ? errorMessage(setEnabled.error) : null}
+      >
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <WorkflowVisualEditor
+            yaml={content}
+            onYamlChange={setContent}
+            owner={owner}
+            file={file}
+            savedYaml={savedYaml}
+            showTest
+            testOpen={testOpen}
+            onTestClose={() => setTestOpen(false)}
+          />
+        </div>
+      </WorkflowEditorLayout>
+      {duplicateOpen ? (
+        <DuplicateWorkflowDialog
+          source={{ owner, file, key: `${owner}/${file}` }}
+          warnUnsaved={contentReady && content !== savedYaml}
+          onClose={() => setDuplicateOpen(false)}
+          onDuplicated={(data) => {
+            setDuplicateOpen(false);
+            navigate(
+              `/workflows/${encodeURIComponent(data.owner)}/${encodeURIComponent(data.file)}/edit`,
+            );
+          }}
         />
-      </div>
-    </WorkflowEditorLayout>
+      ) : null}
+    </>
   );
 }

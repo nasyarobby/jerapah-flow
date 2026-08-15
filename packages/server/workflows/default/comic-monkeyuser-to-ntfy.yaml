@@ -2,24 +2,23 @@ name: Comic - monkeyuser to ntfy
 scripts:
   - script: fetch-html.js
     config:
-      url: "https://www.monkeyuser.com/"
-      outputVar: "httpResponse"
-      selector: ".comic img"
+      url: https://www.monkeyuser.com/
+      outputVar: comic
+      selector: .comic img
       jsonata: |
         {"url": "https://www.monkeyuser.com" & [attributes.src][0], "title": [attributes.title][0]}
   - script: jsonata.js
     config:
       expression: |
         {
-          "title": data.httpResponse.title,
-          "message": data.httpResponse.title,
-          "attach": data.httpResponse.url
+          "title": data.comic.title,
+          "message": data.comic.title,
+          "attach": data.comic.url
         }
-  - fetch-binary.js
+  - script: fetch-binary.js
   - script: ntfy.js
     config:
       url: https://ntfy.sh/jerapah-flow
-
 triggers:
   - type: HTTP
     method: POST

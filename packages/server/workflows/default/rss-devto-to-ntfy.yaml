@@ -1,4 +1,4 @@
-name: RSS - selfh.st first item to ntfy
+name: RSS - selfh.st first item to ntfy (copy)
 scripts:
   - script: fetch-rss-feed.js
     config:
@@ -23,4 +23,5 @@ scripts:
 triggers:
   - type: HTTP
     method: POST
-    path: /selfhst-rss
+    path: /selfhst-rss-rss-devto-to-ntfy
+enabled: false

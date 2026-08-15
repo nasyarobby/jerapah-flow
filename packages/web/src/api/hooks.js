@@ -199,6 +199,27 @@ export function useDeleteWorkflow() {
   });
 }
 
+export function useDuplicateWorkflow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ owner, file, destOwner, destFile }) =>
+      (
+        await api.post(
+          `/workflows/${encodeURIComponent(owner)}/${encodeURIComponent(file)}/duplicate`,
+          {
+            ...(destOwner ? { owner: destOwner } : {}),
+            ...(destFile ? { file: destFile } : {}),
+          },
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workflows"] });
+      qc.invalidateQueries({ queryKey: ["owners"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
 export function useRunWorkflow() {
   const qc = useQueryClient();
   return useMutation({
