@@ -1,0 +1,18 @@
+name: test-send-gmail
+description: |
+  Kick send-gmail with sample data. Edit the payload below, then Run
+  (or POST /u/default/test-send-gmail).
+scripts:
+  - script: trigger-workflow.js
+    config:
+      name: send-gmail
+      expression: |
+        {
+          "subject": "scrunner test",
+          "text": "Hello from test-send-gmail",
+          "html": "<p>Hello from <strong>test-send-gmail</strong></p>"
+        }
+triggers:
+  - type: HTTP
+    method: POST
+    path: /test-send-gmail

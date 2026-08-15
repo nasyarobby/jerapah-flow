@@ -114,13 +114,14 @@ async function fetchHttp(ctx) {
 }
 
 fetchHttp.meta = {
-  description: "Fetch a URL and store the response body as-is (JSON stays an object)",
+  description: "Fetch a URL and store the response body.",
   config: {
     url: { type: "string", required: true, description: "Request URL" },
     method: {
       type: "string",
       default: "GET",
-      description: "HTTP method (GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS)",
+      enum: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      description: "HTTP method",
     },
     headers: {
       type: "object",
@@ -134,7 +135,12 @@ fetchHttp.meta = {
     },
   },
   input: {
-    method: { type: "string", required: false, description: "Fallback when config.method is omitted" },
+    method: {
+      type: "string",
+      required: false,
+      enum: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      description: "Fallback when config.method is omitted",
+    },
     headers: {
       type: "object",
       required: false,

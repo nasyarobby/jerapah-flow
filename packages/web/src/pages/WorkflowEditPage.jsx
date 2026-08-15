@@ -1,46 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { parse as parseYaml } from "yaml";
 import { LuArrowLeft, LuPause, LuPlay, LuSave } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import {
   useOwners,
-  useRunWorkflow,
   useSaveWorkflow,
   useSetWorkflowEnabled,
   useWorkflow,
 } from "../api/hooks.js";
-import { CodeEditor } from "../components/CodeEditor.jsx";
-import { MermaidDiagram } from "../components/MermaidDiagram.jsx";
-import { workflowToFlowchart } from "../lib/workflow-mermaid.js";
-
-const NEW_YAML = `name: new workflow
-scripts:
-  - get-current-time.js
-triggers:
-  - type: HTTP
-    method: POST
-    path: /new
-`;
-
-function useYamlPreview(content) {
-  return useMemo(() => {
-    try {
-      const parsedYaml = parseYaml(content);
-      return {
-        parsed: parsedYaml,
-        parseError: null,
-        mermaid: workflowToFlowchart(parsedYaml),
-      };
-    } catch (err) {
-      return {
-        parsed: null,
-        parseError: err instanceof Error ? err.message : String(err),
-        mermaid: { chart: "", scriptIds: {} },
-      };
-    }
-  }, [content]);
-}
+import { WorkflowVisualEditor } from "../components/workflow/WorkflowVisualEditor.jsx";
+import { NEW_WORKFLOW_YAML, parseWorkflowYaml } from "../lib/workflow-doc.js";
 
 function WorkflowEditorLayout({
   title,
@@ -49,11 +18,8 @@ function WorkflowEditorLayout({
   saveDisabled,
   saveError,
   saveSuccess,
-  formId,
-  onRun,
-  runPending,
-  runDisabled,
-  runError,
+  onSave,
+  onTest,
   onToggleEnabled,
   enabled,
   enablePending,
@@ -86,64 +52,26 @@ function WorkflowEditorLayout({
             {enabled ? "Disable" : "Enable"}
           </button>
         ) : null}
-        {onRun ? (
-          <button
-            type="button"
-            className="btn btn-sm"
-            disabled={runPending || runDisabled}
-            onClick={onRun}
-          >
-            {runPending ? (
-              <span className="loading loading-spinner loading-xs" />
-            ) : (
-              <LuPlay className="size-4" />
-            )}
-            Run
+        {onTest ? (
+          <button type="button" className="btn btn-sm" onClick={onTest}>
+            <LuPlay className="size-4" />
+            Test
           </button>
         ) : null}
         <button
-          type="submit"
-          form={formId}
+          type="button"
           className="btn btn-primary btn-sm"
           disabled={savePending || saveDisabled}
+          onClick={onSave}
         >
           <LuSave className="size-4" />
           Save
         </button>
       </div>
       {children}
-      {saveError ? (
-        <p className="text-error text-sm shrink-0">{saveError}</p>
-      ) : null}
-      {runError ? (
-        <p className="text-error text-sm shrink-0">{runError}</p>
-      ) : null}
-      {enableError ? (
-        <p className="text-error text-sm shrink-0">{enableError}</p>
-      ) : null}
-      {saveSuccess ? (
-        <p className="text-success text-sm shrink-0">Workflow saved</p>
-      ) : null}
-    </div>
-  );
-}
-
-function WorkflowYamlAndDiagram({ content, onChange, parseError, mermaid, parsed }) {
-  return (
-    <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-2">
-      <div className="min-h-0">
-        <CodeEditor language="yaml" value={content} onChange={onChange} height="100%" />
-      </div>
-      <div className="min-h-0 overflow-auto">
-        {parseError ? (
-          <p className="text-error text-sm">{parseError}</p>
-        ) : (
-          <MermaidDiagram chart={mermaid.chart} scriptIds={mermaid.scriptIds} />
-        )}
-        {parsed?.name ? (
-          <p className="text-sm opacity-70 mt-2">{parsed.name}</p>
-        ) : null}
-      </div>
+      {saveError ? <p className="text-error text-sm shrink-0">{saveError}</p> : null}
+      {enableError ? <p className="text-error text-sm shrink-0">{enableError}</p> : null}
+      {saveSuccess ? <p className="text-success text-sm shrink-0">Workflow saved</p> : null}
     </div>
   );
 }
@@ -153,16 +81,15 @@ export function WorkflowNewPage() {
   const { data: owners = [] } = useOwners();
   const [owner, setOwner] = useState("");
   const [file, setFile] = useState("");
-  const [content, setContent] = useState(NEW_YAML);
+  const [content, setContent] = useState(NEW_WORKFLOW_YAML);
+  const [savedYaml] = useState(NEW_WORKFLOW_YAML);
   const save = useSaveWorkflow();
-  const { parsed, parseError, mermaid } = useYamlPreview(content);
 
   useEffect(() => {
     if (!owner && owners[0]) setOwner(owners[0]);
   }, [owner, owners]);
 
-  function onSave(e) {
-    e.preventDefault();
+  function onSave() {
     const yamlFile = file.endsWith(".yaml") || file.endsWith(".yml") ? file : `${file}.yaml`;
     save.mutate(
       { owner, file: yamlFile, content },
@@ -178,83 +105,71 @@ export function WorkflowNewPage() {
   return (
     <WorkflowEditorLayout
       title="New workflow"
-      formId="workflow-edit-form"
+      onSave={onSave}
       savePending={save.isPending}
       saveDisabled={!owner || !file}
       saveError={save.isError ? errorMessage(save.error) : null}
     >
-      <form
-        id="workflow-edit-form"
-        onSubmit={onSave}
-        className="flex min-h-0 flex-1 flex-col gap-3"
-      >
-        <div className="flex shrink-0 flex-col sm:flex-row gap-2">
-          <input
-            className="input input-sm w-full sm:max-w-xs"
-            placeholder="owner"
-            value={owner}
-            onChange={(e) => setOwner(e.target.value)}
-            required
-          />
-          <input
-            className="input input-sm w-full sm:max-w-xs"
-            placeholder="file.yaml"
-            value={file}
-            onChange={(e) => setFile(e.target.value)}
-            required
-          />
-        </div>
-        <WorkflowYamlAndDiagram
-          content={content}
-          onChange={setContent}
-          parseError={parseError}
-          mermaid={mermaid}
-          parsed={parsed}
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <WorkflowVisualEditor
+          yaml={content}
+          onYamlChange={setContent}
+          owner={owner}
+          file={file}
+          savedYaml={savedYaml}
+          showTest={false}
+          extraChrome={
+            <>
+              <input
+                className="input input-sm w-full sm:max-w-xs"
+                placeholder="owner"
+                value={owner}
+                onChange={(e) => setOwner(e.target.value)}
+                required
+              />
+              <input
+                className="input input-sm w-full sm:max-w-xs"
+                placeholder="file.yaml"
+                value={file}
+                onChange={(e) => setFile(e.target.value)}
+                required
+              />
+            </>
+          }
         />
-      </form>
+      </div>
     </WorkflowEditorLayout>
   );
 }
 
 export function WorkflowEditPage() {
-  const navigate = useNavigate();
   const { owner: rawOwner, file: rawFile } = useParams();
   const owner = decodeURIComponent(rawOwner ?? "");
   const file = decodeURIComponent(rawFile ?? "");
   const existing = useWorkflow(owner, file);
   const save = useSaveWorkflow();
-  const run = useRunWorkflow();
   const setEnabled = useSetWorkflowEnabled();
   const [content, setContent] = useState("");
+  const [savedYaml, setSavedYaml] = useState("");
   const [contentReady, setContentReady] = useState(false);
-  const { parsed, parseError, mermaid } = useYamlPreview(content);
-
-  function onRun() {
-    run.mutate(
-      { owner, file },
-      {
-        onSuccess: (data) => {
-          if (data?.runId) navigate(`/events/${data.runId}`);
-        },
-        onError: (err) => {
-          const runId = err?.response?.data?.runId;
-          if (runId) navigate(`/events/${runId}`);
-        },
-      },
-    );
-  }
+  const [testKey, setTestKey] = useState(0);
 
   useEffect(() => {
     if (existing.isLoading) return;
-    if (existing.data?.content != null) {
+    if (!contentReady && existing.data?.content != null) {
       setContent(existing.data.content);
+      setSavedYaml(existing.data.content);
       setContentReady(true);
     }
-  }, [existing.data, existing.isLoading]);
+  }, [existing.data, existing.isLoading, contentReady]);
 
-  function onSave(e) {
-    e.preventDefault();
-    save.mutate({ owner, file, content });
+  function onSave() {
+    save.mutate(
+      { owner, file, content },
+      {
+        onSuccess: () => setSavedYaml(content),
+      },
+    );
   }
 
   if (existing.isLoading) {
@@ -277,18 +192,17 @@ export function WorkflowEditPage() {
     );
   }
 
+  const yamlOk = !parseWorkflowYaml(content).parseError;
+
   return (
     <WorkflowEditorLayout
       title={`${owner}/${file}`}
-      formId="workflow-edit-form"
       savePending={save.isPending}
       saveDisabled={!contentReady}
       saveError={save.isError ? errorMessage(save.error) : null}
       saveSuccess={save.isSuccess}
-      onRun={onRun}
-      runPending={run.isPending}
-      runDisabled={!contentReady || Boolean(parseError) || Boolean(existing.data?.loadError)}
-      runError={run.isError && !run.error?.response?.data?.runId ? errorMessage(run.error) : null}
+      onSave={onSave}
+      onTest={() => setTestKey((k) => k + 1)}
       onToggleEnabled={() =>
         setEnabled.mutate({
           owner,
@@ -298,18 +212,20 @@ export function WorkflowEditPage() {
       }
       enabled={existing.data?.parsed?.enabled !== false}
       enablePending={setEnabled.isPending}
-      enableDisabled={!contentReady || Boolean(existing.data?.parseError)}
+      enableDisabled={!contentReady || Boolean(existing.data?.parseError) || !yamlOk}
       enableError={setEnabled.isError ? errorMessage(setEnabled.error) : null}
     >
-      <form id="workflow-edit-form" onSubmit={onSave} className="flex min-h-0 flex-1 flex-col">
-        <WorkflowYamlAndDiagram
-          content={content}
-          onChange={setContent}
-          parseError={parseError}
-          mermaid={mermaid}
-          parsed={parsed}
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <WorkflowVisualEditor
+          yaml={content}
+          onYamlChange={setContent}
+          owner={owner}
+          file={file}
+          savedYaml={savedYaml}
+          showTest
+          testKey={testKey}
         />
-      </form>
+      </div>
     </WorkflowEditorLayout>
   );
 }

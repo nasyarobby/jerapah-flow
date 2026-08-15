@@ -20,6 +20,11 @@ function FieldTable({ title, fields }) {
               const notes = [
                 field.required ? "required" : null,
                 field.default !== undefined ? `default ${JSON.stringify(field.default)}` : null,
+                Array.isArray(field.enum)
+                  ? `enum ${field.enum.map((x) => (x && typeof x === "object" ? x.value : x)).join(", ")}`
+                  : Array.isArray(field.options)
+                    ? `enum ${field.options.map((x) => (x && typeof x === "object" ? x.value : x)).join(", ")}`
+                    : null,
                 field.description,
               ]
                 .filter(Boolean)

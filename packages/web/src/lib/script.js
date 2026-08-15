@@ -49,6 +49,13 @@ function defaultsFromFields(fields) {
   return out;
 }
 
+export function defaultConfigFromMeta(meta) {
+  if (meta?.example?.config && typeof meta.example.config === "object" && !Array.isArray(meta.example.config)) {
+    return { ...meta.example.config };
+  }
+  return defaultsFromFields(meta?.config);
+}
+
 export function contextFromMeta(meta) {
   if (meta?.example && typeof meta.example === "object" && !Array.isArray(meta.example)) {
     return {

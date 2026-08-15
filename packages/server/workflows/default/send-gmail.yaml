@@ -1,0 +1,40 @@
+name: send-gmail
+description: |
+  Send email via Gmail SMTP. Configure user/from and the named secret,
+  then call from other workflows with trigger-workflow.js (name: send-gmail).
+
+  Input (data):
+    to       optional recipient(s); defaults to your Gmail below
+    subject  required
+    text     plain body (aliases: body, message)
+    html     optional HTML body
+    from, cc, bcc, replyTo, priority, headers  optional
+scripts:
+  - script: jsonata.js
+    config:
+      expression: |
+        {
+          "data": {
+            "to": $exists(to) ? to : "nasyarobby@gmail.com",
+            "from": from,
+            "subject": subject,
+            "text": $exists(text) ? text : ($exists(body) ? body : message),
+            "html": html,
+            "cc": cc,
+            "bcc": bcc,
+            "replyTo": replyTo,
+            "priority": priority,
+            "headers": headers
+          }
+        }
+  - script: send-email.js
+    config:
+      service: Gmail
+      user: elevent16th@gmail.com
+      from: elevent16th@gmail.com
+      passwordSecret: gmail_app_password
+triggers:
+  - type: workflow
+  - type: HTTP
+    method: POST
+    path: /send-gmail
