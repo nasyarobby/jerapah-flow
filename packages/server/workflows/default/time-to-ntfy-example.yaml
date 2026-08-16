@@ -3,6 +3,8 @@ description: |
   this workflow will send a message to ntfy with the current time
 scripts:
   - script: get-current-time.js
+    config:
+      key: ""
   - script: ntfy.js
     config:
       url: https://n.0dev.web.id/system

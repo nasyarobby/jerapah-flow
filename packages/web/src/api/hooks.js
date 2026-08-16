@@ -336,6 +336,33 @@ export function useDeleteSecret() {
   });
 }
 
+export function useVariables(owner) {
+  return useQuery({
+    queryKey: ["variables", owner ?? "all"],
+    queryFn: async () => {
+      const params = owner ? { owner } : {};
+      return (await api.get("/variables", { params })).data.variables;
+    },
+  });
+}
+
+export function useUpsertVariable() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body) => (await api.put("/variables", body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["variables"] }),
+  });
+}
+
+export function useDeleteVariable() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id) =>
+      (await api.delete(`/variables/${encodeURIComponent(id)}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["variables"] }),
+  });
+}
+
 export function useKvNamespaces() {
   return useQuery({
     queryKey: ["kv", "namespaces"],

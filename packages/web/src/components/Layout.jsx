@@ -12,6 +12,7 @@ import {
   LuMoon,
   LuShield,
   LuSun,
+  LuTags,
   LuUsers,
 } from "react-icons/lu";
 import { useLogout } from "../api/hooks.js";
@@ -24,6 +25,7 @@ const links = [
   { to: "/workflows", label: "Workflows", icon: LuGitBranch },
   { to: "/events", label: "Events", icon: LuActivity },
   { to: "/kv", label: "KV", icon: LuDatabase },
+  { to: "/variables", label: "Variables", icon: LuTags },
   { to: "/auth", label: "Auth", icon: LuShield },
   { to: "/responses", label: "Responses", icon: LuFileText },
 ];

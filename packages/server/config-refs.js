@@ -1,17 +1,16 @@
 import { coerceCredentialString } from "./http-trigger-auth.js";
-import { kvGet } from "./kv-store.js";
 import { assertSecretName, getSecretPlaintext } from "./secrets-store.js";
 import { isSecret } from "./secret-value.js";
+import { assertVariableName, getVariablePlain } from "./variables-store.js";
 
-/** Longest prefix first so `$CONTEXT_` is not confused with `$KV_`. */
 const PREFIXES = [
   { kind: "context", prefix: "$CONTEXT_" },
   { kind: "secret", prefix: "$SECRET_" },
-  { kind: "kv", prefix: "$KV_" },
+  { kind: "var", prefix: "$VAR_" },
 ];
 
 /**
- * @typedef {{ kind: "secret" | "kv" | "context", name: string, raw: string }} ConfigRef
+ * @typedef {{ kind: "secret" | "context" | "var", name: string, raw: string }} ConfigRef
  * @typedef {{ owner: string, workflowKey: string, context?: unknown }} ConfigRefCtx
  */
 
@@ -32,7 +31,7 @@ export function parseConfigRef(value) {
 }
 
 /**
- * Walk config (objects/arrays) and replace whole-value `$SECRET_` / `$KV_` / `$CONTEXT_`
+ * Walk config (objects/arrays) and replace whole-value `$SECRET_` / `$CONTEXT_` / `$VAR_`
  * strings. Does not walk trigger data.
  *
  * @param {unknown} value
@@ -69,7 +68,7 @@ export async function resolveConfigRefs(value, ctx, seen = new WeakSet()) {
 /**
  * @param {string} value
  * @param {ConfigRefCtx} ctx
- * @returns {Promise<string>}
+ * @returns {Promise<string | number | boolean>}
  */
 async function resolveStringRef(value, ctx) {
   const ref = parseConfigRef(value);
@@ -78,8 +77,8 @@ async function resolveStringRef(value, ctx) {
   if (ref.kind === "secret") {
     return resolveSecretRef(ref, ctx);
   }
-  if (ref.kind === "kv") {
-    return resolveKvRef(ref, ctx);
+  if (ref.kind === "var") {
+    return resolveVarRef(ref, ctx);
   }
   return resolveContextRef(ref, ctx);
 }
@@ -105,21 +104,22 @@ async function resolveSecretRef(ref, ctx) {
 /**
  * @param {ConfigRef} ref
  * @param {ConfigRefCtx} ctx
- * @returns {Promise<string>}
+ * @returns {Promise<string | number | boolean>}
  */
-async function resolveKvRef(ref, ctx) {
+async function resolveVarRef(ref, ctx) {
   if (ref.name.length === 0) {
-    throw new Error(`config ref ${ref.raw}: empty KV key`);
+    throw new Error(`config ref ${ref.raw}: empty variable name`);
   }
-  const raw = await kvGet(ctx.workflowKey, ref.name);
-  if (raw == null) {
-    throw new Error(`config ref ${ref.raw}: KV "${ref.name}" not found`);
+  try {
+    assertVariableName(ref.name);
+  } catch {
+    throw new Error(`config ref ${ref.raw}: invalid variable name`);
   }
-  const coerced = coerceCredentialString(raw);
-  if (coerced == null) {
-    throw new Error(`config ref ${ref.raw}: KV "${ref.name}" is not a scalar`);
+  const value = await getVariablePlain(ctx.owner, ref.name);
+  if (value == null) {
+    throw new Error(`config ref ${ref.raw}: variable "${ref.name}" not found`);
   }
-  return coerced;
+  return value;
 }
 
 /**

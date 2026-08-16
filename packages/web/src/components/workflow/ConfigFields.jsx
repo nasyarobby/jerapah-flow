@@ -9,7 +9,7 @@ const MULTILINE_KEYS = new Set(["expression", "jsonata"]);
 const CONFIG_REF_PREFIXES = [
   { prefix: "$SECRET_", label: "secret" },
   { prefix: "$CONTEXT_", label: "context" },
-  { prefix: "$KV_", label: "KV" },
+  { prefix: "$VAR_", label: "variable" },
 ];
 
 function describeConfigRef(value) {

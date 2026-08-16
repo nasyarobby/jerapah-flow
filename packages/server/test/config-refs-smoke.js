@@ -1,6 +1,6 @@
 import { migrate, db } from "../db.js";
-import { kvSet, kvDelete } from "../kv-store.js";
 import { upsertSecret, deleteSecret } from "../secrets-store.js";
+import { deleteVariable, upsertVariable } from "../variables-store.js";
 import { Secret } from "../secret-value.js";
 import { parseConfigRef, resolveConfigRefs } from "../config-refs.js";
 
@@ -45,7 +45,8 @@ assertParse("  password123  ", null);
 assertParse("$SECRET_zte_modem_password", { kind: "secret", name: "zte_modem_password" });
 assertParse("  $SECRET_zte_modem_password  ", { kind: "secret", name: "zte_modem_password" });
 assertParse("Bearer $SECRET_x", null);
-assertParse("$KV_modem password", { kind: "kv", name: "modem password" });
+assertParse("$KV_modem password", null);
+assertParse("$VAR_ntfy_url", { kind: "var", name: "ntfy_url" });
 assertParse("$CONTEXT_token", { kind: "context", name: "token" });
 assertParse("$SECRET_", { kind: "secret", name: "" });
 assertParse("$CONTEXT_SECRET_foo", { kind: "context", name: "SECRET_foo" });
@@ -55,6 +56,8 @@ assertParse("$CONTEXT_SECRET_foo", { kind: "context", name: "SECRET_foo" });
   assert(literal === "password123", "literal passthrough");
   const unknown = await resolveConfigRefs("$FOO_bar", ctx);
   assert(unknown === "$FOO_bar", "$FOO_bar stays literal");
+  const kvLiteral = await resolveConfigRefs("$KV_modem_password", ctx);
+  assert(kvLiteral === "$KV_modem_password", "$KV_ stays literal");
   const embedded = await resolveConfigRefs("Bearer $SECRET_x", ctx);
   assert(embedded === "Bearer $SECRET_x", "mid-string stays literal");
   const number = await resolveConfigRefs(42, ctx);
@@ -66,9 +69,24 @@ const secret = await upsertSecret({
   name: "config_refs_smoke_token",
   value: "s3cret-ok",
 });
-await kvSet(workflowKey, "modem_password", "kv-pass-ok");
-await kvSet(workflowKey, "modem password", "kv-spaced-ok");
-await kvSet(workflowKey, "obj-key", { nested: true });
+const varUrl = await upsertVariable({
+  owner,
+  name: "config_refs_smoke_url",
+  type: "string",
+  value: "https://example.test",
+});
+const varRetry = await upsertVariable({
+  owner,
+  name: "config_refs_smoke_retry",
+  type: "number",
+  value: 3,
+});
+const varDebug = await upsertVariable({
+  owner,
+  name: "config_refs_smoke_debug",
+  type: "boolean",
+  value: false,
+});
 
 try {
   {
@@ -80,12 +98,18 @@ try {
     assert(resolved === "s3cret-ok", "secret resolve trimmed");
   }
   {
-    const resolved = await resolveConfigRefs("$KV_modem_password", ctx);
-    assert(resolved === "kv-pass-ok", "kv resolve");
+    const resolved = await resolveConfigRefs("$VAR_config_refs_smoke_url", ctx);
+    assert(resolved === "https://example.test", "var string");
   }
   {
-    const resolved = await resolveConfigRefs("$KV_modem password", ctx);
-    assert(resolved === "kv-spaced-ok", "kv spaced key");
+    const resolved = await resolveConfigRefs("$VAR_config_refs_smoke_retry", ctx);
+    assert(resolved === 3, "var number stays number");
+    assert(typeof resolved === "number", "var number type");
+  }
+  {
+    const resolved = await resolveConfigRefs("$VAR_config_refs_smoke_debug", ctx);
+    assert(resolved === false, "var boolean stays false");
+    assert(typeof resolved === "boolean", "var boolean type");
   }
   {
     const resolved = await resolveConfigRefs("$CONTEXT_token", {
@@ -113,16 +137,20 @@ try {
   {
     const nested = await resolveConfigRefs(
       {
-        url: "http://example.test",
+        url: "$VAR_config_refs_smoke_url",
+        retry: "$VAR_config_refs_smoke_retry",
+        debug: "$VAR_config_refs_smoke_debug",
         password: "$SECRET_config_refs_smoke_token",
         headers: { Authorization: "$KV_modem_password" },
         extra: ["$CONTEXT_token", "plain"],
       },
       { ...ctx, context: { token: "ctx-token-ok" } },
     );
-    assert(nested.url === "http://example.test", "nested literal");
+    assert(nested.url === "https://example.test", "nested var string");
+    assert(nested.retry === 3, "nested var number");
+    assert(nested.debug === false, "nested var boolean");
     assert(nested.password === "s3cret-ok", "nested secret");
-    assert(nested.headers.Authorization === "kv-pass-ok", "nested kv");
+    assert(nested.headers.Authorization === "$KV_modem_password", "nested $KV_ stays literal");
     assert(nested.extra[0] === "ctx-token-ok", "nested array context");
     assert(nested.extra[1] === "plain", "nested array literal");
   }
@@ -147,18 +175,6 @@ try {
     "invalid secret name",
   );
   await assertRejects(
-    () => resolveConfigRefs("$KV_missing-key", ctx),
-    'KV "missing-key" not found',
-  );
-  await assertRejects(
-    () => resolveConfigRefs("$KV_obj-key", ctx),
-    'KV "obj-key" is not a scalar',
-  );
-  await assertRejects(
-    () => resolveConfigRefs("$KV_", ctx),
-    "empty KV key",
-  );
-  await assertRejects(
     () => resolveConfigRefs("$CONTEXT_missing", ctx),
     'context "missing" not found',
   );
@@ -174,11 +190,23 @@ try {
     () => resolveConfigRefs("$CONTEXT_", ctx),
     "empty context key",
   );
+  await assertRejects(
+    () => resolveConfigRefs("$VAR_does_not_exist_xyz", ctx),
+    'variable "does_not_exist_xyz" not found',
+  );
+  await assertRejects(
+    () => resolveConfigRefs("$VAR_not valid", ctx),
+    "invalid variable name",
+  );
+  await assertRejects(
+    () => resolveConfigRefs("$VAR_", ctx),
+    "empty variable name",
+  );
 } finally {
   await deleteSecret(secret.id);
-  await kvDelete(workflowKey, "modem_password");
-  await kvDelete(workflowKey, "modem password");
-  await kvDelete(workflowKey, "obj-key");
+  await deleteVariable(varUrl.id);
+  await deleteVariable(varRetry.id);
+  await deleteVariable(varDebug.id);
 }
 
 console.log("config-refs smoke test passed");

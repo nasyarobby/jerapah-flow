@@ -36,3 +36,4 @@ triggers:
   - type: HTTP
     method: POST
     path: /send-gmail
+    auth: basic-auth
