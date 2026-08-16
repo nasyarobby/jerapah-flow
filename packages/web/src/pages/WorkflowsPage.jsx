@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { LuActivity, LuPencil, LuPlay, LuPlus, LuRefreshCw, LuTrash2, LuTriangleAlert } from "react-icons/lu";
+import { LuActivity, LuCopy, LuPencil, LuPlay, LuPlus, LuRefreshCw, LuTrash2, LuTriangleAlert } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import {
   useDeleteWorkflow,
@@ -9,6 +9,8 @@ import {
   useSetWorkflowEnabled,
   useWorkflows,
 } from "../api/hooks.js";
+import { DuplicateWorkflowDialog } from "../components/DuplicateWorkflowDialog.jsx";
+import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
 import { formatTime, WorkflowStatusBadge } from "../lib/format.jsx";
 
 export function WorkflowsPage() {
@@ -17,6 +19,7 @@ export function WorkflowsPage() {
   const editParam = params.get("edit");
   const { data: workflows = [], isLoading } = useWorkflows();
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [duplicateSource, setDuplicateSource] = useState(null);
   const [runError, setRunError] = useState(null);
   const del = useDeleteWorkflow();
   const run = useRunWorkflow();
@@ -120,9 +123,10 @@ export function WorkflowsPage() {
                 <tr key={w.key} className="hover">
                   <td>
                     <Link
-                      className="link"
+                      className="link inline-flex items-center gap-2"
                       to={`/workflows/${encodeURIComponent(w.owner)}/${encodeURIComponent(w.file)}/edit`}
                     >
+                      <WorkflowFileIcon className="size-7 shrink-0" />
                       {w.name}
                     </Link>
                     {!w.registered ? (
@@ -188,6 +192,15 @@ export function WorkflowsPage() {
                     </Link>
                     <button
                       type="button"
+                      className="btn btn-ghost btn-xs"
+                      title="Duplicate"
+                      disabled={Boolean(w.loadError)}
+                      onClick={() => setDuplicateSource(w)}
+                    >
+                      <LuCopy className="size-4" />
+                    </button>
+                    <button
+                      type="button"
                       className="btn btn-ghost btn-xs text-error"
                       title="Delete"
                       onClick={() => setConfirmDelete(w)}
@@ -201,6 +214,19 @@ export function WorkflowsPage() {
           </table>
         </div>
       )}
+
+      {duplicateSource ? (
+        <DuplicateWorkflowDialog
+          source={duplicateSource}
+          onClose={() => setDuplicateSource(null)}
+          onDuplicated={(data) => {
+            setDuplicateSource(null);
+            navigate(
+              `/workflows/${encodeURIComponent(data.owner)}/${encodeURIComponent(data.file)}/edit`,
+            );
+          }}
+        />
+      ) : null}
 
       {confirmDelete ? (
         <dialog className="modal modal-open">

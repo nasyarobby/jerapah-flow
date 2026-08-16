@@ -1,5 +1,5 @@
 {
-  "name": "@scrunner/server",
+  "name": "@jerapah-flow/server",
   "version": "1.0.0",
   "private": true,
   "type": "module",

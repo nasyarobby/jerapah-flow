@@ -107,11 +107,12 @@ export function useDeleteScript() {
 
 export function useDryRunScript() {
   return useMutation({
-    mutationFn: async ({ name, content, data, config, owner }) =>
+    mutationFn: async ({ name, content, data, context, config, owner }) =>
       (
         await api.post(`/scripts/${encodeURIComponent(name)}/dry-run`, {
           content,
           data,
+          context,
           config,
           owner,
         })
@@ -193,6 +194,27 @@ export function useDeleteWorkflow() {
       ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workflows"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
+export function useDuplicateWorkflow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ owner, file, destOwner, destFile }) =>
+      (
+        await api.post(
+          `/workflows/${encodeURIComponent(owner)}/${encodeURIComponent(file)}/duplicate`,
+          {
+            ...(destOwner ? { owner: destOwner } : {}),
+            ...(destFile ? { file: destFile } : {}),
+          },
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workflows"] });
+      qc.invalidateQueries({ queryKey: ["owners"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
@@ -311,6 +333,33 @@ export function useDeleteSecret() {
     mutationFn: async (id) =>
       (await api.delete(`/secrets/${encodeURIComponent(id)}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["secrets"] }),
+  });
+}
+
+export function useVariables(owner) {
+  return useQuery({
+    queryKey: ["variables", owner ?? "all"],
+    queryFn: async () => {
+      const params = owner ? { owner } : {};
+      return (await api.get("/variables", { params })).data.variables;
+    },
+  });
+}
+
+export function useUpsertVariable() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body) => (await api.put("/variables", body)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["variables"] }),
+  });
+}
+
+export function useDeleteVariable() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id) =>
+      (await api.delete(`/variables/${encodeURIComponent(id)}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["variables"] }),
   });
 }
 

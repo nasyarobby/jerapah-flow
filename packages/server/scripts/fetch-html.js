@@ -1,10 +1,11 @@
 import { parse } from "node-html-parser";
 import jsonata from "jsonata";
 
-function ensureDataObject(ctx) {
-  if (ctx.data == null || typeof ctx.data !== "object" || Array.isArray(ctx.data)) {
-    ctx.data = {};
+function passContext(ctx) {
+  if (ctx?.context != null && typeof ctx.context === "object" && !Array.isArray(ctx.context)) {
+    return { ...ctx.context };
   }
+  return {};
 }
 
 function serializeElement(el) {
@@ -43,8 +44,6 @@ async function fetchHtml(ctx) {
     throw new Error("fetch-html: ctx.config.outputVar is required when selector or jsonata is set");
   }
 
-  ensureDataObject(ctx);
-
   log.info({ url }, "fetch-html: fetching page");
   const response = await $axios.get(url);
   log.info(
@@ -52,19 +51,20 @@ async function fetchHtml(ctx) {
     "fetch-html: fetch complete",
   );
 
-  ctx.data.httpResponse = String(response.data ?? "");
+  /** @type {Record<string, unknown>} */
+  const output = { httpResponse: String(response.data ?? "") };
   log.info(
-    { length: ctx.data.httpResponse.length },
+    { length: String(output.httpResponse).length },
     "fetch-html: saved httpResponse",
   );
 
   if (selector) {
     log.info({ selector, outputVar }, "fetch-html: selecting elements");
-    const root = parse(ctx.data.httpResponse);
+    const root = parse(String(output.httpResponse));
     const elements = root.querySelectorAll(selector);
-    ctx.data[outputVar] = elements.map(serializeElement);
+    output[outputVar] = elements.map(serializeElement);
     log.info(
-      { outputVar, count: ctx.data[outputVar].length },
+      { outputVar, count: output[outputVar].length },
       "fetch-html: saved selector matches",
     );
   }
@@ -72,20 +72,21 @@ async function fetchHtml(ctx) {
   if (jsonataExpr) {
     log.info({ outputVar, jsonata: jsonataExpr }, "fetch-html: evaluating jsonata");
     const expression = jsonata(jsonataExpr);
-    const input = ctx.data[outputVar];
-    const result = await expression.evaluate(input);
-    ctx.data[outputVar] = result;
+    const result = await expression.evaluate(output[outputVar]);
+    output[outputVar] = result;
     log.info(
       { outputVar, result: previewValue(result) },
       "fetch-html: saved jsonata result",
     );
   }
 
-  return ctx;
+  return { output, context: { ...passContext(ctx), ...output } };
 }
 
 fetchHtml.meta = {
   description: "Fetch HTML and optionally select elements or transform with JSONata",
+  previewConfigKey: "url",
+  tags: ["HTTP"],
   config: {
     url: { type: "string", required: true, description: "Page URL" },
     selector: { type: "string", required: false, description: "CSS selector" },
@@ -98,7 +99,10 @@ fetchHtml.meta = {
   },
   input: {},
   output: {
-    httpResponse: { type: "string", description: "Raw HTML" },
+    httpResponse: { type: "string", description: "Raw HTML (overwritten when outputVar is httpResponse)" },
+  },
+  context: {
+    httpResponse: { type: "any", description: "Same keys as output" },
   },
   example: {
     data: {},

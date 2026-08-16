@@ -4,8 +4,10 @@ import { LuArrowLeft, LuPlay, LuSave } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import { useSaveScript, useScript } from "../api/hooks.js";
 import { CodeEditor } from "../components/CodeEditor.jsx";
+import { ScriptIcon } from "../components/ScriptIcon.jsx";
 import { ScriptMetaPanel } from "../components/ScriptMetaPanel.jsx";
 import { NEW_SCRIPT_TEMPLATE, normalizeScriptName } from "../lib/script.js";
+import { useNotifications } from "../notifications.jsx";
 
 export function ScriptNewPage() {
   const navigate = useNavigate();
@@ -87,6 +89,7 @@ export function ScriptEditPage() {
   const { name: rawName } = useParams();
   const name = decodeURIComponent(rawName ?? "");
   const navigate = useNavigate();
+  const { notify } = useNotifications();
   const existing = useScript(name);
   const save = useSaveScript();
   const [content, setContent] = useState("");
@@ -102,7 +105,10 @@ export function ScriptEditPage() {
 
   function onSave(e) {
     e.preventDefault();
-    save.mutate({ name, content });
+    save.mutate(
+      { name, content },
+      { onSuccess: () => notify.success("Script saved") },
+    );
   }
 
   function openDryRun() {
@@ -137,6 +143,7 @@ export function ScriptEditPage() {
         <Link to="/scripts" className="btn btn-ghost btn-sm btn-square" aria-label="Back">
           <LuArrowLeft className="size-4" />
         </Link>
+        <ScriptIcon name={name} hasIcon={existing.data?.hasIcon} className="size-8 shrink-0" />
         <h1 className="truncate font-mono text-xl font-semibold">{name}</h1>
         <div className="flex-1" />
         <button type="button" className="btn btn-outline btn-sm" onClick={openDryRun}>
@@ -169,9 +176,6 @@ export function ScriptEditPage() {
 
       {save.isError ? (
         <p className="text-error text-sm shrink-0">{errorMessage(save.error)}</p>
-      ) : null}
-      {save.isSuccess ? (
-        <p className="text-success text-sm shrink-0">Script saved</p>
       ) : null}
     </div>
   );

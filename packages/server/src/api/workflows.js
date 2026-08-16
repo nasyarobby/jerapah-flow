@@ -10,6 +10,11 @@ import {
   authLabel,
   validateWorkflowHttpTriggers,
 } from "../../workflow-http-validate.js";
+import {
+  duplicateWorkflowYaml,
+  ensureWorkflowFilename,
+  suggestCopyFilename,
+} from "../../workflow-duplicate.js";
 
 function triggerSummary(owner, workflow) {
   if (!workflow || typeof workflow !== "object") return [];
@@ -32,7 +37,7 @@ function scriptNames(workflow) {
   for (const raw of workflow.scripts ?? []) {
     try {
       const parsed = parseScriptStep(raw);
-      names.push(parsed.kind === "set" ? `set:${parsed.as}` : parsed.script);
+      names.push(parsed.kind === "set" ? "set" : parsed.script);
     } catch {
       names.push(null);
     }
@@ -257,6 +262,101 @@ export default function workflowsPluginFactory(registry) {
       fsStore.writeRegisters(owner, registered);
       registry.reregister();
       return { ok: true };
+    });
+
+    fastify.post("/workflows/:owner/:file/duplicate", async (req, reply) => {
+      const { owner, file } = /** @type {{ owner: string, file: string }} */ (
+        req.params
+      );
+      try {
+        fsStore.assertOwner(owner);
+        fsStore.assertWorkflowFile(file);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({ error: err.message });
+      }
+      const source = fsStore.readWorkflowYaml(owner, file);
+      if (source == null) {
+        return reply.code(404).send({ error: "workflow not found" });
+      }
+
+      const body = /** @type {{ file?: unknown, owner?: unknown }} */ (req.body ?? {});
+      let destOwner = owner;
+      if (body.owner != null && body.owner !== "") {
+        if (typeof body.owner !== "string") {
+          return reply.code(400).send({ error: "owner must be a string" });
+        }
+        try {
+          destOwner = fsStore.assertOwner(body.owner);
+        } catch (err) {
+          return reply.code(err.statusCode ?? 400).send({ error: err.message });
+        }
+      }
+
+      let destFile;
+      try {
+        if (body.file == null || body.file === "") {
+          destFile = suggestCopyFilename(file, fsStore.listOwnerYamlFiles(destOwner));
+        } else if (typeof body.file !== "string") {
+          return reply.code(400).send({ error: "file must be a string" });
+        } else {
+          destFile = ensureWorkflowFilename(body.file);
+        }
+        fsStore.assertWorkflowFile(destFile);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({ error: err.message });
+      }
+
+      if (destOwner === owner && destFile === file) {
+        return reply.code(400).send({ error: "cannot duplicate onto itself" });
+      }
+      if (fsStore.readWorkflowYaml(destOwner, destFile) != null) {
+        return reply.code(409).send({ error: "workflow already exists" });
+      }
+
+      let content;
+      try {
+        content = duplicateWorkflowYaml(source, {
+          sourceFile: file,
+          destFile,
+          rewriteHttpPaths: destOwner === owner,
+        });
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      let parsed;
+      try {
+        parsed = yaml.parse(content);
+      } catch (err) {
+        return reply.code(400).send({
+          error: `invalid yaml: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+      try {
+        compileWorkflowScripts(parsed?.scripts);
+      } catch (err) {
+        return reply.code(400).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      try {
+        await validateWorkflowHttpTriggers(parsed);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      fsStore.writeWorkflowYaml(destOwner, destFile, content);
+      const registered = fsStore.readRegisters(destOwner);
+      if (!registered.includes(destFile)) {
+        registered.push(destFile);
+        fsStore.writeRegisters(destOwner, registered);
+      }
+      registry.reregister();
+      return reply.code(201).send({ owner: destOwner, file: destFile });
     });
 
     fastify.post("/workflows/:owner/:file/run", async (req, reply) => {

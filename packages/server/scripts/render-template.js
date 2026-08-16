@@ -70,15 +70,22 @@ async function renderTemplate(ctx) {
   const text = htmlToText(html);
 
   return {
-    html,
-    text,
-    template: templateName,
+    output: {
+      html,
+      text,
+      template: templateName,
+    },
+    context:
+      ctx.context != null && typeof ctx.context === "object" && !Array.isArray(ctx.context)
+        ? ctx.context
+        : {},
   };
 }
 
 renderTemplate.meta = {
   description:
     "Render an HTML template from Responses (kind: template) with Mustache and return html + plain-text fallback",
+  previewConfigKey: "template",
   config: {
     template: {
       type: "string",

@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import * as store from "../../store.js";
 
-export const COOKIE = "scrunner_token";
+export const COOKIE = "jerapah_flow_token";
 export const OPEN_API_ROUTES = new Set([
   "GET /auth/bootstrap",
   "POST /auth/register",

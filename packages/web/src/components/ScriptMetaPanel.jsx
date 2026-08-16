@@ -1,3 +1,6 @@
+import { scriptTags, scriptReadsCtx } from "../lib/script.js";
+import { TagBadge } from "./TagBadge.jsx";
+
 function FieldTable({ title, fields }) {
   const entries = Object.entries(fields ?? {});
   if (entries.length === 0) return null;
@@ -20,6 +23,11 @@ function FieldTable({ title, fields }) {
               const notes = [
                 field.required ? "required" : null,
                 field.default !== undefined ? `default ${JSON.stringify(field.default)}` : null,
+                Array.isArray(field.enum)
+                  ? `enum ${field.enum.map((x) => (x && typeof x === "object" ? x.value : x)).join(", ")}`
+                  : Array.isArray(field.options)
+                    ? `enum ${field.options.map((x) => (x && typeof x === "object" ? x.value : x)).join(", ")}`
+                    : null,
                 field.description,
               ]
                 .filter(Boolean)
@@ -51,13 +59,26 @@ export function ScriptMetaPanel({ meta, metaError, className = "" }) {
     );
   }
 
+  const tags = scriptTags(meta);
+
   return (
     <div className={`space-y-3 ${className}`}>
       {meta.description ? <p className="text-sm">{meta.description}</p> : null}
-      <div className="grid gap-3 md:grid-cols-3">
+      {(tags.length || scriptReadsCtx(meta)) ? (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((tag) => (
+            <TagBadge key={tag} tag={tag} />
+          ))}
+          {scriptReadsCtx(meta) ? (
+            <span className="badge badge-outline badge-sm font-mono">reads: ctx</span>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <FieldTable title="Config" fields={meta.config} />
         <FieldTable title="Input (data)" fields={meta.input} />
         <FieldTable title="Output" fields={meta.output} />
+        <FieldTable title="Context" fields={meta.context} />
       </div>
     </div>
   );

@@ -2,9 +2,13 @@ name: cron example
 description: |
   this workflow triggered by cron
 scripts:
+  - script: get-current-time.js
+  - set:
+      expression: '{"message": context.datetime}'
   - script: ntfy.js
     config:
-      url: https://ntfy.sh/scrunner
+      url: $VAR_ntfy_channel
+      title: $DATA
 triggers:
   - type: cron
     schedule: "*/20 * * * *"

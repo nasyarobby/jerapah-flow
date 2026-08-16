@@ -17,6 +17,7 @@ import runsPlugin from "./src/api/runs.js";
 import dashboardPluginFactory from "./src/api/dashboard.js";
 import secretsPlugin from "./src/api/secrets.js";
 import kvPlugin from "./src/api/kv.js";
+import variablesPlugin from "./src/api/variables.js";
 import httpPagesPlugin from "./src/api/http-pages.js";
 import httpAuthsPlugin from "./src/api/http-auths.js";
 import { WEB_DIST } from "./paths.js";
@@ -26,11 +27,12 @@ await migrate();
 enableLogPersistence();
 
 const jwtSecret =
+  process.env.JERAPAH_FLOW_JWT_SECRET ??
   process.env.SCRUNNER_JWT_SECRET ??
   (process.env.NODE_ENV === "production" ? "" : "scrunner-dev-secret");
 
 if (!jwtSecret) {
-  log.error("SCRUNNER_JWT_SECRET is required in production");
+  log.error("JERAPAH_FLOW_JWT_SECRET is required in production");
   process.exit(1);
 }
 
@@ -52,7 +54,7 @@ await server.register(jwt, {
   },
 });
 await server.register(cors, {
-  origin: process.env.SCRUNNER_CORS_ORIGIN ?? "http://localhost:5173",
+  origin: process.env.JERAPAH_FLOW_CORS_ORIGIN ?? process.env.SCRUNNER_CORS_ORIGIN ?? "http://localhost:5173",
   credentials: true,
 });
 
@@ -91,6 +93,7 @@ await server.register(
     await api.register(authPlugin);
     await api.register(usersPlugin);
     await api.register(secretsPlugin);
+    await api.register(variablesPlugin);
     await api.register(kvPlugin);
     await api.register(httpPagesPlugin);
     await api.register(httpAuthsPlugin);

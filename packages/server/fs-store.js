@@ -55,11 +55,42 @@ export function writeScript(name, content) {
   fs.writeFileSync(path.join(SCRIPTS_DIR, name), content, "utf8");
 }
 
+/**
+ * Icon next to the script: `fetch-html.js` → `fetch-html.png` or `.jpg`.
+ * @returns {{ filePath: string, contentType: string } | null}
+ */
+export function resolveScriptIcon(name) {
+  assertScriptName(name);
+  const base = name.slice(0, -3);
+  for (const { ext, contentType } of [
+    { ext: "png", contentType: "image/png" },
+    { ext: "jpg", contentType: "image/jpeg" },
+  ]) {
+    const filePath = path.join(SCRIPTS_DIR, `${base}.${ext}`);
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      return { filePath, contentType };
+    }
+  }
+  return null;
+}
+
+export function scriptHasIcon(name) {
+  return resolveScriptIcon(name) != null;
+}
+
 export function deleteScript(name) {
   assertScriptName(name);
   const filePath = path.join(SCRIPTS_DIR, name);
   if (!fs.existsSync(filePath)) return false;
+  const icon = resolveScriptIcon(name);
   fs.unlinkSync(filePath);
+  if (icon) {
+    try {
+      fs.unlinkSync(icon.filePath);
+    } catch {
+      // ignore missing icon
+    }
+  }
   return true;
 }
 

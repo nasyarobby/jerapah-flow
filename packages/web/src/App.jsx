@@ -17,6 +17,7 @@ import { AuthProfilesPage } from "./pages/AuthProfilesPage.jsx";
 import { ResponsesPage } from "./pages/ResponsesPage.jsx";
 import { UsersPage } from "./pages/UsersPage.jsx";
 import { SecretsPage } from "./pages/SecretsPage.jsx";
+import { VariablesPage } from "./pages/VariablesPage.jsx";
 
 export function App() {
   const qc = useQueryClient();
@@ -27,8 +28,8 @@ export function App() {
     function onUnauthorized() {
       qc.setQueryData(["me"], null);
     }
-    window.addEventListener("scrunner:unauthorized", onUnauthorized);
-    return () => window.removeEventListener("scrunner:unauthorized", onUnauthorized);
+    window.addEventListener("jerapah-flow:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("jerapah-flow:unauthorized", onUnauthorized);
   }, [qc]);
 
   const user = me.data?.user;
@@ -61,6 +62,7 @@ export function App() {
         <Route path="/events" element={<EventsPage />} />
         <Route path="/events/:id" element={<EventDetailPage />} />
         <Route path="/kv" element={<KvPage />} />
+        <Route path="/variables" element={<VariablesPage />} />
         <Route path="/auth" element={<AuthProfilesPage />} />
         <Route path="/responses" element={<ResponsesPage />} />
         {user.role === "admin" ? (

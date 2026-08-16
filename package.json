@@ -1,16 +1,16 @@
 {
-  "name": "scrunner",
+  "name": "jerapah-flow",
   "version": "1.0.0",
   "private": true,
   "description": "Script/workflow runner with admin UI",
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @scrunner/server --filter @scrunner/web --parallel dev",
-    "dev:server": "pnpm --filter @scrunner/server dev",
-    "dev:web": "pnpm --filter @scrunner/web dev",
-    "build": "pnpm --filter @scrunner/web build",
-    "start": "pnpm --filter @scrunner/server start",
-    "migrate": "pnpm --filter @scrunner/server migrate"
+    "dev": "pnpm --filter @jerapah-flow/server --filter @jerapah-flow/web --parallel dev",
+    "dev:server": "pnpm --filter @jerapah-flow/server dev",
+    "dev:web": "pnpm --filter @jerapah-flow/web dev",
+    "build": "pnpm --filter @jerapah-flow/web build",
+    "start": "pnpm --filter @jerapah-flow/server start",
+    "migrate": "pnpm --filter @jerapah-flow/server migrate"
   },
   "packageManager": "pnpm@10.25.0",
   "pnpm": {

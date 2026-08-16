@@ -1,3 +1,4 @@
+import fs from "fs";
 import {
   clearScriptCache,
   inspectScriptSource,
@@ -5,6 +6,8 @@ import {
 } from "../../script-sandbox.js";
 import * as fsStore from "../../fs-store.js";
 import { createDryRunLogger, safeSerialize } from "./dry-run-logger.js";
+import { normalizeStepResult } from "../../step-result.js";
+import { resolveConfigRefs } from "../../config-refs.js";
 
 /**
  * @param {{ referencedScripts: () => Set<string> }} registry
@@ -21,9 +24,25 @@ export default function scriptsPluginFactory(registry) {
           content == null
             ? { meta: null, metaError: "script not found" }
             : inspectScriptSource(name, content);
-        return { name, ...inspected };
+        return { name, hasIcon: fsStore.scriptHasIcon(name), ...inspected };
       });
       return { scripts };
+    });
+
+    fastify.get("/scripts/:name/icon", async (req, reply) => {
+      const { name } = /** @type {{ name: string }} */ (req.params);
+      try {
+        fsStore.assertScriptName(name);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({ error: err.message });
+      }
+      const icon = fsStore.resolveScriptIcon(name);
+      if (icon == null) return reply.code(404).send({ error: "icon not found" });
+      const body = fs.readFileSync(icon.filePath);
+      return reply
+        .type(icon.contentType)
+        .header("Cache-Control", "private, max-age=60")
+        .send(body);
     });
 
     fastify.get("/scripts/:name", async (req, reply) => {
@@ -35,7 +54,7 @@ export default function scriptsPluginFactory(registry) {
       }
       const content = fsStore.readScript(name);
       if (content == null) return reply.code(404).send({ error: "script not found" });
-      return { name, content, ...inspectScriptSource(name, content) };
+      return { name, content, hasIcon: fsStore.scriptHasIcon(name), ...inspectScriptSource(name, content) };
     });
 
     fastify.put("/scripts/:name", async (req, reply) => {
@@ -85,7 +104,7 @@ export default function scriptsPluginFactory(registry) {
         return reply.code(err.statusCode ?? 400).send({ error: err.message });
       }
 
-      const body = /** @type {{ content?: string, data?: unknown, config?: unknown, owner?: string }} */ (
+      const body = /** @type {{ content?: string, data?: unknown, context?: unknown, config?: unknown, owner?: string }} */ (
         req.body ?? {}
       );
       if (typeof body.content !== "string") {
@@ -101,24 +120,37 @@ export default function scriptsPluginFactory(registry) {
         }
       }
 
-      const ctx = {
-        data: body.data ?? null,
-        config: body.config ?? null,
-      };
+      const incomingContext =
+        body.context != null && typeof body.context === "object" && !Array.isArray(body.context)
+          ? body.context
+          : {};
 
       const { log, logs } = createDryRunLogger();
       const started = Date.now();
 
       try {
+        const config = await resolveConfigRefs(body.config ?? null, {
+          owner,
+          workflowKey: "dry-run",
+          context: incomingContext,
+        });
+        const ctx = {
+          data: body.data ?? null,
+          context: incomingContext,
+          config,
+        };
         const { fn, meta, metaError } = instantiateScriptSource(name, body.content, {
           log,
           workflowName: "dry-run",
           owner,
         });
-        const output = await fn(ctx);
+        const raw = await fn(ctx);
+        const result = normalizeStepResult(raw, incomingContext, name);
         return {
           status: "success",
-          output: safeSerialize(output),
+          output: safeSerialize(result.output),
+          context: safeSerialize(result.context),
+          skipRemaining: result.skipRemaining,
           error: null,
           logs,
           durationMs: Date.now() - started,
@@ -130,6 +162,8 @@ export default function scriptsPluginFactory(registry) {
         return {
           status: "failed",
           output: null,
+          context: null,
+          skipRemaining: false,
           error: err instanceof Error ? err.message : String(err),
           logs,
           durationMs: Date.now() - started,

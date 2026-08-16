@@ -1,5 +1,12 @@
 import jsonata from "jsonata";
 
+function passContext(ctx) {
+  if (ctx?.context != null && typeof ctx.context === "object" && !Array.isArray(ctx.context)) {
+    return { ...ctx.context };
+  }
+  return {};
+}
+
 function ntfyHeaders(ctx) {
   const headers = {};
 
@@ -72,18 +79,21 @@ async function ntfy(ctx) {
         "ntfy: skipped, fingerprint unchanged",
       );
       return {
-        sent: "false",
-        skipped: true,
-        fingerprint: checked.hash,
-        fingerprintAt: checked.previousAt,
-        fingerprintAge: checked.ageMs,
+        output: {
+          sent: "false",
+          skipped: true,
+          fingerprint: checked.hash,
+          fingerprintAt: checked.previousAt,
+          fingerprintAge: checked.ageMs,
+        },
+        context: passContext(ctx),
       };
     }
     fp = checked;
   }
 
   const headers = ntfyHeaders(ctx);
-  const ntfyUrl = ctx.config?.url || "https://ntfy.sh/scrunner";
+  const ntfyUrl = ctx.config?.url || "https://ntfy.sh/jerapah-flow";
 
   if (hasFile) {
     const filename = ctx.data?.filename || "attachment";
@@ -114,7 +124,7 @@ async function ntfy(ctx) {
     log.info("ntfy sending message to %s", ntfyUrl);
     log.info("ntfy messsage: %s", truncatedMessage);
 
-    await $axios.post(ntfyUrl, ctx.data?.message || "Hello from scrunner", {
+    await $axios.post(ntfyUrl, ctx.data?.message || "Hello from jerapah-flow", {
       headers,
     });
   }
@@ -126,15 +136,17 @@ async function ntfy(ctx) {
     sent.fingerprint = stored.hash;
     sent.fingerprintAt = stored.at;
   }
-  return sent;
+  return { output: sent, context: passContext(ctx) };
 }
 
 ntfy.meta = {
   description: "Send a message or file to an ntfy topic",
+  previewConfigKey: "url",
+  tags: ["channel"],
   config: {
     url: {
       type: "string",
-      default: "https://ntfy.sh/scrunner",
+      default: "https://ntfy.sh/jerapah-flow",
       description: "ntfy topic URL",
     },
     fingerprint: {
@@ -145,7 +157,7 @@ ntfy.meta = {
     fingerprintJsonata: {
       type: "string",
       required: false,
-      description: "JSONata against ctx; default hashes title, message, attach, filename, contentType",
+      description: "JSONata against full ctx; default hashes data title, message, attach, filename, contentType",
     },
     fingerprintMaxAge: {
       type: "string",
@@ -161,12 +173,13 @@ ntfy.meta = {
     filename: { type: "string", required: false },
     contentType: { type: "string", required: false },
   },
+  reads: "ctx",
   output: {
-    sent: { type: "string", description: "Replaces the workflow context with { sent: \"true\" }" },
+    sent: { type: "string", description: '"true" when sent, "false" when fingerprint skipped' },
   },
   example: {
-    data: { title: "Hello", message: "Hello from scrunner" },
-    config: { url: "https://ntfy.sh/scrunner", fingerprint: true },
+    data: { title: "Hello", message: "Hello from jerapah-flow" },
+    config: { url: "https://ntfy.sh/jerapah-flow", fingerprint: true },
   },
 };
 

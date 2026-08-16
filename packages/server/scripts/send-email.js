@@ -218,24 +218,32 @@ async function sendEmail(ctx) {
   log.info({ messageId: info.messageId }, "send-email: message sent");
 
   return {
-    sent: true,
-    messageId: info.messageId ?? null,
-    from,
-    to,
-    cc: cc ?? null,
-    bcc: bcc ?? null,
-    subject,
+    output: {
+      sent: true,
+      messageId: info.messageId ?? null,
+      from,
+      to,
+      cc: cc ?? null,
+      bcc: bcc ?? null,
+      subject,
+    },
+    context:
+      ctx.context != null && typeof ctx.context === "object" && !Array.isArray(ctx.context)
+        ? ctx.context
+        : {},
   };
 }
 
 sendEmail.meta = {
   description: "Send an email via SMTP (nodemailer); plain text, HTML, or both",
+  previewConfigKey: "from",
+  tags: ["channel"],
   config: {
     service: {
       type: "string",
       required: false,
       description:
-        "Well-known provider shortcut (e.g. gmail, outlook365, sendgrid). Alternative to host.",
+        "Nodemailer well-known service ID (e.g. Gmail, Outlook365, SendGrid). Sets host, port, and TLS. See https://nodemailer.com/smtp/well-known-services",
     },
     host: {
       type: "string",
@@ -426,13 +434,11 @@ sendEmail.meta = {
       to: ["recipient@example.com", "other@example.com"],
       cc: "manager@example.com",
       bcc: "audit@example.com",
-      subject: "Hello from scrunner",
+      subject: "Hello from JerapahFlow",
       text: "This is a plain-text test message.",
     },
     config: {
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
+      service: "Gmail",
       user: "smtp-login@gmail.com",
       from: "notifications@example.com",
       passwordSecret: "gmail_app_password",

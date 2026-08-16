@@ -1,14 +1,13 @@
-import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useMemo, useState, Fragment } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { LuArrowLeft, LuFilter } from "react-icons/lu";
 import { useRun } from "../api/hooks.js";
+import { JsonViewBlock } from "../components/JsonViewBlock.jsx";
 import { LogViewer } from "../components/LogViewer.jsx";
 import { formatTime, StatusBadge } from "../lib/format.jsx";
 
 function stepLabel(s) {
-  if (s.script === "set") {
-    return s.config?.as ? `set:${s.config.as}` : "set";
-  }
+  if (s.script === "set") return "set";
   return s.script;
 }
 
@@ -20,10 +19,32 @@ function isEditableScript(s) {
   return Boolean(s.script) && s.script !== "set";
 }
 
+function envelopeParts(raw) {
+  if (raw != null && typeof raw === "object" && !Array.isArray(raw) && ("output" in raw || "context" in raw)) {
+    return {
+      output: "output" in raw ? raw.output : undefined,
+      context: "context" in raw ? raw.context : undefined,
+      skipRemaining: raw.skipRemaining === true,
+    };
+  }
+  return { output: raw, context: undefined, skipRemaining: false };
+}
+
 export function EventDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { data: run, isLoading, error } = useRun(id);
   const [stepFilters, setStepFilters] = useState([]);
+  const [openStep, setOpenStep] = useState(null);
+
+  function goBack() {
+    const idx = window.history.state?.idx;
+    if (typeof idx === "number" && idx > 0) {
+      navigate(-1);
+      return;
+    }
+    navigate("/events");
+  }
 
   const steps = run?.steps ?? [];
   const logs = run?.logs ?? [];
@@ -50,12 +71,14 @@ export function EventDetailPage() {
   if (isLoading) return <span className="loading loading-spinner loading-lg" />;
   if (error || !run) return <p className="text-error">Event not found</p>;
 
+  const runParts = envelopeParts(run.output);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Link to="/events" className="btn btn-ghost btn-sm btn-square" aria-label="Back">
+        <button type="button" className="btn btn-ghost btn-sm btn-square" aria-label="Back" onClick={goBack}>
           <LuArrowLeft className="size-4" />
-        </Link>
+        </button>
         <h1 className="text-xl font-semibold truncate">{run.workflow_name || run.workflow}</h1>
         <StatusBadge status={run.status} />
       </div>
@@ -88,6 +111,15 @@ export function EventDetailPage() {
         </div>
       ) : null}
 
+      <div className="grid gap-2 sm:grid-cols-2">
+        <JsonViewBlock title="Run input (data)" value={run.input} />
+        <JsonViewBlock title="Run output" value={runParts.output} />
+        <JsonViewBlock title="Run context" value={runParts.context} />
+      </div>
+      {runParts.skipRemaining ? (
+        <p className="text-sm opacity-70">This run stopped early (<span className="font-mono">skipRemaining</span>).</p>
+      ) : null}
+
       <section>
         <h2 className="font-semibold mb-2">Steps</h2>
         <div className="overflow-x-auto">
@@ -103,42 +135,65 @@ export function EventDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {steps.map((s) => (
-                <tr key={s.id}>
-                  <td>{s.step_index}</td>
-                  <td className="font-mono">
-                    {isEditableScript(s) ? (
-                      <Link className="link" to={`/scripts/${encodeURIComponent(s.script)}/edit`}>
-                        {stepLabel(s)}
-                      </Link>
-                    ) : (
-                      stepLabel(s)
-                    )}
-                  </td>
-                  <td>
-                    <StatusBadge status={s.status} />
-                  </td>
-                  <td>{s.duration_ms != null ? `${s.duration_ms}ms` : "—"}</td>
-                  <td
-                    className={
-                      s.status === "skipped" ? "opacity-60 text-xs" : "text-error text-xs"
-                    }
-                  >
-                    {s.error || ""}
-                  </td>
-                  <td className="text-right">
-                    <button
-                      type="button"
-                      className={`btn btn-ghost btn-xs btn-square ${stepFilters.includes(s.id) ? "btn-active" : ""}`}
-                      aria-label={`Filter logs for ${filterLabel(s)}`}
-                      aria-pressed={stepFilters.includes(s.id)}
-                      onClick={() => toggleStepFilter(s.id)}
-                    >
-                      <LuFilter className="size-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {steps.map((s) => {
+                const parts = envelopeParts(s.output);
+                const open = openStep === s.id;
+                return (
+                  <Fragment key={s.id}>
+                    <tr>
+                      <td>{s.step_index}</td>
+                      <td className="font-mono">
+                        {isEditableScript(s) ? (
+                          <Link className="link" to={`/scripts/${encodeURIComponent(s.script)}/edit`}>
+                            {stepLabel(s)}
+                          </Link>
+                        ) : (
+                          stepLabel(s)
+                        )}
+                      </td>
+                      <td>
+                        <StatusBadge status={s.status} />
+                      </td>
+                      <td>{s.duration_ms != null ? `${s.duration_ms}ms` : "—"}</td>
+                      <td
+                        className={
+                          s.status === "skipped" ? "opacity-60 text-xs" : "text-error text-xs"
+                        }
+                      >
+                        {s.error || (parts.skipRemaining ? "skipRemaining" : "")}
+                      </td>
+                      <td className="text-right">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs"
+                          onClick={() => setOpenStep(open ? null : s.id)}
+                        >
+                          I/O
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-ghost btn-xs btn-square ${stepFilters.includes(s.id) ? "btn-active" : ""}`}
+                          aria-label={`Filter logs for ${filterLabel(s)}`}
+                          aria-pressed={stepFilters.includes(s.id)}
+                          onClick={() => toggleStepFilter(s.id)}
+                        >
+                          <LuFilter className="size-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                    {open ? (
+                      <tr>
+                        <td colSpan={6} className="bg-base-200">
+                          <div className="grid gap-2 p-2 sm:grid-cols-2">
+                            <JsonViewBlock title="output" value={parts.output} />
+                            <JsonViewBlock title="context" value={parts.context} />
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -1,9 +1,17 @@
 import jsonata from "jsonata";
 
-function ensureDataObject(ctx) {
-  if (ctx.data == null || typeof ctx.data !== "object" || Array.isArray(ctx.data)) {
-    ctx.data = {};
+function passContext(ctx) {
+  if (ctx?.context != null && typeof ctx.context === "object" && !Array.isArray(ctx.context)) {
+    return { ...ctx.context };
   }
+  return {};
+}
+
+function mergeData(data) {
+  if (data != null && typeof data === "object" && !Array.isArray(data)) {
+    return { ...data };
+  }
+  return {};
 }
 
 async function fingerprint(ctx) {
@@ -28,13 +36,14 @@ async function fingerprint(ctx) {
     maxAge: ctx.config?.maxAge,
   });
 
-  ensureDataObject(ctx);
-  ctx.data.fingerprint = result.hash;
-  ctx.data.fingerprintChanged = result.changed;
-  ctx.data.fingerprintPrevious = result.previous;
-  ctx.data.fingerprintAt = result.changed ? result.at : result.previousAt;
-  ctx.data.fingerprintAge = result.ageMs;
-  ctx.data.fingerprintExpired = result.expired;
+  const extra = {
+    fingerprint: result.hash,
+    fingerprintChanged: result.changed,
+    fingerprintPrevious: result.previous,
+    fingerprintAt: result.changed ? result.at : result.previousAt,
+    fingerprintAge: result.ageMs,
+    fingerprintExpired: result.expired,
+  };
 
   log.info(
     {
@@ -46,16 +55,22 @@ async function fingerprint(ctx) {
     "fingerprint: result",
   );
 
+  /** @type {{ output: Record<string, unknown>, context: Record<string, unknown>, skipRemaining?: true }} */
+  const envelope = {
+    output: { ...mergeData(ctx.data), ...extra },
+    context: { ...passContext(ctx), ...extra },
+  };
   if (!result.changed && skipRemaining) {
-    ctx.skipRemaining = true;
+    envelope.skipRemaining = true;
   }
-
-  return ctx;
+  return envelope;
 }
 
 fingerprint.meta = {
   description:
     "Hash a value, compare it to the last stored fingerprint, and skip remaining steps when unchanged",
+  previewConfigKey: "key",
+  reads: "ctx",
   config: {
     key: {
       type: "string",
@@ -85,6 +100,14 @@ fingerprint.meta = {
     fingerprintPrevious: { type: "string", required: false },
     fingerprintAt: { type: "string", required: false, description: "ISO timestamp of the stored record" },
     fingerprintAge: { type: "number", required: false, description: "Age in milliseconds" },
+    fingerprintExpired: { type: "boolean" },
+  },
+  context: {
+    fingerprint: { type: "string" },
+    fingerprintChanged: { type: "boolean" },
+    fingerprintPrevious: { type: "string", required: false },
+    fingerprintAt: { type: "string", required: false },
+    fingerprintAge: { type: "number", required: false },
     fingerprintExpired: { type: "boolean" },
   },
   example: {

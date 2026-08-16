@@ -11,10 +11,11 @@ const AUTH_TAG_LEN = 16;
  */
 export function resolveSecretsKeyMaterial() {
   const raw =
+    process.env.JERAPAH_FLOW_SECRETS_KEY ??
     process.env.SCRUNNER_SECRETS_KEY ??
     (process.env.NODE_ENV === "production" ? "" : DEV_DEFAULT);
   if (!raw) {
-    throw new Error("SCRUNNER_SECRETS_KEY is required in production");
+    throw new Error("JERAPAH_FLOW_SECRETS_KEY is required in production");
   }
   return raw;
 }

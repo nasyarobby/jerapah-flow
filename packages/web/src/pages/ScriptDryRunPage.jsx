@@ -10,6 +10,7 @@ import {
 } from "../api/hooks.js";
 import { CodeEditor } from "../components/CodeEditor.jsx";
 import { LogViewer } from "../components/LogViewer.jsx";
+import { ScriptIcon } from "../components/ScriptIcon.jsx";
 import { ScriptMetaPanel } from "../components/ScriptMetaPanel.jsx";
 import { StatusBadge } from "../lib/format.jsx";
 import {
@@ -18,8 +19,10 @@ import {
   contextFromMeta,
   prettyJson,
 } from "../lib/script.js";
+import { useNotifications } from "../notifications.jsx";
 
 export function ScriptDryRunPage() {
+  const { notify } = useNotifications();
   const { name: rawName } = useParams();
   const name = decodeURIComponent(rawName ?? "");
   const location = useLocation();
@@ -75,7 +78,9 @@ export function ScriptDryRunPage() {
     setRunStatus(lastRun.status);
     setLogs(lastRun.logs ?? []);
     if (lastRun.status === "success") {
-      setOutputJson(prettyJson(lastRun.output));
+      const envelope = { output: lastRun.output, context: lastRun.context };
+      if (lastRun.skipRemaining) envelope.skipRemaining = true;
+      setOutputJson(prettyJson(envelope));
     } else {
       setOutputJson(prettyJson({ error: lastRun.error ?? "run failed" }));
     }
@@ -96,10 +101,11 @@ export function ScriptDryRunPage() {
       throw new Error(err instanceof Error ? err.message : "invalid JSON");
     }
     if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error('input context must be a JSON object with "data" and/or "config"');
+      throw new Error('input must be a JSON object with "data", "context", and/or "config"');
     }
     return {
       data: "data" in parsed ? parsed.data : null,
+      context: "context" in parsed ? parsed.context : {},
       config: "config" in parsed ? parsed.config : null,
     };
   }
@@ -118,13 +124,17 @@ export function ScriptDryRunPage() {
       name,
       content,
       data: ctx.data,
+      context: ctx.context,
       config: ctx.config,
       owner,
     });
   }
 
   function onSave() {
-    save.mutate({ name, content });
+    save.mutate(
+      { name, content },
+      { onSuccess: () => notify.success("Script saved") },
+    );
   }
 
   return (
@@ -133,6 +143,7 @@ export function ScriptDryRunPage() {
         <Link to={backHref} className="btn btn-ghost btn-sm btn-square" aria-label="Back">
           <LuArrowLeft className="size-4" />
         </Link>
+        <ScriptIcon name={name} hasIcon={existing.data?.hasIcon} className="size-8 shrink-0" />
         <h1 className="truncate font-mono text-lg font-semibold">{name}</h1>
         <span className="badge badge-ghost badge-sm">dry run</span>
         {runStatus ? <StatusBadge status={runStatus} /> : null}
@@ -188,9 +199,6 @@ export function ScriptDryRunPage() {
       {save.isError ? (
         <p className="text-error text-sm shrink-0">{errorMessage(save.error)}</p>
       ) : null}
-      {save.isSuccess ? (
-        <p className="text-success text-sm shrink-0">Script saved</p>
-      ) : null}
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-3">
         <section className="flex min-h-0 flex-col gap-1">
@@ -227,7 +235,7 @@ export function ScriptDryRunPage() {
         </section>
 
         <section className="flex min-h-0 flex-col gap-1">
-          <h2 className="shrink-0 text-sm font-semibold opacity-70">Output</h2>
+          <h2 className="shrink-0 text-sm font-semibold opacity-70">Result (output + context)</h2>
           <div className="min-h-0 flex-1">
             <CodeEditor
               language="json"

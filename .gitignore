@@ -5,3 +5,8 @@ logs/
 *.db-*
 .DS_Store
 packages/web/dist
+
+# Personal/local scripts and workflows (not for the repo)
+packages/server/scripts/dev-*
+packages/server/workflows/**/dev-*
+debug-*.js

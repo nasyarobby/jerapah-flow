@@ -10,6 +10,7 @@ import { SCRIPTS_DIR } from "./paths.js";
 import { isSecret, Secret, unwrapSecretsDeep } from "./secret-value.js";
 import { getHttpPageByName, getHttpTemplateByName } from "./http-pages-store.js";
 import { getSecretPlaintext } from "./secrets-store.js";
+import { getVariablePlain } from "./variables-store.js";
 
 const hostRequire = createRequire(import.meta.url);
 
@@ -304,6 +305,24 @@ function createRestrictedRequire(screenedAxios) {
 /**
  * @param {string} owner
  */
+function createVarsApi(owner) {
+  return {
+    /**
+     * @param {string} name
+     */
+    async get(name) {
+      const value = await getVariablePlain(owner, name);
+      if (value == null) {
+        throw new Error(`variable "${name}" not found`);
+      }
+      return value;
+    },
+  };
+}
+
+/**
+ * @param {string} owner
+ */
 function createSecretsApi(owner) {
   return {
     /**
@@ -380,6 +399,7 @@ function createScriptSandbox({
   const $kv = createKvApi(workflowName);
   const $fingerprint = createFingerprintApi($kv);
   const $secrets = createSecretsApi(owner);
+  const $vars = createVarsApi(owner);
   const $responses = createResponsesApi();
   const sandbox = {
     ...pickBuiltins(),
@@ -389,13 +409,14 @@ function createScriptSandbox({
     $kv,
     $fingerprint,
     $secrets,
+    $vars,
     $responses,
     $workflows,
     require: createRestrictedRequire($axios),
   };
 
   vm.createContext(sandbox, {
-    name: `scrunner:${workflowName}:${script}`,
+    name: `jerapah-flow:${workflowName}:${script}`,
     codeGeneration: { strings: false, wasm: false },
   });
 
