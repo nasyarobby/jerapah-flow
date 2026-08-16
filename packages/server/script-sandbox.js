@@ -8,11 +8,19 @@ import { createKvApi } from "./kv-store.js";
 import { createFingerprintApi } from "./script-fingerprint.js";
 import { SCRIPTS_DIR } from "./paths.js";
 import { isSecret, Secret, unwrapSecretsDeep } from "./secret-value.js";
+import { getHttpPageByName, getHttpTemplateByName } from "./http-pages-store.js";
 import { getSecretPlaintext } from "./secrets-store.js";
 
 const hostRequire = createRequire(import.meta.url);
 
-const ALLOWED_MODULES = new Set(["axios", "jsonata", "node-html-parser", "rss-parser"]);
+const ALLOWED_MODULES = new Set([
+  "axios",
+  "jsonata",
+  "mustache",
+  "node-html-parser",
+  "nodemailer",
+  "rss-parser",
+]);
 
 const BUILTIN_NAMES = [
   "Infinity",
@@ -318,6 +326,33 @@ function createSecretsApi(owner) {
   };
 }
 
+/**
+ * Load HTML template pages from the Responses store.
+ */
+function createResponsesApi() {
+  return {
+    /**
+     * @param {string} name
+     */
+    async getTemplate(name) {
+      if (typeof name !== "string" || name.length === 0) {
+        throw new Error("template name is required");
+      }
+      const page = await getHttpTemplateByName(name);
+      if (!page) {
+        const any = await getHttpPageByName(name);
+        if (any && any.kind !== "template") {
+          throw new Error(
+            `"${name}" is an HTTP response page, not an HTML template`,
+          );
+        }
+        throw new Error(`html template "${name}" not found`);
+      }
+      return page.content;
+    },
+  };
+}
+
 const $workflowsStub = {
   async trigger() {
     throw new Error("workflow runner is not available");
@@ -345,6 +380,7 @@ function createScriptSandbox({
   const $kv = createKvApi(workflowName);
   const $fingerprint = createFingerprintApi($kv);
   const $secrets = createSecretsApi(owner);
+  const $responses = createResponsesApi();
   const sandbox = {
     ...pickBuiltins(),
     log: scriptLog,
@@ -353,6 +389,7 @@ function createScriptSandbox({
     $kv,
     $fingerprint,
     $secrets,
+    $responses,
     $workflows,
     require: createRestrictedRequire($axios),
   };

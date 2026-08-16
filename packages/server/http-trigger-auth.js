@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { kvGet } from "./kv-store.js";
 import { getSecretPlaintext } from "./secrets-store.js";
 import { getHttpAuthInternal, assertAuthType } from "./http-auths-store.js";
-import { getHttpPageByName, contentTypeForMime } from "./http-pages-store.js";
+import { getHttpPageByName, contentTypeForMime, assertHttpResponsePage } from "./http-pages-store.js";
 import { log } from "./logger.js";
 
 /**
@@ -246,14 +246,18 @@ export function resolveUnauthorizedSpec(trigger, mechanism) {
 export async function sendHttpPageOrJson(reply, status, pageName, fallbackBody) {
   if (pageName) {
     const page = await getHttpPageByName(pageName);
-    if (page) {
+    if (page && page.kind !== "template") {
       const code = status ?? page.status;
       return reply
         .code(code)
         .type(contentTypeForMime(page.mime))
         .send(page.content);
     }
-    log.warn({ pageName }, "http page not found; using fallback");
+    if (page?.kind === "template") {
+      log.warn({ pageName }, "http template page cannot be used as HTTP response");
+    } else {
+      log.warn({ pageName }, "http page not found; using fallback");
+    }
   }
   return reply.code(status).send(fallbackBody ?? { error: "unauthorized" });
 }
@@ -266,12 +270,16 @@ export async function sendHttpPageOrJson(reply, status, pageName, fallbackBody) 
  */
 export async function sendSuccessPage(reply, pageName, fallbackBody) {
   const page = await getHttpPageByName(pageName);
-  if (page) {
+  if (page && page.kind !== "template") {
     return reply
       .code(page.status)
       .type(contentTypeForMime(page.mime))
       .send(page.content);
   }
-  log.warn({ pageName }, "success page not found; using default JSON");
+  if (page?.kind === "template") {
+    log.warn({ pageName }, "html template page cannot be used as HTTP success response");
+  } else {
+    log.warn({ pageName }, "success page not found; using default JSON");
+  }
   return reply.send(fallbackBody);
 }

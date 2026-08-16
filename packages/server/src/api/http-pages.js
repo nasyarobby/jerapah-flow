@@ -2,6 +2,7 @@ import {
   assertPageName,
   assertMime,
   assertHttpStatus,
+  assertPageKind,
   listHttpPages,
   getHttpPageById,
   getHttpPageByName,
@@ -37,11 +38,13 @@ export default async function httpPagesPlugin(fastify) {
       content?: string,
       mime?: string,
       status?: number,
+      kind?: string,
     }} */ (req.body ?? {});
     try {
       assertPageName(String(body.name ?? ""));
       assertMime(body.mime);
       assertHttpStatus(body.status, 200);
+      const kind = assertPageKind(body.kind, "response");
       if (typeof body.content !== "string") {
         return reply.code(400).send({ error: "content must be a string" });
       }
@@ -50,6 +53,7 @@ export default async function httpPagesPlugin(fastify) {
         content: body.content,
         mime: String(body.mime),
         status: body.status,
+        kind,
       });
       return reply.send({ page });
     } catch (err) {
@@ -63,7 +67,11 @@ export default async function httpPagesPlugin(fastify) {
     if (!existing) {
       return reply.code(404).send({ error: "page not found" });
     }
-    await deleteHttpPage(id);
+    try {
+      await deleteHttpPage(id);
+    } catch (err) {
+      return reply.code(err.statusCode ?? 500).send({ error: err.message });
+    }
     return { ok: true };
   });
 }

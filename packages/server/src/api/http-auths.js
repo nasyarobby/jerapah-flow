@@ -8,7 +8,7 @@ import {
   deleteHttpAuth,
   revealHttpAuthLiterals,
 } from "../../http-auths-store.js";
-import { getHttpPageByName } from "../../http-pages-store.js";
+import { getHttpPageByName, assertHttpResponsePage } from "../../http-pages-store.js";
 
 /**
  * @param {import("fastify").FastifyInstance} fastify
@@ -62,11 +62,11 @@ export default async function httpAuthsPlugin(fastify) {
         String(body.unauthorized_response).length > 0
       ) {
         const page = await getHttpPageByName(String(body.unauthorized_response));
-        if (!page) {
-          return reply
-            .code(400)
-            .send({ error: `unknown response page "${body.unauthorized_response}"` });
-        }
+        assertHttpResponsePage(
+          page,
+          String(body.unauthorized_response),
+          "unauthorized_response",
+        );
       }
       const auth = await upsertHttpAuth({
         name: String(body.name),
