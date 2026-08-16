@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "../api/client.js";
 import { useDuplicateWorkflow, useOwners, useWorkflows } from "../api/hooks.js";
 import { ensureWorkflowFilename, suggestCopyFilename } from "../lib/workflow-doc.js";
+import { useNotifications } from "../notifications.jsx";
 
 const EMPTY_WORKFLOWS = [];
 
 export function DuplicateWorkflowDialog({ source, warnUnsaved, onClose, onDuplicated }) {
+  const { notify } = useNotifications();
   const { data: owners = [] } = useOwners();
   const { data: workflows = EMPTY_WORKFLOWS } = useWorkflows();
   const duplicate = useDuplicateWorkflow();
@@ -40,6 +42,7 @@ export function DuplicateWorkflowDialog({ source, warnUnsaved, onClose, onDuplic
       },
       {
         onSuccess: (data) => {
+          notify.success(`Duplicated to ${data.owner}/${data.file}`);
           onDuplicated?.(data);
         },
       },

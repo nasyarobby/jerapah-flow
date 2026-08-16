@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { LuMaximize2, LuMinimize2, LuPlay } from "react-icons/lu";
 import { errorMessage } from "../../api/client.js";
@@ -6,25 +6,68 @@ import { useRunWorkflow } from "../../api/hooks.js";
 import { CodeEditor } from "../CodeEditor.jsx";
 import { StatusBadge } from "../../lib/format.jsx";
 import { prettyJson } from "../../lib/script.js";
+import {
+  overlayWorkflowTestData,
+  readWorkflowTestData,
+  writeWorkflowTestData,
+} from "../../lib/workflow-test-storage.js";
+import { SchemaTooltip } from "./FieldHelp.jsx";
+
+const SAVE_DEBOUNCE_MS = 300;
+
+function initialDataJson(owner, file, defaultData) {
+  return prettyJson(overlayWorkflowTestData(defaultData, readWorkflowTestData(owner, file)));
+}
 
 export function WorkflowTestPanel({
   owner,
   file,
   defaultData,
+  inputFields,
   disabled,
   disabledReason,
   open,
   onClose,
 }) {
   const run = useRunWorkflow();
-  const [dataJson, setDataJson] = useState(() => prettyJson(defaultData ?? {}));
+  const [dataJson, setDataJson] = useState(() => initialDataJson(owner, file, defaultData));
+  const [inputTouched, setInputTouched] = useState(() => readWorkflowTestData(owner, file) != null);
   const [parseError, setParseError] = useState(null);
   const [last, setLast] = useState(null);
   const [expanded, setExpanded] = useState(false);
+  const saveTimer = useRef(null);
+
+  const seedJson = prettyJson(
+    overlayWorkflowTestData(defaultData, readWorkflowTestData(owner, file)),
+  );
 
   useEffect(() => {
-    setDataJson(prettyJson(defaultData ?? {}));
-  }, [defaultData]);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (inputTouched) return;
+    setDataJson(seedJson);
+  }, [seedJson, inputTouched]);
+
+  function persist(data) {
+    writeWorkflowTestData(owner, file, data);
+  }
+
+  function onDataChange(value) {
+    setDataJson(value);
+    setInputTouched(true);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      try {
+        persist(JSON.parse(value || "null"));
+      } catch {
+        // skip invalid JSON
+      }
+    }, SAVE_DEBOUNCE_MS);
+  }
 
   function onRun() {
     setParseError(null);
@@ -35,6 +78,7 @@ export function WorkflowTestPanel({
       setParseError(err instanceof Error ? err.message : String(err));
       return;
     }
+    persist(data);
     run.mutate(
       { owner, file, data },
       {
@@ -64,6 +108,15 @@ export function WorkflowTestPanel({
     : "";
 
   function close() {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    try {
+      persist(JSON.parse(dataJson || "null"));
+    } catch {
+      // skip invalid
+    }
     setExpanded(false);
     onClose?.();
   }
@@ -103,9 +156,12 @@ export function WorkflowTestPanel({
           className={`grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 min-h-0 ${expanded ? "flex-1" : ""}`}
         >
           <div className={expanded ? "min-h-0 h-full" : "min-h-64 h-64"}>
-            <p className="text-xs opacity-60 mb-1">data</p>
+            <p className="text-xs opacity-60 mb-1 flex items-center gap-2">
+              data
+              <SchemaTooltip label="Input" fields={inputFields} />
+            </p>
             <div className={expanded ? "h-[calc(100%-1.25rem)]" : "h-[calc(100%-1.25rem)]"}>
-              <CodeEditor language="json" value={dataJson} onChange={setDataJson} height="100%" />
+              <CodeEditor language="json" value={dataJson} onChange={onDataChange} height="100%" />
             </div>
           </div>
           <div className={expanded ? "min-h-0 h-full" : "min-h-64 h-64"}>

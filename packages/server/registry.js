@@ -30,6 +30,7 @@ import {
   sendHttpPageOrJson,
   sendSuccessPage,
 } from "./http-trigger-auth.js";
+import { resolveConfigRefs } from "./config-refs.js";
 
 /**
  * @typedef {{ owner: string, file: string, workflow: any }} WorkflowEntry
@@ -137,9 +138,12 @@ export function createRegistry(server) {
 
       const onDisk = fsStore.listOwnerYamlFiles(owner);
       for (const file of onDisk) {
-        if (!workflowFiles.includes(file)) {
-          log.warn(`Workflow file not in registers.yaml: ${owner}/${file}`);
+        if (workflowFiles.includes(file)) continue;
+        if (file.startsWith("dev-")) {
+          workflowFiles.push(file);
+          continue;
         }
+        log.warn(`Workflow file not in registers.yaml: ${owner}/${file}`);
       }
 
       for (const file of workflowFiles) {
@@ -572,21 +576,26 @@ export function createRegistry(server) {
     depth,
   ) {
     const script = parsed.kind === "set" ? SET_STEP_SCRIPT : parsed.script;
-    const config = parsed.config;
+    const unresolvedConfig = parsed.config;
     const incomingContext = normalizeContext(ctx.context);
-    const stepCtx = {
-      data: ctx.data,
-      context: incomingContext,
-      config,
-    };
     const step = await store.startStep({
       runId,
       index,
       script,
-      config,
+      config: unresolvedConfig,
     });
     const stepLog = runLog.child({ stepId: step.id, script });
     try {
+      const config = await resolveConfigRefs(unresolvedConfig, {
+        owner,
+        workflowKey: key,
+        context: incomingContext,
+      });
+      const stepCtx = {
+        data: ctx.data,
+        context: incomingContext,
+        config,
+      };
       if (parsed.when) {
         const whenResult = await evaluateJsonata(parsed.when, stepCtx);
         if (!isJsonataTruthy(whenResult)) {

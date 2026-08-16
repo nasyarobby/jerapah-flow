@@ -12,6 +12,7 @@ import { DuplicateWorkflowDialog } from "../components/DuplicateWorkflowDialog.j
 import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
 import { WorkflowVisualEditor } from "../components/workflow/WorkflowVisualEditor.jsx";
 import { NEW_WORKFLOW_YAML, parseWorkflowYaml } from "../lib/workflow-doc.js";
+import { useNotifications } from "../notifications.jsx";
 
 function WorkflowEditorLayout({
   title,
@@ -19,7 +20,6 @@ function WorkflowEditorLayout({
   savePending,
   saveDisabled,
   saveError,
-  saveSuccess,
   onSave,
   onTest,
   onDuplicate,
@@ -81,7 +81,6 @@ function WorkflowEditorLayout({
       {children}
       {saveError ? <p className="text-error text-sm shrink-0">{saveError}</p> : null}
       {enableError ? <p className="text-error text-sm shrink-0">{enableError}</p> : null}
-      {saveSuccess ? <p className="text-success text-sm shrink-0">Workflow saved</p> : null}
     </div>
   );
 }
@@ -154,6 +153,7 @@ export function WorkflowNewPage() {
 
 export function WorkflowEditPage() {
   const navigate = useNavigate();
+  const { notify } = useNotifications();
   const { owner: rawOwner, file: rawFile } = useParams();
   const owner = decodeURIComponent(rawOwner ?? "");
   const file = decodeURIComponent(rawFile ?? "");
@@ -190,7 +190,10 @@ export function WorkflowEditPage() {
     save.mutate(
       { owner, file, content },
       {
-        onSuccess: () => setSavedYaml(content),
+        onSuccess: () => {
+          setSavedYaml(content);
+          notify.success("Workflow saved");
+        },
       },
     );
   }
@@ -227,7 +230,6 @@ export function WorkflowEditPage() {
         savePending={save.isPending}
         saveDisabled={!contentReady}
         saveError={save.isError ? errorMessage(save.error) : null}
-        saveSuccess={save.isSuccess}
         onSave={onSave}
         onTest={() => setTestOpen(true)}
         onDuplicate={() => setDuplicateOpen(true)}

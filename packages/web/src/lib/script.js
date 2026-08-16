@@ -78,8 +78,12 @@ export function prettyJson(value) {
   }
 }
 
+function isPlainObject(value) {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
 function defaultsFromFields(fields) {
-  if (fields == null || typeof fields !== "object" || Array.isArray(fields)) return {};
+  if (!isPlainObject(fields)) return {};
   /** @type {Record<string, unknown>} */
   const out = {};
   for (const [key, spec] of Object.entries(fields)) {
@@ -88,6 +92,57 @@ function defaultsFromFields(fields) {
     }
   }
   return out;
+}
+
+function placeholderForField(spec) {
+  const type = spec?.type;
+  if (type === "object") return {};
+  if (type === "array") return [];
+  if (type === "number" || type === "integer") return 0;
+  if (type === "boolean") return false;
+  if (type === "string") return "";
+  return null;
+}
+
+function seedFromInputFields(fields) {
+  if (!isPlainObject(fields)) return {};
+  /** @type {Record<string, unknown>} */
+  const out = {};
+  for (const [key, spec] of Object.entries(fields)) {
+    const field = spec && typeof spec === "object" ? spec : {};
+    if ("default" in field) out[key] = field.default;
+    else if (field.required) out[key] = placeholderForField(field);
+  }
+  return out;
+}
+
+export function inputHasFields(meta) {
+  return isPlainObject(meta?.input) && Object.keys(meta.input).length > 0;
+}
+
+/** First script step with a non-empty `meta.input`; else first script meta. */
+export function firstInputMeta(steps, scriptsByName) {
+  let fallback = null;
+  for (const step of steps ?? []) {
+    if (step?.kind === "set") continue;
+    const name = typeof step === "string" ? step : step?.script;
+    if (!name) continue;
+    const listed = scriptsByName?.get(name);
+    const meta = listed && typeof listed === "object" ? listed.meta ?? null : null;
+    if (!fallback) fallback = meta;
+    if (inputHasFields(meta)) return meta;
+  }
+  return fallback;
+}
+
+/** Seed workflow test `data` from required/default fields, example, then YAML `data`. */
+export function dataFromInputMeta(meta, yamlData) {
+  const fromExample = contextFromMeta(meta).data;
+  return {
+    ...seedFromInputFields(meta?.input),
+    ...(isPlainObject(fromExample) ? fromExample : {}),
+    ...(isPlainObject(yamlData) ? yamlData : {}),
+  };
 }
 
 export function defaultConfigFromMeta(meta) {

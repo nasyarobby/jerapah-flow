@@ -7,6 +7,7 @@ import { CodeEditor } from "../components/CodeEditor.jsx";
 import { ScriptIcon } from "../components/ScriptIcon.jsx";
 import { ScriptMetaPanel } from "../components/ScriptMetaPanel.jsx";
 import { NEW_SCRIPT_TEMPLATE, normalizeScriptName } from "../lib/script.js";
+import { useNotifications } from "../notifications.jsx";
 
 export function ScriptNewPage() {
   const navigate = useNavigate();
@@ -88,6 +89,7 @@ export function ScriptEditPage() {
   const { name: rawName } = useParams();
   const name = decodeURIComponent(rawName ?? "");
   const navigate = useNavigate();
+  const { notify } = useNotifications();
   const existing = useScript(name);
   const save = useSaveScript();
   const [content, setContent] = useState("");
@@ -103,7 +105,10 @@ export function ScriptEditPage() {
 
   function onSave(e) {
     e.preventDefault();
-    save.mutate({ name, content });
+    save.mutate(
+      { name, content },
+      { onSuccess: () => notify.success("Script saved") },
+    );
   }
 
   function openDryRun() {
@@ -171,9 +176,6 @@ export function ScriptEditPage() {
 
       {save.isError ? (
         <p className="text-error text-sm shrink-0">{errorMessage(save.error)}</p>
-      ) : null}
-      {save.isSuccess ? (
-        <p className="text-success text-sm shrink-0">Script saved</p>
       ) : null}
     </div>
   );

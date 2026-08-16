@@ -19,8 +19,10 @@ import {
   contextFromMeta,
   prettyJson,
 } from "../lib/script.js";
+import { useNotifications } from "../notifications.jsx";
 
 export function ScriptDryRunPage() {
+  const { notify } = useNotifications();
   const { name: rawName } = useParams();
   const name = decodeURIComponent(rawName ?? "");
   const location = useLocation();
@@ -129,7 +131,10 @@ export function ScriptDryRunPage() {
   }
 
   function onSave() {
-    save.mutate({ name, content });
+    save.mutate(
+      { name, content },
+      { onSuccess: () => notify.success("Script saved") },
+    );
   }
 
   return (
@@ -193,9 +198,6 @@ export function ScriptDryRunPage() {
       ) : null}
       {save.isError ? (
         <p className="text-error text-sm shrink-0">{errorMessage(save.error)}</p>
-      ) : null}
-      {save.isSuccess ? (
-        <p className="text-success text-sm shrink-0">Script saved</p>
       ) : null}
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-3">

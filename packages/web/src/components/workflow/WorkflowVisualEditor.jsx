@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { parse as parseYaml } from "yaml";
 import { useHttpAuths, useHttpPages, useScripts, useWorkflows } from "../../api/hooks.js";
+import { dataFromInputMeta, firstInputMeta } from "../../lib/script.js";
 import { workflowToFlowchart } from "../../lib/workflow-mermaid.js";
 import { parseWorkflowYaml, stringifyWorkflowDoc } from "../../lib/workflow-doc.js";
 import { ScriptsTab } from "./ScriptsTab.jsx";
@@ -80,7 +81,27 @@ export function WorkflowVisualEditor({
     setTab(next);
   }
 
-  const defaultData = displayDoc?.extra?.data ?? {};
+  const scriptsByName = useMemo(() => {
+    const map = new Map();
+    for (const s of scripts) {
+      const name = typeof s === "string" ? s : s.name;
+      if (name) map.set(name, s);
+    }
+    return map;
+  }, [scripts]);
+
+  const inputMeta = useMemo(
+    () => firstInputMeta(displayDoc?.scripts, scriptsByName),
+    [displayDoc?.scripts, scriptsByName],
+  );
+
+  const defaultData = useMemo(() => {
+    const yamlData = displayDoc?.extra?.data;
+    return dataFromInputMeta(inputMeta, yamlData);
+  }, [displayDoc?.extra?.data, inputMeta]);
+
+  const inputFields = inputMeta?.input;
+
   let testDisabledReason = null;
   if (visualDisabled) testDisabledReason = "Fix YAML before running.";
   else if (unsaved) testDisabledReason = "Save the workflow before running. Test uses the saved YAML.";
@@ -181,9 +202,11 @@ export function WorkflowVisualEditor({
 
       {showTest && owner && file ? (
         <WorkflowTestPanel
+          key={`${owner}/${file}`}
           owner={owner}
           file={file}
           defaultData={defaultData}
+          inputFields={inputFields}
           disabled={Boolean(testDisabledReason)}
           disabledReason={testDisabledReason}
           open={testOpen}

@@ -7,6 +7,7 @@ import {
 import * as fsStore from "../../fs-store.js";
 import { createDryRunLogger, safeSerialize } from "./dry-run-logger.js";
 import { normalizeStepResult } from "../../step-result.js";
+import { resolveConfigRefs } from "../../config-refs.js";
 
 /**
  * @param {{ referencedScripts: () => Set<string> }} registry
@@ -123,16 +124,21 @@ export default function scriptsPluginFactory(registry) {
         body.context != null && typeof body.context === "object" && !Array.isArray(body.context)
           ? body.context
           : {};
-      const ctx = {
-        data: body.data ?? null,
-        context: incomingContext,
-        config: body.config ?? null,
-      };
 
       const { log, logs } = createDryRunLogger();
       const started = Date.now();
 
       try {
+        const config = await resolveConfigRefs(body.config ?? null, {
+          owner,
+          workflowKey: "dry-run",
+          context: incomingContext,
+        });
+        const ctx = {
+          data: body.data ?? null,
+          context: incomingContext,
+          config,
+        };
         const { fn, meta, metaError } = instantiateScriptSource(name, body.content, {
           log,
           workflowName: "dry-run",

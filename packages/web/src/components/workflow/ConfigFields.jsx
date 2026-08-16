@@ -6,6 +6,33 @@ import { FieldLabel } from "./FieldHelp.jsx";
 
 const MULTILINE_KEYS = new Set(["expression", "jsonata"]);
 
+const CONFIG_REF_PREFIXES = [
+  { prefix: "$SECRET_", label: "secret" },
+  { prefix: "$CONTEXT_", label: "context" },
+  { prefix: "$KV_", label: "KV" },
+];
+
+function describeConfigRef(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  for (const { prefix, label } of CONFIG_REF_PREFIXES) {
+    if (trimmed.startsWith(prefix) && trimmed.length > prefix.length) {
+      return { label, name: trimmed.slice(prefix.length) };
+    }
+  }
+  return null;
+}
+
+function ConfigRefHint({ value }) {
+  const ref = describeConfigRef(value);
+  if (!ref) return null;
+  return (
+    <p className="text-xs opacity-60">
+      from {ref.label} <span className="font-mono">{ref.name}</span>
+    </p>
+  );
+}
+
 function fieldSpec(meta, key) {
   const spec = meta?.config?.[key];
   if (spec && typeof spec === "object") return spec;
@@ -261,11 +288,14 @@ function ObjectFields({ value, onChange }) {
                 onChange={(nv) => setVal(k, nv)}
               />
             ) : (
-              <EditableText
-                value={v == null ? "" : String(v)}
-                onCommit={(nv) => setVal(k, nv)}
-                className="font-mono text-xs"
-              />
+              <div className="space-y-0.5">
+                <EditableText
+                  value={v == null ? "" : String(v)}
+                  onCommit={(nv) => setVal(k, nv)}
+                  className="font-mono text-xs"
+                />
+                <ConfigRefHint value={v} />
+              </div>
             )}
           </div>
           <button
@@ -395,6 +425,7 @@ export function ConfigFields({
               excludeFile={excludeFile}
               disabled={disabled}
             />
+            <ConfigRefHint value={cfg[key]} />
           </div>
         );
       })}
@@ -430,6 +461,7 @@ export function ConfigFields({
             excludeFile={excludeFile}
             disabled={disabled}
           />
+          <ConfigRefHint value={cfg[key]} />
         </div>
       ))}
       <button type="button" className="btn btn-ghost btn-xs" disabled={disabled} onClick={addExtra}>
