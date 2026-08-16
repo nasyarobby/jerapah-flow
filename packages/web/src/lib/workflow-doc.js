@@ -142,6 +142,8 @@ export function newHttpTrigger() {
     auth: null,
     response: "",
     unauthorized: null,
+    onConsecutiveFailures: "",
+    triggerWorkflow: "",
   };
 }
 
@@ -155,6 +157,8 @@ export function newCronTrigger() {
     auth: null,
     response: "",
     unauthorized: null,
+    onConsecutiveFailures: "",
+    triggerWorkflow: "",
   };
 }
 
@@ -168,6 +172,8 @@ export function newWorkflowTrigger() {
     auth: null,
     response: "",
     unauthorized: null,
+    onConsecutiveFailures: "",
+    triggerWorkflow: "",
   };
 }
 
@@ -252,9 +258,18 @@ function normalizeTrigger(raw) {
   if (String(type).toLowerCase() === "http") type = "HTTP";
   const known =
     type === "HTTP"
-      ? new Set(["type", "method", "path", "auth", "response", "unauthorized"])
+      ? new Set([
+          "type",
+          "method",
+          "path",
+          "auth",
+          "response",
+          "unauthorized",
+          "onConsecutiveFailures",
+          "triggerWorkflow",
+        ])
       : type === "cron"
-        ? new Set(["type", "schedule"])
+        ? new Set(["type", "schedule", "onConsecutiveFailures", "triggerWorkflow"])
         : new Set(["type"]);
   /** @type {Record<string, unknown>} */
   const extra = {};
@@ -267,6 +282,12 @@ function normalizeTrigger(raw) {
     method: typeof raw.method === "string" && raw.method ? raw.method : "POST",
     path: typeof raw.path === "string" ? raw.path : "",
     schedule: typeof raw.schedule === "string" ? raw.schedule : "",
+    onConsecutiveFailures:
+      raw.onConsecutiveFailures == null || raw.onConsecutiveFailures === ""
+        ? ""
+        : String(raw.onConsecutiveFailures),
+    triggerWorkflow:
+      typeof raw.triggerWorkflow === "string" ? raw.triggerWorkflow : "",
     auth: raw.auth ?? null,
     response: typeof raw.response === "string" ? raw.response : "",
     unauthorized: raw.unauthorized ?? null,
@@ -300,6 +321,18 @@ function dumpStep(step) {
   return out;
 }
 
+function dumpFailureTriggerFields(t, out) {
+  if (t.onConsecutiveFailures !== "" && t.onConsecutiveFailures != null) {
+    const threshold = Number(t.onConsecutiveFailures);
+    if (Number.isFinite(threshold) && threshold > 0) {
+      out.onConsecutiveFailures = Math.floor(threshold);
+    }
+  }
+  if (typeof t.triggerWorkflow === "string" && t.triggerWorkflow.trim()) {
+    out.triggerWorkflow = t.triggerWorkflow.trim();
+  }
+}
+
 function dumpTrigger(t) {
   const type = String(t?.type ?? "").toLowerCase() === "http" ? "HTTP" : t?.type;
   if (type === "HTTP") {
@@ -312,12 +345,14 @@ function dumpTrigger(t) {
     if (t.auth != null && t.auth !== false && t.auth !== "") out.auth = t.auth;
     if (t.response) out.response = t.response;
     if (t.unauthorized != null && t.unauthorized !== "") out.unauthorized = t.unauthorized;
+    dumpFailureTriggerFields(t, out);
     Object.assign(out, t.extra ?? {});
     return out;
   }
   if (type === "cron") {
     /** @type {Record<string, unknown>} */
     const out = { type: "cron", schedule: t.schedule || "" };
+    dumpFailureTriggerFields(t, out);
     Object.assign(out, t.extra ?? {});
     return out;
   }

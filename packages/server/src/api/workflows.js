@@ -10,6 +10,7 @@ import {
   authLabel,
   validateWorkflowHttpTriggers,
 } from "../../workflow-http-validate.js";
+import { validateWorkflowFailureTriggers } from "../../trigger-failure.js";
 import {
   duplicateWorkflowYaml,
   ensureWorkflowFilename,
@@ -26,6 +27,8 @@ function triggerSummary(owner, workflow) {
       method: isHttp ? String(t?.method ?? "POST").toUpperCase() : t?.method ?? null,
       path: isHttp && t?.path != null ? namespacedPath(owner, t.path) : t?.path ?? null,
       schedule: t?.schedule ?? null,
+      onConsecutiveFailures: t?.onConsecutiveFailures ?? null,
+      triggerWorkflow: t?.triggerWorkflow ?? null,
       auth: isHttp ? authLabel(t?.auth) : null,
     };
   });
@@ -197,6 +200,13 @@ export default function workflowsPluginFactory(registry) {
           error: err instanceof Error ? err.message : String(err),
         });
       }
+      try {
+        await validateWorkflowFailureTriggers(parsed);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
       const existed = fsStore.readWorkflowYaml(owner, file) != null;
       fsStore.writeWorkflowYaml(owner, file, body.content);
       const registered = fsStore.readRegisters(owner);
@@ -343,6 +353,13 @@ export default function workflowsPluginFactory(registry) {
       }
       try {
         await validateWorkflowHttpTriggers(parsed);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      try {
+        await validateWorkflowFailureTriggers(parsed);
       } catch (err) {
         return reply.code(err.statusCode ?? 400).send({
           error: err instanceof Error ? err.message : String(err),
