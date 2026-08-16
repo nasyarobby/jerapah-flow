@@ -323,7 +323,7 @@ export function createRegistry(server) {
       pruneTask.destroy();
       pruneTask = null;
     }
-    const days = Number(process.env.JERAPAH_FLOW_RETENTION_DAYS ?? process.env.SCRUNNER_RETENTION_DAYS ?? 30);
+    const days = Number(process.env.JFLOW_RETENTION_DAYS ?? 30);
     pruneTask = cron.schedule(
       "0 0 * * *",
       async () => {

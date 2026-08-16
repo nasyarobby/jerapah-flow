@@ -27,12 +27,11 @@ await migrate();
 enableLogPersistence();
 
 const jwtSecret =
-  process.env.JERAPAH_FLOW_JWT_SECRET ??
-  process.env.SCRUNNER_JWT_SECRET ??
-  (process.env.NODE_ENV === "production" ? "" : "scrunner-dev-secret");
+  process.env.JFLOW_JWT_SECRET ??
+  (process.env.NODE_ENV === "production" ? "" : "jflow-dev-secret");
 
 if (!jwtSecret) {
-  log.error("JERAPAH_FLOW_JWT_SECRET is required in production");
+  log.error("JFLOW_JWT_SECRET is required in production");
   process.exit(1);
 }
 
@@ -54,7 +53,7 @@ await server.register(jwt, {
   },
 });
 await server.register(cors, {
-  origin: process.env.JERAPAH_FLOW_CORS_ORIGIN ?? process.env.SCRUNNER_CORS_ORIGIN ?? "http://localhost:5173",
+  origin: process.env.JFLOW_CORS_ORIGIN ?? "http://localhost:5173",
   credentials: true,
 });
 

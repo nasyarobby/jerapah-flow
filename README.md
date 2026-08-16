@@ -61,12 +61,12 @@ Optional `script.meta.reads = "ctx"` documents expression hosts. `meta.input` / 
 
 | Variable | Default | Notes |
 |---|---|---|
-| `JERAPAH_FLOW_JWT_SECRET` | `scrunner-dev-secret` (dev only) | **Required in production**. `SCRUNNER_JWT_SECRET` is still accepted. |
-| `JERAPAH_FLOW_SECRETS_KEY` | `scrunner-dev-secrets-key` (dev only) | Master key for named secrets. **Required in production**. Changing it makes existing secrets unreadable. 64 hex chars are used as a raw AES-256 key; any other string is derived with scrypt. `SCRUNNER_SECRETS_KEY` is still accepted. |
-| `JERAPAH_FLOW_DB_PATH` | `packages/server/data/jerapah-flow.db` (or existing `scrunner.db`) | SQLite file. `SCRUNNER_DB_PATH` is still accepted. |
-| `JERAPAH_FLOW_LOG_LEVEL` | `debug` | Pino level |
-| `JERAPAH_FLOW_RETENTION_DAYS` | `30` | Run history prune |
-| `JERAPAH_FLOW_CORS_ORIGIN` | `http://localhost:5173` | Vite origin in dev |
+| `JFLOW_JWT_SECRET` | `jflow-dev-secret` (dev only) | **Required in production**. |
+| `JFLOW_SECRETS_KEY` | `jflow-dev-secrets-key` (dev only) | Master key for named secrets. **Required in production**. Changing it makes existing secrets unreadable. 64 hex chars are used as a raw AES-256 key; any other string is derived with scrypt. |
+| `JFLOW_DB_PATH` | `packages/server/data/jerapah-flow.db` | SQLite file. |
+| `JFLOW_LOG_LEVEL` | `debug` | Pino level |
+| `JFLOW_RETENTION_DAYS` | `30` | Run history prune |
+| `JFLOW_CORS_ORIGIN` | `http://localhost:5173` | Vite origin in dev |
 | `PORT` | `9000` | HTTP port |
 | `NODE_ENV` | — | Set `production` for secure cookies |
 
@@ -75,7 +75,7 @@ Optional `script.meta.reads = "ctx"` documents expression hosts. `meta.input` / 
 ```bash
 pnpm install
 pnpm build
-JERAPAH_FLOW_JWT_SECRET=... JERAPAH_FLOW_SECRETS_KEY=... NODE_ENV=production pnpm start
+JFLOW_JWT_SECRET=... JFLOW_SECRETS_KEY=... NODE_ENV=production pnpm start
 ```
 
 The server serves `packages/web/dist` when that folder exists.

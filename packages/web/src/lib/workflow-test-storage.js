@@ -1,4 +1,4 @@
-const PREFIX = "scrunner.workflowTestData:";
+const PREFIX = "jerapah-flow.workflowTestData:";
 
 export function workflowTestStorageKey(owner, file) {
   return `${PREFIX}${owner}/${file}`;

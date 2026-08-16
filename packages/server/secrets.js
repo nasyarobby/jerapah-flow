@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
 
-const DEV_DEFAULT = "scrunner-dev-secrets-key";
-const SCRYPT_SALT = Buffer.from("scrunner-secrets-v1");
+const DEV_DEFAULT = "jflow-dev-secrets-key";
+const SCRYPT_SALT = Buffer.from("jflow-secrets-v1");
 const KEY_LEN = 32;
 const IV_LEN = 12;
 const AUTH_TAG_LEN = 16;
@@ -11,11 +11,10 @@ const AUTH_TAG_LEN = 16;
  */
 export function resolveSecretsKeyMaterial() {
   const raw =
-    process.env.JERAPAH_FLOW_SECRETS_KEY ??
-    process.env.SCRUNNER_SECRETS_KEY ??
+    process.env.JFLOW_SECRETS_KEY ??
     (process.env.NODE_ENV === "production" ? "" : DEV_DEFAULT);
   if (!raw) {
-    throw new Error("JERAPAH_FLOW_SECRETS_KEY is required in production");
+    throw new Error("JFLOW_SECRETS_KEY is required in production");
   }
   return raw;
 }

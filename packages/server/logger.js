@@ -113,7 +113,7 @@ const rollingFile = pino.transport({
 });
 
 export const log = pino(
-  { level: process.env.JERAPAH_FLOW_LOG_LEVEL ?? process.env.SCRUNNER_LOG_LEVEL ?? "debug" },
+  { level: process.env.JFLOW_LOG_LEVEL ?? "debug" },
   pino.multistream([
     { level: "debug", stream: redactStream(process.stdout) },
     { level: "debug", stream: redactStream(rollingFile) },
