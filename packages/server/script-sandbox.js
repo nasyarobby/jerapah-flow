@@ -15,6 +15,8 @@ import { getVariablePlain } from "./variables-store.js";
 const hostRequire = createRequire(import.meta.url);
 
 const ALLOWED_MODULES = new Set([
+  "@aws-sdk/client-s3",
+  "@aws-sdk/s3-request-presigner",
   "axios",
   "jsonata",
   "mustache",

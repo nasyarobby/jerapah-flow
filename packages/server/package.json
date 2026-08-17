@@ -10,6 +10,8 @@
     "migrate": "node -e \"import('./db.js').then((m) => m.migrate().then(() => process.exit(0)))\""
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1111.0",
+    "@aws-sdk/s3-request-presigner": "^3.1111.0",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.1.0",
     "@fastify/jwt": "^9.1.0",
