@@ -12,6 +12,7 @@ import { WorkflowsPage } from "./pages/WorkflowsPage.jsx";
 import { WorkflowEditPage, WorkflowNewPage } from "./pages/WorkflowEditPage.jsx";
 import { EventsPage } from "./pages/EventsPage.jsx";
 import { EventDetailPage } from "./pages/EventDetailPage.jsx";
+import { FailuresPage } from "./pages/FailuresPage.jsx";
 import { KvPage } from "./pages/KvPage.jsx";
 import { AuthProfilesPage } from "./pages/AuthProfilesPage.jsx";
 import { ResponsesPage } from "./pages/ResponsesPage.jsx";
@@ -61,6 +62,7 @@ export function App() {
         <Route path="/workflows/:owner/:file/edit" element={<WorkflowEditPage />} />
         <Route path="/events" element={<EventsPage />} />
         <Route path="/events/:id" element={<EventDetailPage />} />
+        <Route path="/failures" element={<FailuresPage />} />
         <Route path="/kv" element={<KvPage />} />
         <Route path="/variables" element={<VariablesPage />} />
         <Route path="/auth" element={<AuthProfilesPage />} />

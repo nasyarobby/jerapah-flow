@@ -278,6 +278,98 @@ export async function countConsecutiveFailures(workflow, triggerType, triggerDet
   return count;
 }
 
+const CONSECUTIVE_FAILURE_WINDOW = 5000;
+const STREAK_LAST_RUN_FIELDS = [
+  "id",
+  "owner",
+  "workflow",
+  "workflow_name",
+  "trigger_type",
+  "trigger_detail",
+  "status",
+  "started_at",
+  "finished_at",
+  "duration_ms",
+  "error",
+];
+
+/**
+ * Workflow+trigger groups currently in a trailing failure streak.
+ *
+ * @param {{
+ *   minCount?: number,
+ *   limit?: number,
+ * }} [opts]
+ * @returns {Promise<{
+ *   items: Array<{
+ *     consecutiveFailures: number,
+ *     workflow: string,
+ *     workflow_name: string | null,
+ *     owner: string,
+ *     trigger_type: string,
+ *     trigger_detail: string | null,
+ *     lastRun: {
+ *       id: string,
+ *       owner: string,
+ *       workflow: string,
+ *       workflow_name: string | null,
+ *       trigger_type: string,
+ *       trigger_detail: string | null,
+ *       status: string,
+ *       started_at: string,
+ *       finished_at: string | null,
+ *       duration_ms: number | null,
+ *       error: string | null,
+ *     },
+ *   }>,
+ *   total: number,
+ * }>}
+ */
+export async function listConsecutiveFailureStreaks(opts = {}) {
+  const minCount = Math.max(opts.minCount ?? 4, 1);
+  const limit = Math.min(Math.max(opts.limit ?? 100, 1), 200);
+
+  const rows = await db("workflow_runs")
+    .select(STREAK_LAST_RUN_FIELDS)
+    .whereIn("status", ["success", "failed"])
+    .orderBy("started_at", "desc")
+    .limit(CONSECUTIVE_FAILURE_WINDOW);
+
+  /** @type {Map<string, { count: number, done: boolean, lastRun: (typeof rows)[number] }>} */
+  const groups = new Map();
+  for (const row of rows) {
+    const key = `${row.workflow}\0${row.trigger_type}\0${row.trigger_detail ?? ""}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { count: 0, done: false, lastRun: row };
+      groups.set(key, group);
+    }
+    if (group.done) continue;
+    if (row.status === "failed") group.count += 1;
+    else group.done = true;
+  }
+
+  const streaks = [...groups.values()]
+    .filter((g) => g.lastRun.status === "failed" && g.count >= minCount)
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return String(b.lastRun.started_at).localeCompare(String(a.lastRun.started_at));
+    });
+
+  return {
+    total: streaks.length,
+    items: streaks.slice(0, limit).map((g) => ({
+      consecutiveFailures: g.count,
+      workflow: g.lastRun.workflow,
+      workflow_name: g.lastRun.workflow_name,
+      owner: g.lastRun.owner,
+      trigger_type: g.lastRun.trigger_type,
+      trigger_detail: g.lastRun.trigger_detail,
+      lastRun: g.lastRun,
+    })),
+  };
+}
+
 /**
  * @returns {Promise<Record<string, { invocationCount: number, lastInvokedAt: string | null, lastStatus: string | null }>>}
  */

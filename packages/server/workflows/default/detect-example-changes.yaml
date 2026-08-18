@@ -20,3 +20,4 @@ triggers:
     schedule: "* * * * *"
     onConsecutiveFailures: 3
     onFailureWorkflow: dev-zte-sms
+enabled: false
