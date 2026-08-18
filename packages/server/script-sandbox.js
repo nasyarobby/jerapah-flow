@@ -21,6 +21,7 @@ const ALLOWED_MODULES = new Set([
   "node-html-parser",
   "nodemailer",
   "rss-parser",
+  "webdav",
 ]);
 
 const BUILTIN_NAMES = [
