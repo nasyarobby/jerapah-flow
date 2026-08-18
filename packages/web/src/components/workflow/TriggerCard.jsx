@@ -3,7 +3,7 @@ import { LuChevronDown, LuCopy, LuGripVertical, LuTrash2 } from "react-icons/lu"
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import cronstrue from "cronstrue";
-import { namespacedPath, HTTP_METHODS } from "../../lib/workflow-doc.js";
+import { namespacedPath, HTTP_METHODS, triggerDestinations } from "../../lib/workflow-doc.js";
 import { CRON_CUSTOM, CRON_PRESETS, matchCronPreset, scheduleForPreset } from "../../lib/cron-presets.js";
 
 export function TriggerCard({
@@ -15,6 +15,8 @@ export function TriggerCard({
   disabled,
   auths = [],
   pages = [],
+  workflows = [],
+  excludeFile,
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: trigger.uiId,
@@ -27,6 +29,7 @@ export function TriggerCard({
   };
   const type = trigger.type;
   const [expanded, setExpanded] = useState(false);
+  const alertDestinations = triggerDestinations(workflows, { owner, excludeFile });
 
   return (
     <article
@@ -85,10 +88,16 @@ export function TriggerCard({
                 onChange={onChange}
                 auths={auths}
                 pages={pages}
+                alertDestinations={alertDestinations}
               />
             ) : null}
             {type === "cron" ? (
-              <CronFields trigger={trigger} disabled={disabled} onChange={onChange} />
+              <CronFields
+                trigger={trigger}
+                disabled={disabled}
+                onChange={onChange}
+                alertDestinations={alertDestinations}
+              />
             ) : null}
             {type === "workflow" ? (
               <p className="text-sm opacity-80">
@@ -111,7 +120,13 @@ function triggerSummary(trigger, owner) {
   if (type === "HTTP") {
     return `${trigger.method || "POST"} ${namespacedPath(owner || "owner", trigger.path || "/")}`;
   }
-  if (type === "cron") return trigger.schedule || "";
+  if (type === "cron") {
+    const extra =
+      trigger.onConsecutiveFailures && trigger.triggerWorkflow
+        ? ` · alert@${trigger.triggerWorkflow}`
+        : "";
+    return `${trigger.schedule || ""}${extra}`;
+  }
   if (type === "workflow") return "callable";
   return "";
 }
@@ -123,7 +138,7 @@ function typeLabel(type) {
   return type || "Trigger";
 }
 
-function HttpFields({ trigger, owner, disabled, onChange, auths, pages }) {
+function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDestinations }) {
   const path = trigger.path || "/";
   const url = namespacedPath(owner || "owner", path);
   const authIsInline = trigger.auth != null && typeof trigger.auth === "object";
@@ -218,11 +233,17 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages }) {
           ) : null}
         </select>
       </label>
+      <FailureAlertFields
+        trigger={trigger}
+        disabled={disabled}
+        onChange={onChange}
+        alertDestinations={alertDestinations}
+      />
     </div>
   );
 }
 
-function CronFields({ trigger, disabled, onChange }) {
+function CronFields({ trigger, disabled, onChange, alertDestinations }) {
   const preset = matchCronPreset(trigger.schedule);
   let human = "";
   try {
@@ -268,6 +289,62 @@ function CronFields({ trigger, disabled, onChange }) {
       <p className="text-xs opacity-60">
         Cron runs use this workflow&apos;s top-level <span className="font-mono">data</span> as the payload.
         Set it in YAML or the Test panel prefill.
+      </p>
+      <FailureAlertFields
+        trigger={trigger}
+        disabled={disabled}
+        onChange={onChange}
+        alertDestinations={alertDestinations}
+      />
+    </div>
+  );
+}
+
+function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) {
+  return (
+    <div className="space-y-2 border-t border-base-300 pt-3">
+      <p className="text-xs font-medium opacity-80">Failure alert</p>
+      <label className="form-control">
+        <span className="label py-0 text-sm">Consecutive failures</span>
+        <input
+          className="input input-sm"
+          type="number"
+          min="1"
+          step="1"
+          value={trigger.onConsecutiveFailures ?? ""}
+          disabled={disabled}
+          onChange={(e) =>
+            onChange({ ...trigger, onConsecutiveFailures: e.target.value })
+          }
+          placeholder="e.g. 3"
+        />
+      </label>
+      <label className="form-control">
+        <span className="label py-0 text-sm">Trigger workflow</span>
+        <select
+          className="select select-sm"
+          value={trigger.triggerWorkflow ?? ""}
+          disabled={disabled}
+          onChange={(e) => onChange({ ...trigger, triggerWorkflow: e.target.value })}
+        >
+          <option value="">None</option>
+          {alertDestinations.map((w) => (
+            <option key={`${w.owner}/${w.file}`} value={w.name ?? w.file}>
+              {w.name ?? w.file}
+            </option>
+          ))}
+          {trigger.triggerWorkflow &&
+          !alertDestinations.some(
+            (w) => (w.name ?? w.file) === trigger.triggerWorkflow,
+          ) ? (
+            <option value={trigger.triggerWorkflow}>{trigger.triggerWorkflow}</option>
+          ) : null}
+        </select>
+      </label>
+      <p className="text-xs opacity-60">
+        After this many sequential failed runs for this trigger, JerapahFlow starts the
+        selected workflow (it must declare a <span className="font-mono">workflow</span>{" "}
+        trigger).
       </p>
     </div>
   );

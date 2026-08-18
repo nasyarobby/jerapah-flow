@@ -31,6 +31,10 @@ import {
   sendSuccessPage,
 } from "./http-trigger-auth.js";
 import { resolveConfigRefs } from "./config-refs.js";
+import {
+  buildFailureAlertData,
+  resolveFailureTriggerConfig,
+} from "./trigger-failure.js";
 
 /**
  * @typedef {{ owner: string, file: string, workflow: any }} WorkflowEntry
@@ -635,6 +639,76 @@ export function createRegistry(server) {
   }
 
   /**
+   * @param {{
+   *   key: string,
+   *   owner: string,
+   *   workflow: Record<string, unknown>,
+   *   runId: string,
+   *   trigger: { type: string, detail?: string | null },
+   *   error: string,
+   *   depth: number,
+   * }} opts
+   */
+  async function maybeTriggerFailureWorkflow(opts) {
+    const failureConfig = resolveFailureTriggerConfig(
+      opts.workflow,
+      opts.owner,
+      opts.trigger,
+    );
+    if (!failureConfig) return;
+
+    const consecutiveFailures = await store.countConsecutiveFailures(
+      opts.key,
+      opts.trigger.type,
+      opts.trigger.detail,
+    );
+    if (consecutiveFailures !== failureConfig.threshold) {
+      log.debug(
+        {
+          workflow: opts.key,
+          consecutiveFailures,
+          threshold: failureConfig.threshold,
+        },
+        "failure alert threshold not reached",
+      );
+      return;
+    }
+
+    const destKey = resolveWorkflowTriggerKey(opts.owner, failureConfig.workflowName);
+    const alertData = buildFailureAlertData({
+      sourceKey: opts.key,
+      sourceName:
+        typeof opts.workflow.name === "string" ? opts.workflow.name : null,
+      owner: opts.owner,
+      trigger: opts.trigger,
+      consecutiveFailures,
+      runId: opts.runId,
+      error: opts.error,
+    });
+
+    log.warn(
+      {
+        workflow: opts.key,
+        consecutiveFailures,
+        triggerWorkflow: failureConfig.workflowName,
+        destination: destKey,
+      },
+      "triggering failure alert workflow",
+    );
+
+    await runWorkflow(
+      destKey,
+      { data: alertData },
+      { type: "workflow", detail: `failure:${opts.key}` },
+      {
+        parentRunId: opts.runId,
+        depth: opts.depth + 1,
+        detach: true,
+      },
+    );
+  }
+
+  /**
    * @param {string} key
    * @param {{ data?: unknown, context?: unknown }} context
    * @param {{ type: string, detail?: string | null }} trigger
@@ -705,11 +779,25 @@ export function createRegistry(server) {
         return { runId: run.id, status: "success", result: storedEnvelope(ctx) };
       } catch (err) {
         runLog.error({ err }, "workflow failed");
+        const error = err instanceof Error ? err.message : String(err);
         await store.finishRun(run.id, "failed", null, err);
+        try {
+          await maybeTriggerFailureWorkflow({
+            key,
+            owner,
+            workflow,
+            runId: run.id,
+            trigger,
+            error,
+            depth,
+          });
+        } catch (alertErr) {
+          runLog.error({ err: alertErr }, "failed to trigger failure alert workflow");
+        }
         return {
           runId: run.id,
           status: "failed",
-          error: err instanceof Error ? err.message : String(err),
+          error,
         };
       }
     };

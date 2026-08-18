@@ -188,6 +188,8 @@ export function WorkflowVisualEditor({
           owner={owner}
           auths={auths}
           pages={pages}
+          workflows={workflows}
+          excludeFile={file}
         />
       ) : null}
       {tab === "yaml" ? (

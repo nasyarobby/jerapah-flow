@@ -251,6 +251,34 @@ export async function pruneOlderThan(days) {
 }
 
 /**
+ * @param {string} workflow
+ * @param {string} triggerType
+ * @param {string | null | undefined} triggerDetail
+ */
+export async function countConsecutiveFailures(workflow, triggerType, triggerDetail) {
+  let q = db("workflow_runs")
+    .select("status")
+    .where({ workflow, trigger_type: triggerType })
+    .whereIn("status", ["success", "failed"])
+    .orderBy("started_at", "desc")
+    .limit(100);
+
+  if (triggerDetail == null || triggerDetail === "") {
+    q = q.whereNull("trigger_detail");
+  } else {
+    q = q.where("trigger_detail", triggerDetail);
+  }
+
+  const rows = await q;
+  let count = 0;
+  for (const row of rows) {
+    if (row.status === "failed") count += 1;
+    else break;
+  }
+  return count;
+}
+
+/**
  * @returns {Promise<Record<string, { invocationCount: number, lastInvokedAt: string | null, lastStatus: string | null }>>}
  */
 export async function workflowStats() {

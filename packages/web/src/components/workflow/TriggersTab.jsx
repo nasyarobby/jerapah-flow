@@ -24,6 +24,8 @@ export function TriggersTab({
   owner,
   auths = [],
   pages = [],
+  workflows = [],
+  excludeFile,
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const sensors = useSensors(
@@ -77,6 +79,8 @@ export function TriggersTab({
                   owner={owner}
                   auths={auths}
                   pages={pages}
+                  workflows={workflows}
+                  excludeFile={excludeFile}
                   disabled={disabled}
                   onChange={(next) => {
                     const copy = [...triggers];
