@@ -26,6 +26,7 @@ const ALLOWED_MODULES = new Set([
   "nodemailer",
   "rss-parser",
   "ssh2-sftp-client",
+  "webdav",
 ]);
 
 const BUILTIN_NAMES = [
