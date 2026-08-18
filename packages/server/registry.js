@@ -690,7 +690,7 @@ export function createRegistry(server) {
       {
         workflow: opts.key,
         consecutiveFailures,
-        triggerWorkflow: failureConfig.workflowName,
+        onFailureWorkflow: failureConfig.workflowName,
         destination: destKey,
       },
       "triggering failure alert workflow",

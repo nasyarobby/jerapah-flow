@@ -8,7 +8,7 @@ scripts:
     config:
       url: https://example.com/
       outputVar: message
-      transform: >
+      transform: |
         data.hasChanges
           ? "example.com changed (fingerprint " & data.fingerprint & ")"
           : "example.com unchanged since " & data.fingerprintAt
@@ -16,3 +16,7 @@ triggers:
   - type: HTTP
     method: POST
     path: /detect-example
+  - type: cron
+    schedule: "* * * * *"
+    onConsecutiveFailures: 3
+    onFailureWorkflow: dev-zte-sms
