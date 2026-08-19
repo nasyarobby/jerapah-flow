@@ -1,4 +1,5 @@
 import pino from "pino";
+import { isBinary, summarizeBinary } from "../../json-preview.js";
 import { redactString } from "../../secret-value.js";
 
 const LEVEL_TO_NUM = {
@@ -64,7 +65,9 @@ export function safeSerialize(value) {
   try {
     return JSON.parse(
       redactString(
-        JSON.stringify(value, (_key, v) => {
+        JSON.stringify(value, function (key, v) {
+          const raw = this[key];
+          if (isBinary(raw)) return summarizeBinary(raw);
           if (typeof v === "bigint") return v.toString();
           if (typeof v === "object" && v !== null) {
             if (seen.has(v)) return "[Circular]";

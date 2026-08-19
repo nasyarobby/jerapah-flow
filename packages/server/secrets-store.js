@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "./db.js";
 import { assertOwner } from "./fs-store.js";
 import { decryptSecret, encryptSecret } from "./secrets.js";
-import { MIN_SECRET_LENGTH, registerPlaintext } from "./secret-value.js";
+import { registerPlaintext } from "./secret-value.js";
 
 const MAX_NAME_LENGTH = 128;
 const SECRET_NAME_RE = /^[A-Za-z0-9._-]+$/;
@@ -68,8 +68,8 @@ export async function getSecretById(id) {
  * @param {{ owner: string, name: string, value: string }} opts
  */
 export async function upsertSecret({ owner, name, value }) {
-  if (typeof value !== "string" || value.length < MIN_SECRET_LENGTH) {
-    const err = new Error(`value must be at least ${MIN_SECRET_LENGTH} characters`);
+  if (typeof value !== "string" || value.length === 0) {
+    const err = new Error("value is required");
     err.statusCode = 400;
     throw err;
   }

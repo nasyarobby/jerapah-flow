@@ -6,7 +6,6 @@ import {
   listSecrets,
   upsertSecret,
 } from "../../secrets-store.js";
-import { MIN_SECRET_LENGTH } from "../../secret-value.js";
 
 /**
  * @param {import("fastify").FastifyInstance} fastify
@@ -37,10 +36,8 @@ export default async function secretsPlugin(fastify) {
     }
 
     const value = String(body.value ?? "");
-    if (value.length < MIN_SECRET_LENGTH) {
-      return reply
-        .code(400)
-        .send({ error: `value must be at least ${MIN_SECRET_LENGTH} characters` });
+    if (value.length === 0) {
+      return reply.code(400).send({ error: "value is required" });
     }
 
     try {

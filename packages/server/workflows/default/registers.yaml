@@ -10,3 +10,4 @@ scripts:
   - test-send-gmail.yaml
   - track.yaml
   - rss-devto-to-ntfy.yaml
+  - test-minio.yaml

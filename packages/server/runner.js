@@ -174,7 +174,7 @@ async function shutdown() {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-const port = Number(process.env.PORT ?? 9000);
+const port = Number(process.env.PORT ?? 8700);
 
 server
   .listen({
