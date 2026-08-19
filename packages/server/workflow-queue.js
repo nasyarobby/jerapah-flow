@@ -13,6 +13,28 @@ export function getRedisUrl() {
   return process.env.REDIS_URL || DEFAULT_REDIS_URL;
 }
 
+/**
+ * Optional Redis AUTH password. Applied even when REDIS_URL has no embedded credentials.
+ * @returns {string | undefined}
+ */
+export function getRedisPassword() {
+  const pass = process.env.REDIS_PASS;
+  if (typeof pass !== "string" || pass.length === 0) return undefined;
+  return pass;
+}
+
+/** Redact credentials for logs. */
+export function getRedisUrlForLog() {
+  try {
+    const url = new URL(getRedisUrl());
+    if (url.password || getRedisPassword()) url.password = "***";
+    if (url.username) url.username = url.username ? "***" : "";
+    return url.toString();
+  } catch {
+    return getRedisUrl();
+  }
+}
+
 export function getQueueName() {
   return process.env.JFLOW_QUEUE_NAME || DEFAULT_QUEUE_NAME;
 }
@@ -29,10 +51,15 @@ export function getWorkerConcurrency() {
  */
 export function getSharedConnection() {
   if (sharedConnection) return sharedConnection;
-  sharedConnection = new IORedis(getRedisUrl(), {
+  /** @type {import("ioredis").RedisOptions} */
+  const options = {
     maxRetriesPerRequest: null,
     enableReadyCheck: true,
-  });
+  };
+  const password = getRedisPassword();
+  if (password) options.password = password;
+
+  sharedConnection = new IORedis(getRedisUrl(), options);
   sharedConnection.on("error", (err) => {
     log.error({ err }, "redis connection error");
   });

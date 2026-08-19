@@ -65,9 +65,10 @@ Optional `script.meta.reads = "ctx"` documents expression hosts. `meta.input` / 
 | `JFLOW_SECRETS_KEY` | `jflow-dev-secrets-key` (dev only) | Master key for named secrets. **Required in production**. Changing it makes existing secrets unreadable. 64 hex chars are used as a raw AES-256 key; any other string is derived with scrypt. |
 | `JFLOW_DB_PATH` | `packages/server/data/jerapah-flow.db` | SQLite file. |
 | `REDIS_URL` | `redis://127.0.0.1:6379` | Redis for BullMQ workflow queue. **Required** — the server will not start if Redis is unreachable. |
+| `REDIS_PASS` | — | Optional Redis AUTH password (sent via ioredis `password`). Prefer this over embedding credentials in `REDIS_URL` so logs stay clean. |
 | `JFLOW_QUEUE_NAME` | `jerapah-workflows` | BullMQ queue name. |
 | `JFLOW_WORKER_CONCURRENCY` | `5` | Max parallel workflow jobs per worker process. |
-| `JFLOW_ROLE` | `all` | `all` (API + cron producer + worker), `api` (HTTP/admin/cron enqueue only), or `worker` (consume queue only). |
+| `JFLOW_ROLE` | `all` | Which duties this process performs: `all` (HTTP/admin + cron producer + worker), `api` (HTTP/admin + cron enqueue only), or `worker` (consume queue only). Use separate processes in production when you want to scale workers independently. |
 | `JFLOW_LOG_LEVEL` | `debug` | Pino level |
 | `JFLOW_RETENTION_DAYS` | `30` | Run history prune |
 | `JFLOW_CORS_ORIGIN` | `http://localhost:5173` | Vite origin in dev |
@@ -81,8 +82,8 @@ Workflow runs are **queued** via BullMQ. HTTP and manual triggers return `202 { 
 ```bash
 pnpm install
 pnpm build
-# Redis must be reachable at REDIS_URL
-JFLOW_JWT_SECRET=... JFLOW_SECRETS_KEY=... REDIS_URL=redis://127.0.0.1:6379 NODE_ENV=production pnpm start
+# Redis must be reachable at REDIS_URL (set REDIS_PASS if Redis requires AUTH)
+JFLOW_JWT_SECRET=... JFLOW_SECRETS_KEY=... REDIS_URL=redis://127.0.0.1:6379 REDIS_PASS=... NODE_ENV=production pnpm start
 ```
 
 The server serves `packages/web/dist` when that folder exists.

@@ -26,7 +26,7 @@ import {
   closeRedis,
   createWorkflowQueue,
   createWorkflowWorker,
-  getRedisUrl,
+  getRedisUrlForLog,
 } from "./workflow-queue.js";
 
 await migrate();
@@ -52,13 +52,13 @@ const role = (process.env.JFLOW_ROLE || "all").toLowerCase();
 const runApi = role === "all" || role === "api";
 const runWorker = role === "all" || role === "worker";
 
-log.info({ redis: getRedisUrl(), role }, "starting jerapah-flow");
+log.info({ redis: getRedisUrlForLog(), role }, "starting jerapah-flow");
 
 const workflowQueue = createWorkflowQueue();
 try {
   await workflowQueue.waitUntilReady();
 } catch (err) {
-  log.error({ err, redis: getRedisUrl() }, "failed to connect to Redis");
+  log.error({ err, redis: getRedisUrlForLog() }, "failed to connect to Redis");
   process.exit(1);
 }
 
