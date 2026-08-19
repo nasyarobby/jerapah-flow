@@ -16,6 +16,20 @@ import {
   ensureWorkflowFilename,
   suggestCopyFilename,
 } from "../../workflow-duplicate.js";
+import { publishReload } from "../../control-bus.js";
+
+/**
+ * Reload this process and notify other HTTP/worker processes via Redis.
+ * @param {{ reregister: () => void }} registry
+ */
+async function reregisterAll(registry) {
+  registry.reregister();
+  try {
+    await publishReload({ type: "workflows" });
+  } catch {
+    // Redis may be briefly unavailable; local reload already applied.
+  }
+}
 
 function triggerSummary(owner, workflow) {
   if (!workflow || typeof workflow !== "object") return [];
@@ -214,7 +228,7 @@ export default function workflowsPluginFactory(registry) {
         registered.push(file);
         fsStore.writeRegisters(owner, registered);
       }
-      registry.reregister();
+      await reregisterAll(registry);
       return reply.code(existed ? 200 : 201).send({ owner, file });
     });
 
@@ -251,7 +265,7 @@ export default function workflowsPluginFactory(registry) {
         doc.set("enabled", false);
       }
       fsStore.writeWorkflowYaml(owner, file, String(doc));
-      registry.reregister();
+      await reregisterAll(registry);
       return { owner, file, enabled: body.enabled };
     });
 
@@ -270,7 +284,7 @@ export default function workflowsPluginFactory(registry) {
       }
       const registered = fsStore.readRegisters(owner).filter((f) => f !== file);
       fsStore.writeRegisters(owner, registered);
-      registry.reregister();
+      await reregisterAll(registry);
       return { ok: true };
     });
 
@@ -372,7 +386,7 @@ export default function workflowsPluginFactory(registry) {
         registered.push(destFile);
         fsStore.writeRegisters(destOwner, registered);
       }
-      registry.reregister();
+      await reregisterAll(registry);
       return reply.code(201).send({ owner: destOwner, file: destFile });
     });
 
@@ -394,9 +408,9 @@ export default function workflowsPluginFactory(registry) {
       if (!registered.includes(file)) {
         registered.push(file);
         fsStore.writeRegisters(owner, registered);
-        registry.reregister();
+        await reregisterAll(registry);
       } else if (!registry.workflows.has(key) && !registry.loadErrors.has(key)) {
-        registry.reregister();
+        await reregisterAll(registry);
       }
       if (!registry.workflows.has(key)) {
         return reply.code(404).send({
@@ -424,7 +438,7 @@ export default function workflowsPluginFactory(registry) {
     });
 
     fastify.post("/workflows/reregister", async () => {
-      registry.reregister();
+      await reregisterAll(registry);
       return { message: "Workflows refreshed" };
     });
   };

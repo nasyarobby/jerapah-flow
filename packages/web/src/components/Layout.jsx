@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   LuActivity,
   LuCode,
@@ -10,12 +10,13 @@ import {
   LuLogOut,
   LuMenu,
   LuMoon,
+  LuServer,
   LuShield,
   LuSun,
   LuTags,
   LuUsers,
 } from "react-icons/lu";
-import { useLogout } from "../api/hooks.js";
+import { useLogout, useOpsStatus } from "../api/hooks.js";
 import { brandMark } from "../theme/brand.js";
 import { useTheme } from "../theme.jsx";
 
@@ -34,6 +35,8 @@ export function Layout({ user, children }) {
   const { theme, toggle } = useTheme();
   const logout = useLogout();
   const navigate = useNavigate();
+  const ops = useOpsStatus(user.role === "admin");
+  const restartNeeded = Boolean(ops.data?.desired?.restartNeeded);
 
   const navItems = [
     ...links,
@@ -41,6 +44,7 @@ export function Layout({ user, children }) {
       ? [
           { to: "/secrets", label: "Secrets", icon: LuKey },
           { to: "/users", label: "Users", icon: LuUsers },
+          { to: "/ops", label: "Ops", icon: LuServer },
         ]
       : []),
   ];
@@ -88,7 +92,24 @@ export function Layout({ user, children }) {
             </button>
           </div>
         </div>
-        <main className="flex-1 p-4">{children}</main>
+        <main className="flex-1 p-4">
+          {restartNeeded ? (
+            <div className="alert alert-warning mb-4 text-sm">
+              <span>
+                Config generation changed
+                {ops.data?.desired?.restartReason
+                  ? ` (${ops.data.desired.restartReason})`
+                  : ""}
+                .{" "}
+                <Link to="/ops" className="link font-medium">
+                  Drain restart from Ops
+                </Link>{" "}
+                to apply on HTTP + workers.
+              </span>
+            </div>
+          ) : null}
+          {children}
+        </main>
       </div>
       <div className="drawer-side z-20">
         <label htmlFor="nav-drawer" aria-label="Close menu" className="drawer-overlay" />

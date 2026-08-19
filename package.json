@@ -6,10 +6,14 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @jerapah-flow/server --filter @jerapah-flow/web --parallel dev",
+    "dev:pm2": "pnpm --filter @jerapah-flow/server dev:pm2",
     "dev:server": "pnpm --filter @jerapah-flow/server dev",
     "dev:web": "pnpm --filter @jerapah-flow/web dev",
     "build": "pnpm --filter @jerapah-flow/web build",
     "start": "pnpm --filter @jerapah-flow/server start",
+    "start:api": "pnpm --filter @jerapah-flow/server start:api",
+    "start:worker": "pnpm --filter @jerapah-flow/server start:worker",
+    "start:control": "pnpm --filter @jerapah-flow/server start:control",
     "migrate": "pnpm --filter @jerapah-flow/server migrate"
   },
   "packageManager": "pnpm@10.25.0",
