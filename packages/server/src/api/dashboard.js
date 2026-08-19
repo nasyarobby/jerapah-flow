@@ -63,8 +63,8 @@ export default function dashboardPluginFactory(registry) {
         }
       }
 
-      const [running, failed, recent] = await Promise.all([
-        store.listRuns({ status: "running", limit: 10 }),
+      const [active, failed, recent] = await Promise.all([
+        store.listRuns({ status: ["queued", "running"], limit: 10 }),
         store.listRuns({ status: "failed", limit: 20 }),
         store.listRuns({ limit: 10 }),
       ]);
@@ -74,7 +74,7 @@ export default function dashboardPluginFactory(registry) {
         scriptCount: fsStore.listScriptFiles().length,
         enabledCount,
         brokenCount,
-        running,
+        running: active,
         needsAttention: {
           failed,
           brokenWorkflows,

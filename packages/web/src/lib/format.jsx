@@ -13,9 +13,11 @@ export function StatusBadge({ status }) {
         ? "badge-error"
         : status === "running"
           ? "badge-warning"
-          : status === "skipped"
+          : status === "queued"
             ? "badge-info"
-            : "badge-ghost";
+            : status === "skipped"
+              ? "badge-ghost"
+              : "badge-ghost";
   return <span className={`badge badge-sm ${cls}`}>{status ?? "—"}</span>;
 }
 
@@ -51,6 +53,12 @@ export function WorkflowStatusBadge({ workflow }) {
     badges.push(
       <span key="failed" className="badge badge-error badge-sm">
         failed
+      </span>,
+    );
+  } else if (workflow.lastStatus === "queued") {
+    badges.push(
+      <span key="queued" className="badge badge-info badge-sm">
+        queued
       </span>,
     );
   } else if (workflow.lastStatus === "running") {

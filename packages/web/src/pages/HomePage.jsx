@@ -43,7 +43,7 @@ export function HomePage() {
           <div className="stat-figure text-warning">
             <LuActivity className="size-7" />
           </div>
-          <div className="stat-title">Running</div>
+          <div className="stat-title">Active</div>
           <div className="stat-value text-2xl">{data.running?.length ?? 0}</div>
         </div>
         <div className="stat">
@@ -58,7 +58,7 @@ export function HomePage() {
       </div>
 
       <section>
-        <h2 className="text-lg font-semibold mb-2">Running</h2>
+        <h2 className="text-lg font-semibold mb-2">Queued / running</h2>
         <RunList runs={data.running} empty="None" />
       </section>
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { LuMaximize2, LuMinimize2, LuPlay } from "react-icons/lu";
-import { errorMessage } from "../../api/client.js";
+import { api, errorMessage } from "../../api/client.js";
 import { useRunWorkflow } from "../../api/hooks.js";
 import { CodeEditor } from "../CodeEditor.jsx";
 import { StatusBadge } from "../../lib/format.jsx";
@@ -14,9 +14,23 @@ import {
 import { SchemaTooltip } from "./FieldHelp.jsx";
 
 const SAVE_DEBOUNCE_MS = 300;
+const POLL_MS = 1500;
 
 function initialDataJson(owner, file, defaultData) {
   return prettyJson(overlayWorkflowTestData(defaultData, readWorkflowTestData(owner, file)));
+}
+
+function isTerminalStatus(status) {
+  return status === "success" || status === "failed";
+}
+
+async function waitForRun(runId, { signal } = {}) {
+  while (!signal?.aborted) {
+    const run = (await api.get(`/runs/${encodeURIComponent(runId)}`)).data;
+    if (isTerminalStatus(run.status)) return run;
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  }
+  throw new Error("polling aborted");
 }
 
 export function WorkflowTestPanel({
@@ -34,8 +48,10 @@ export function WorkflowTestPanel({
   const [inputTouched, setInputTouched] = useState(() => readWorkflowTestData(owner, file) != null);
   const [parseError, setParseError] = useState(null);
   const [last, setLast] = useState(null);
+  const [polling, setPolling] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const saveTimer = useRef(null);
+  const pollAbort = useRef(null);
 
   const seedJson = prettyJson(
     overlayWorkflowTestData(defaultData, readWorkflowTestData(owner, file)),
@@ -44,6 +60,7 @@ export function WorkflowTestPanel({
   useEffect(() => {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
+      pollAbort.current?.abort();
     };
   }, []);
 
@@ -79,16 +96,42 @@ export function WorkflowTestPanel({
       return;
     }
     persist(data);
+    pollAbort.current?.abort();
+    const controller = new AbortController();
+    pollAbort.current = controller;
+
     run.mutate(
       { owner, file, data },
       {
-        onSuccess: (res) => {
+        onSuccess: async (res) => {
+          const runId = res.runId ?? null;
           setLast({
-            status: res.status ?? "success",
-            runId: res.runId ?? null,
-            result: res.result,
+            status: res.status ?? "queued",
+            runId,
+            result: null,
             error: null,
           });
+          if (!runId) return;
+          setPolling(true);
+          try {
+            const finished = await waitForRun(runId, { signal: controller.signal });
+            setLast({
+              status: finished.status,
+              runId,
+              result: finished.output,
+              error: finished.error ?? null,
+            });
+          } catch (err) {
+            if (controller.signal.aborted) return;
+            setLast({
+              status: "failed",
+              runId,
+              result: null,
+              error: errorMessage(err),
+            });
+          } finally {
+            if (!controller.signal.aborted) setPolling(false);
+          }
         },
         onError: (err) => {
           const runId = err?.response?.data?.runId;
@@ -107,11 +150,15 @@ export function WorkflowTestPanel({
     ? prettyJson(last.error ? { error: last.error } : last.result)
     : "";
 
+  const busy = run.isPending || polling;
+
   function close() {
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
+    pollAbort.current?.abort();
+    setPolling(false);
     try {
       persist(JSON.parse(dataJson || "null"));
     } catch {
@@ -134,8 +181,8 @@ export function WorkflowTestPanel({
           <div className="min-w-0 flex-1">
             <h3 className="font-bold text-lg">Test workflow</h3>
             <p className="text-sm opacity-70">
-              Runs the <strong>saved</strong> YAML and writes an Event. Manual run works even when
-              the workflow is disabled. Save before testing unsaved edits.
+              Enqueues the <strong>saved</strong> YAML and polls the Event until it finishes.
+              Manual run works even when the workflow is disabled. Save before testing unsaved edits.
             </p>
           </div>
           <button
@@ -192,10 +239,10 @@ export function WorkflowTestPanel({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={disabled || run.isPending}
+            disabled={disabled || busy}
             onClick={onRun}
           >
-            {run.isPending ? (
+            {busy ? (
               <span className="loading loading-spinner loading-xs" />
             ) : (
               <LuPlay className="size-4" />
