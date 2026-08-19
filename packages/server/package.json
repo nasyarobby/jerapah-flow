@@ -6,7 +6,7 @@
   "main": "runner.js",
   "scripts": {
     "dev": "node --watch runner.js",
-    "dev:pm2": "node scripts/dev-pm2.mjs",
+    "dev:pm2": "node dev-pm2.mjs",
     "start": "node runner.js",
     "start:api": "node server.js",
     "start:worker": "node worker.js",
