@@ -1,0 +1,7 @@
+{
+  "name": "jflow-plugin-joplin-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "JerapahFlow plugin: Joplin HTTP with Bearer token (native fetch)"
+}

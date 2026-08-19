@@ -1,0 +1,7 @@
+{
+  "name": "jflow-plugin-send-sms",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "JerapahFlow plugin: send SMS via a ZTE modem web UI"
+}

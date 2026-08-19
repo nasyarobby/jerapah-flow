@@ -1,0 +1,8 @@
+{
+  "id": "joplin-api",
+  "name": "Joplin API",
+  "version": "0.1.0",
+  "jerapah": ">=0.1.0 <1.0.0",
+  "main": "script.js",
+  "description": "GET/POST a Joplin host with Bearer token using native fetch (LAN/WG IPs)"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "send-sms",
+  "name": "Send SMS",
+  "version": "0.1.0",
+  "jerapah": ">=0.1.0 <1.0.0",
+  "main": "script.js",
+  "description": "Log in to a ZTE modem web UI and send an SMS"
+}
