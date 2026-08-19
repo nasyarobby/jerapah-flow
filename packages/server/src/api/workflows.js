@@ -28,7 +28,7 @@ function triggerSummary(owner, workflow) {
       path: isHttp && t?.path != null ? namespacedPath(owner, t.path) : t?.path ?? null,
       schedule: t?.schedule ?? null,
       onConsecutiveFailures: t?.onConsecutiveFailures ?? null,
-      triggerWorkflow: t?.triggerWorkflow ?? null,
+      onFailureWorkflow: t?.onFailureWorkflow ?? null,
       auth: isHttp ? authLabel(t?.auth) : null,
     };
   });
