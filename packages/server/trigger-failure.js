@@ -46,8 +46,7 @@ export function resolveFailureTriggerConfig(workflow, owner, runtimeTrigger) {
     if (!spec) continue;
 
     const threshold = Number(spec.onConsecutiveFailures);
-    const workflowName =
-      typeof spec.triggerWorkflow === "string" ? spec.triggerWorkflow.trim() : "";
+    const workflowName = onFailureWorkflowName(spec);
     if (!Number.isFinite(threshold) || threshold < 1 || workflowName.length === 0) {
       return null;
     }
@@ -57,6 +56,14 @@ export function resolveFailureTriggerConfig(workflow, owner, runtimeTrigger) {
     };
   }
   return null;
+}
+
+/**
+ * @param {Record<string, unknown>} trigger
+ */
+function onFailureWorkflowName(trigger) {
+  const value = trigger?.onFailureWorkflow;
+  return typeof value === "string" ? value.trim() : "";
 }
 
 /**
@@ -73,14 +80,13 @@ export async function validateWorkflowFailureTriggers(workflow) {
 
     const hasThreshold =
       trigger.onConsecutiveFailures != null && trigger.onConsecutiveFailures !== "";
-    const hasWorkflow =
-      typeof trigger.triggerWorkflow === "string" && trigger.triggerWorkflow.trim().length > 0;
+    const hasWorkflow = onFailureWorkflowName(trigger).length > 0;
 
     if (!hasThreshold && !hasWorkflow) continue;
 
     if (!hasThreshold || !hasWorkflow) {
       const err = new Error(
-        "onConsecutiveFailures and triggerWorkflow must both be set on a trigger",
+        "onConsecutiveFailures and onFailureWorkflow must both be set on a trigger",
       );
       err.statusCode = 400;
       throw err;

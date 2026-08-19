@@ -143,7 +143,7 @@ export function newHttpTrigger() {
     response: "",
     unauthorized: null,
     onConsecutiveFailures: "",
-    triggerWorkflow: "",
+    onFailureWorkflow: "",
   };
 }
 
@@ -158,7 +158,7 @@ export function newCronTrigger() {
     response: "",
     unauthorized: null,
     onConsecutiveFailures: "",
-    triggerWorkflow: "",
+    onFailureWorkflow: "",
   };
 }
 
@@ -173,7 +173,7 @@ export function newWorkflowTrigger() {
     response: "",
     unauthorized: null,
     onConsecutiveFailures: "",
-    triggerWorkflow: "",
+    onFailureWorkflow: "",
   };
 }
 
@@ -190,6 +190,10 @@ export function triggerDestinations(workflows, { owner, excludeFile } = {}) {
 }
 
 export { HTTP_METHODS };
+
+function readOnFailureWorkflow(raw) {
+  return typeof raw?.onFailureWorkflow === "string" ? raw.onFailureWorkflow : "";
+}
 
 function normalizeStep(step) {
   const uiId = nextUiId("step");
@@ -266,10 +270,10 @@ function normalizeTrigger(raw) {
           "response",
           "unauthorized",
           "onConsecutiveFailures",
-          "triggerWorkflow",
+          "onFailureWorkflow",
         ])
       : type === "cron"
-        ? new Set(["type", "schedule", "onConsecutiveFailures", "triggerWorkflow"])
+        ? new Set(["type", "schedule", "onConsecutiveFailures", "onFailureWorkflow"])
         : new Set(["type"]);
   /** @type {Record<string, unknown>} */
   const extra = {};
@@ -286,8 +290,7 @@ function normalizeTrigger(raw) {
       raw.onConsecutiveFailures == null || raw.onConsecutiveFailures === ""
         ? ""
         : String(raw.onConsecutiveFailures),
-    triggerWorkflow:
-      typeof raw.triggerWorkflow === "string" ? raw.triggerWorkflow : "",
+    onFailureWorkflow: readOnFailureWorkflow(raw),
     auth: raw.auth ?? null,
     response: typeof raw.response === "string" ? raw.response : "",
     unauthorized: raw.unauthorized ?? null,
@@ -328,8 +331,8 @@ function dumpFailureTriggerFields(t, out) {
       out.onConsecutiveFailures = Math.floor(threshold);
     }
   }
-  if (typeof t.triggerWorkflow === "string" && t.triggerWorkflow.trim()) {
-    out.triggerWorkflow = t.triggerWorkflow.trim();
+  if (typeof t.onFailureWorkflow === "string" && t.onFailureWorkflow.trim()) {
+    out.onFailureWorkflow = t.onFailureWorkflow.trim();
   }
 }
 

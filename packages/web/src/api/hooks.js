@@ -266,6 +266,17 @@ export function useRuns(filters = {}) {
   });
 }
 
+export function useConsecutiveFailures(limit) {
+  return useQuery({
+    queryKey: ["consecutive-failures", limit ?? "all"],
+    queryFn: async () => {
+      const params = {};
+      if (limit) params.limit = limit;
+      return (await api.get("/consecutive-failures", { params })).data;
+    },
+  });
+}
+
 export function useRun(id) {
   return useQuery({
     queryKey: ["runs", id],

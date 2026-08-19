@@ -117,15 +117,15 @@ export function TriggerCard({
 
 function triggerSummary(trigger, owner) {
   const type = trigger?.type;
+  const failure =
+    trigger.onConsecutiveFailures && trigger.onFailureWorkflow
+      ? ` · onFailure@${trigger.onFailureWorkflow}`
+      : "";
   if (type === "HTTP") {
-    return `${trigger.method || "POST"} ${namespacedPath(owner || "owner", trigger.path || "/")}`;
+    return `${trigger.method || "POST"} ${namespacedPath(owner || "owner", trigger.path || "/")}${failure}`;
   }
   if (type === "cron") {
-    const extra =
-      trigger.onConsecutiveFailures && trigger.triggerWorkflow
-        ? ` · alert@${trigger.triggerWorkflow}`
-        : "";
-    return `${trigger.schedule || ""}${extra}`;
+    return `${trigger.schedule || ""}${failure}`;
   }
   if (type === "workflow") return "callable";
   return "";
@@ -320,12 +320,12 @@ function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) 
         />
       </label>
       <label className="form-control">
-        <span className="label py-0 text-sm">Trigger workflow</span>
+        <span className="label py-0 text-sm">On failure, start</span>
         <select
           className="select select-sm"
-          value={trigger.triggerWorkflow ?? ""}
+          value={trigger.onFailureWorkflow ?? ""}
           disabled={disabled}
-          onChange={(e) => onChange({ ...trigger, triggerWorkflow: e.target.value })}
+          onChange={(e) => onChange({ ...trigger, onFailureWorkflow: e.target.value })}
         >
           <option value="">None</option>
           {alertDestinations.map((w) => (
@@ -333,11 +333,11 @@ function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) 
               {w.name ?? w.file}
             </option>
           ))}
-          {trigger.triggerWorkflow &&
+          {trigger.onFailureWorkflow &&
           !alertDestinations.some(
-            (w) => (w.name ?? w.file) === trigger.triggerWorkflow,
+            (w) => (w.name ?? w.file) === trigger.onFailureWorkflow,
           ) ? (
-            <option value={trigger.triggerWorkflow}>{trigger.triggerWorkflow}</option>
+            <option value={trigger.onFailureWorkflow}>{trigger.onFailureWorkflow}</option>
           ) : null}
         </select>
       </label>

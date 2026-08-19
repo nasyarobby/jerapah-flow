@@ -15,12 +15,17 @@ import { getVariablePlain } from "./variables-store.js";
 const hostRequire = createRequire(import.meta.url);
 
 const ALLOWED_MODULES = new Set([
+  "@aws-sdk/client-s3",
+  "@aws-sdk/s3-request-presigner",
   "axios",
+  "basic-ftp",
   "jsonata",
   "mustache",
   "node-html-parser",
+  "node:stream",
   "nodemailer",
   "rss-parser",
+  "ssh2-sftp-client",
   "webdav",
 ]);
 

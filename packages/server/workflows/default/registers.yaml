@@ -10,3 +10,11 @@ scripts:
   - test-send-gmail.yaml
   - track.yaml
   - rss-devto-to-ntfy.yaml
+  - test-minio.yaml
+  - dev-joplin-sync.yaml
+  - dev-joplin-daily.yaml
+  - dev-joplin-get-note.yaml
+  - web-dave.yaml
+  - jadwal-sholat-jakart.yaml
+  - detect-example-changes.yaml
+  - test-sftp.yaml
