@@ -35,6 +35,7 @@ import {
   buildFailureAlertData,
   resolveFailureTriggerConfig,
 } from "./trigger-failure.js";
+import { enqueueWorkflowJob } from "./workflow-queue.js";
 
 /**
  * @typedef {{ owner: string, file: string, workflow: any }} WorkflowEntry
@@ -56,8 +57,10 @@ function hasWorkflowTrigger(workflow) {
 
 /**
  * @param {import("fastify").FastifyInstance} server
+ * @param {{ queue?: import("bullmq").Queue | null }} [opts]
  */
-export function createRegistry(server) {
+export function createRegistry(server, opts = {}) {
+  const queue = opts.queue ?? null;
   /** @type {Map<string, WorkflowEntry>} */
   const workflows = new Map();
   /** @type {Map<string, string>} */
@@ -261,26 +264,27 @@ export function createRegistry(server) {
       }
     }
 
-    const result = await runWorkflow(
+    const result = await enqueueWorkflow(
       mapped.key,
       { data: req.body },
       { type: "http", detail: `${method} ${url}` },
     );
     if (result.status === "failed") {
-      return reply.code(500).send({
+      return reply.code(result.runId ? 500 : 404).send({
         runId: result.runId,
+        status: result.status,
         error: result.error,
       });
     }
 
     const defaultBody = {
       runId: result.runId,
-      result: result.result,
+      status: result.status,
     };
     if (typeof liveTrigger.response === "string" && liveTrigger.response) {
       return sendSuccessPage(reply, liveTrigger.response, defaultBody);
     }
-    return reply.send(defaultBody);
+    return reply.code(202).send(defaultBody);
   }
 
   function registerCronTriggers() {
@@ -308,7 +312,7 @@ export function createRegistry(server) {
           schedule,
           () => {
             log.debug(`cron firing ${key} (${schedule})`);
-            return runWorkflow(
+            return enqueueWorkflow(
               key,
               { data: workflow.data ?? null },
               { type: "cron", detail: schedule },
@@ -544,14 +548,13 @@ export function createRegistry(server) {
           );
         }
         const destKey = resolveWorkflowTriggerKey(owner, name);
-        return runWorkflow(
+        return enqueueWorkflow(
           destKey,
           { data },
           { type: "workflow", detail: parentKey },
           {
             parentRunId,
             depth: depth + 1,
-            detach: true,
           },
         );
       },
@@ -696,32 +699,36 @@ export function createRegistry(server) {
       "triggering failure alert workflow",
     );
 
-    await runWorkflow(
+    await enqueueWorkflow(
       destKey,
       { data: alertData },
       { type: "workflow", detail: `failure:${opts.key}` },
       {
         parentRunId: opts.runId,
         depth: opts.depth + 1,
-        detach: true,
       },
     );
   }
 
   /**
+   * Create a queued run and push a BullMQ job. Returns immediately.
+   *
    * @param {string} key
    * @param {{ data?: unknown, context?: unknown }} context
    * @param {{ type: string, detail?: string | null }} trigger
    * @param {{
    *   parentRunId?: string | null,
    *   depth?: number,
-   *   detach?: boolean,
    * }} [opts]
    */
-  async function runWorkflow(key, context, trigger, opts = {}) {
+  async function enqueueWorkflow(key, context, trigger, opts = {}) {
     const parentRunId = opts.parentRunId ?? null;
     const depth = opts.depth ?? 0;
-    const detach = opts.detach === true;
+
+    if (!queue) {
+      log.error({ workflow: key }, "workflow queue is not configured");
+      return { runId: null, status: "failed", error: "workflow queue is not configured" };
+    }
 
     const entry = workflows.get(key);
     if (!entry) {
@@ -734,82 +741,130 @@ export function createRegistry(server) {
       log.debug({ workflow: key, trigger }, "skipping disabled workflow");
       return { runId: null, status: "failed", error: "workflow disabled" };
     }
+
+    const input = context.data ?? workflow.data ?? null;
     const run = await store.startRun({
       owner,
       workflow: key,
       workflowName: workflow?.name,
       trigger,
-      input: context.data,
+      input,
       parentRunId,
+      status: "queued",
     });
     const runLog = log.child({ runId: run.id, owner, workflow: key });
-    runLog.debug(detach ? "running workflow (detached)" : "running workflow");
 
-    const initialCtx = {
-      data: context.data ?? workflow.data ?? null,
-      context: normalizeContext(context.context),
-    };
-
-    const execute = async () => {
-      let ctx = initialCtx;
-      try {
-        const compiled = compileWorkflowScripts(workflow.scripts);
-        if (compiled.dagMode) {
-          ctx = await runDagSteps(
-            compiled,
-            ctx,
-            run.id,
-            runLog,
-            key,
-            owner,
-            depth,
-          );
-        } else {
-          ctx = await runLinearSteps(
-            compiled,
-            ctx,
-            run.id,
-            runLog,
-            key,
-            owner,
-            depth,
-          );
-        }
-        await store.finishRun(run.id, "success", storedEnvelope(ctx));
-        return { runId: run.id, status: "success", result: storedEnvelope(ctx) };
-      } catch (err) {
-        runLog.error({ err }, "workflow failed");
-        const error = err instanceof Error ? err.message : String(err);
-        await store.finishRun(run.id, "failed", null, err);
-        try {
-          await maybeTriggerFailureWorkflow({
-            key,
-            owner,
-            workflow,
-            runId: run.id,
-            trigger,
-            error,
-            depth,
-          });
-        } catch (alertErr) {
-          runLog.error({ err: alertErr }, "failed to trigger failure alert workflow");
-        }
-        return {
-          runId: run.id,
-          status: "failed",
-          error,
-        };
-      }
-    };
-
-    if (detach) {
-      execute().catch((err) => {
-        runLog.error({ err }, "detached workflow failed unexpectedly");
+    try {
+      const job = await enqueueWorkflowJob(queue, {
+        runId: run.id,
+        key,
+        depth,
       });
-      return { runId: run.id, status: "started" };
+      await store.setRunJobId(run.id, String(job.id));
+      runLog.debug({ jobId: job.id }, "workflow queued");
+      return { runId: run.id, status: "queued", jobId: String(job.id) };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      runLog.error({ err }, "failed to enqueue workflow");
+      await store.finishRun(run.id, "failed", null, err);
+      return { runId: run.id, status: "failed", error: message };
+    }
+  }
+
+  /**
+   * Execute a previously queued run (BullMQ worker entrypoint).
+   *
+   * @param {{ runId: string, key: string, depth?: number }} jobData
+   */
+  async function executeQueuedRun(jobData) {
+    const runId = jobData.runId;
+    const key = jobData.key;
+    const depth = jobData.depth ?? 0;
+
+    const entry = workflows.get(key);
+    if (!entry) {
+      await store.finishRun(runId, "failed", null, new Error("workflow not found"));
+      return { runId, status: "failed", error: "workflow not found" };
     }
 
-    return execute();
+    const existing = await store.getRun(runId);
+    if (!existing) {
+      return { runId, status: "failed", error: "run not found" };
+    }
+    if (existing.status === "success" || existing.status === "failed") {
+      return { runId, status: existing.status };
+    }
+
+    const marked = await store.markRunRunning(runId);
+    if (!marked.updated && existing.status !== "running") {
+      return { runId, status: existing.status };
+    }
+
+    const { owner, workflow } = entry;
+    const runLog = log.child({ runId, owner, workflow: key });
+    runLog.debug("running queued workflow");
+
+    const trigger = {
+      type: existing.trigger_type,
+      detail: existing.trigger_detail,
+    };
+    const initialCtx = {
+      data: existing.input ?? workflow.data ?? null,
+      context: normalizeContext(null),
+    };
+
+    try {
+      const compiled = compileWorkflowScripts(workflow.scripts);
+      let ctx;
+      if (compiled.dagMode) {
+        ctx = await runDagSteps(
+          compiled,
+          initialCtx,
+          runId,
+          runLog,
+          key,
+          owner,
+          depth,
+        );
+      } else {
+        ctx = await runLinearSteps(
+          compiled,
+          initialCtx,
+          runId,
+          runLog,
+          key,
+          owner,
+          depth,
+        );
+      }
+      await store.finishRun(runId, "success", storedEnvelope(ctx));
+      return { runId, status: "success", result: storedEnvelope(ctx) };
+    } catch (err) {
+      runLog.error({ err }, "workflow failed");
+      const error = err instanceof Error ? err.message : String(err);
+      await store.finishRun(runId, "failed", null, err);
+      try {
+        await maybeTriggerFailureWorkflow({
+          key,
+          owner,
+          workflow,
+          runId,
+          trigger,
+          error,
+          depth,
+        });
+      } catch (alertErr) {
+        runLog.error({ err: alertErr }, "failed to trigger failure alert workflow");
+      }
+      return { runId, status: "failed", error };
+    }
+  }
+
+  /**
+   * @deprecated Prefer enqueueWorkflow; kept as alias for callers.
+   */
+  async function runWorkflow(key, context, trigger, opts = {}) {
+    return enqueueWorkflow(key, context, trigger, opts);
   }
 
   function reregister() {
@@ -842,6 +897,8 @@ export function createRegistry(server) {
     registerPruneJob,
     reregister,
     runWorkflow,
+    enqueueWorkflow,
+    executeQueuedRun,
     referencedScripts,
   };
 }

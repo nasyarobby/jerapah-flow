@@ -404,7 +404,7 @@ export default function workflowsPluginFactory(registry) {
         });
       }
       const body = /** @type {{ data?: unknown }} */ (req.body ?? {});
-      const result = await registry.runWorkflow(
+      const result = await registry.enqueueWorkflow(
         key,
         { data: body.data ?? null },
         { type: "manual", detail: "ui" },
@@ -412,14 +412,15 @@ export default function workflowsPluginFactory(registry) {
       if (result.status === "failed") {
         return reply.code(result.runId ? 500 : 404).send({
           runId: result.runId,
+          status: result.status,
           error: result.error,
         });
       }
-      return {
+      return reply.code(202).send({
         runId: result.runId,
         status: result.status,
-        result: store.toDisplayValue(result.result),
-      };
+        jobId: result.jobId ?? null,
+      });
     });
 
     fastify.post("/workflows/reregister", async () => {

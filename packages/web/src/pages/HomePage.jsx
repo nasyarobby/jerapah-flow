@@ -1,5 +1,10 @@
 import { Link } from "react-router-dom";
-import { LuCode, LuGitBranch, LuTriangleAlert } from "react-icons/lu";
+import {
+  LuActivity,
+  LuCode,
+  LuGitBranch,
+  LuTriangleAlert,
+} from "react-icons/lu";
 import { useDashboard } from "../api/hooks.js";
 import { formatTime, StatusBadge } from "../lib/format.jsx";
 
@@ -37,6 +42,13 @@ export function HomePage() {
           <div className="stat-value text-2xl">{data.scriptCount}</div>
         </div>
         <div className="stat">
+          <div className="stat-figure text-warning">
+            <LuActivity className="size-7" />
+          </div>
+          <div className="stat-title">Active</div>
+          <div className="stat-value text-2xl">{data.running?.length ?? 0}</div>
+        </div>
+        <div className="stat">
           <div className="stat-figure text-error">
             <LuTriangleAlert className="size-7" />
           </div>
@@ -44,6 +56,11 @@ export function HomePage() {
           <div className="stat-value text-2xl">{streakCount + broken.length}</div>
         </div>
       </div>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-2">Queued / running</h2>
+        <RunList runs={data.running} empty="None" />
+      </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="min-w-0">

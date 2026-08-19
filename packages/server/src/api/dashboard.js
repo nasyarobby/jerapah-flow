@@ -63,8 +63,8 @@ export default function dashboardPluginFactory(registry) {
         }
       }
 
-      const [running, streaks, failedEvents, recent] = await Promise.all([
-        store.listRuns({ status: "running", limit: 10 }),
+      const [active, streaks, failedEvents, recent] = await Promise.all([
+        store.listRuns({ status: ["queued", "running"], limit: 10 }),
         store.listConsecutiveFailureStreaks({ minCount: 4, limit: 10 }),
         store.listRuns({ status: "failed", limit: 5 }),
         store.listRuns({ limit: 10 }),
@@ -75,7 +75,7 @@ export default function dashboardPluginFactory(registry) {
         scriptCount: fsStore.listScriptFiles().length,
         enabledCount,
         brokenCount,
-        running,
+        running: active,
         needsAttention: {
           consecutiveFailures: streaks.items,
           consecutiveFailureCount: streaks.total,

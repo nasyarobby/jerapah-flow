@@ -282,8 +282,10 @@ export function useRun(id) {
     queryKey: ["runs", id],
     queryFn: async () => (await api.get(`/runs/${encodeURIComponent(id)}`)).data,
     enabled: Boolean(id),
-    refetchInterval: (query) =>
-      query.state.data?.status === "running" ? 2000 : false,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "running" || status === "queued" ? 1500 : false;
+    },
   });
 }
 

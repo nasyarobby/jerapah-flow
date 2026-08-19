@@ -64,6 +64,7 @@ function nowIso() {
  *   trigger: { type: string, detail?: string | null },
  *   input?: unknown,
  *   parentRunId?: string | null,
+ *   status?: "queued" | "running",
  * }} opts
  */
 export async function startRun({
@@ -73,9 +74,11 @@ export async function startRun({
   trigger,
   input = null,
   parentRunId = null,
+  status = "queued",
 }) {
   const id = randomUUID();
-  const started_at = nowIso();
+  const now = nowIso();
+  const isQueued = status === "queued";
   await db("workflow_runs").insert({
     id,
     owner,
@@ -83,12 +86,36 @@ export async function startRun({
     workflow_name: workflowName ?? null,
     trigger_type: trigger.type,
     trigger_detail: trigger.detail ?? null,
-    status: "running",
-    started_at,
+    status,
+    started_at: now,
+    queued_at: isQueued ? now : null,
     input: serialize(input),
     parent_run_id: parentRunId ?? null,
   });
-  return { id, started_at };
+  return { id, started_at: now, queued_at: isQueued ? now : null };
+}
+
+/**
+ * @param {string} id
+ * @param {string} jobId
+ */
+export async function setRunJobId(id, jobId) {
+  await db("workflow_runs").where({ id }).update({ job_id: jobId });
+}
+
+/**
+ * @param {string} id
+ */
+export async function markRunRunning(id) {
+  const started_at = nowIso();
+  const updated = await db("workflow_runs")
+    .where({ id })
+    .whereIn("status", ["queued", "running"])
+    .update({
+      status: "running",
+      started_at,
+    });
+  return { updated: Number(updated) > 0, started_at };
 }
 
 /**
@@ -196,7 +223,7 @@ export async function insertLogs(rows) {
  * @param {{
  *   owner?: string,
  *   workflow?: string,
- *   status?: string,
+ *   status?: string | string[],
  *   limit?: number,
  *   before?: string,
  * }} [filters]
@@ -218,7 +245,13 @@ export async function listRuns(filters = {}) {
       q = q.where("workflow", key);
     }
   }
-  if (filters.status) q = q.where("status", filters.status);
+  if (filters.status) {
+    if (Array.isArray(filters.status)) {
+      q = q.whereIn("status", filters.status);
+    } else {
+      q = q.where("status", filters.status);
+    }
+  }
   if (filters.before) q = q.where("started_at", "<", filters.before);
   const rows = await q.limit(limit);
   return rows.map((row) => ({
