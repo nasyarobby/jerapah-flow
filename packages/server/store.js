@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./db.js";
+import { jsonPreviewReplacer } from "./json-preview.js";
 import { redactString } from "./secret-value.js";
 
 const MAX_JSON_BYTES = 64 * 1024;
@@ -12,7 +13,7 @@ export function serialize(value) {
   if (value === undefined || value === null) return null;
   let json;
   try {
-    json = JSON.stringify(value);
+    json = JSON.stringify(value, jsonPreviewReplacer);
   } catch {
     json = JSON.stringify({ truncated: true, reason: "unserializable" });
   }
@@ -22,6 +23,20 @@ export function serialize(value) {
     truncated: true,
     preview: json.slice(0, 1024),
   });
+}
+
+/**
+ * Parsed JSON-safe copy for API / UI (buffers summarized, size-capped).
+ * @param {unknown} value
+ */
+export function toDisplayValue(value) {
+  const json = serialize(value);
+  if (json == null) return null;
+  try {
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
 }
 
 /**
