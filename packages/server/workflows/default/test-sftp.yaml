@@ -1,0 +1,22 @@
+name: SFTP Test
+scripts:
+  - script: remote-fs.js
+    config:
+      protocol: sftp
+      action: list
+      host: localhost
+      path: /Users/nsrb/
+      username: nsrb
+      port: 22
+      password: JKLjkl
+  - script: jsonata.js
+    config:
+      expression: '{"message": $join(data.entries.name, "\n")}'
+  - script: ntfy.js
+    config:
+      url: $VAR_ntfy_channel
+      fingerprint: "false"
+triggers:
+  - type: HTTP
+    method: POST
+    path: /new

@@ -17,3 +17,4 @@ scripts:
   - web-dave.yaml
   - jadwal-sholat-jakart.yaml
   - detect-example-changes.yaml
+  - test-sftp.yaml
