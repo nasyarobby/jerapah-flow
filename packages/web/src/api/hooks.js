@@ -89,6 +89,47 @@ export function useSaveScript() {
       qc.invalidateQueries({ queryKey: ["scripts"] });
       qc.invalidateQueries({ queryKey: ["scripts", vars.name] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["ops-status"] });
+    },
+  });
+}
+
+export function useCreatePlugin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, content, description }) =>
+      (await api.post("/plugins/create", { id, content, description })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scripts"] });
+      qc.invalidateQueries({ queryKey: ["ops-status"] });
+    },
+  });
+}
+
+export function useForkScript() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, id, description }) =>
+      (
+        await api.post(`/scripts/${encodeURIComponent(name)}/fork`, {
+          id,
+          description,
+        })
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scripts"] });
+      qc.invalidateQueries({ queryKey: ["ops-status"] });
+    },
+  });
+}
+
+export function useInstallPlugin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body) => (await api.post("/plugins/install", body)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scripts"] });
+      qc.invalidateQueries({ queryKey: ["ops-status"] });
     },
   });
 }

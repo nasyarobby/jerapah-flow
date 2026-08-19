@@ -31,6 +31,26 @@ The first account created becomes **admin**. Later accounts are created from Use
 
 `pnpm dev:pm2` is the mode for Ops (start/stop HTTP, scale workers, drain restart). Control owns SQLite migrations; HTTP/workers do not migrate.
 
+## Scripts (core vs plugins)
+
+| Kind | Name in YAML | Editable | Location |
+|---|---|---|---|
+| **Core** | `fetch-http.js`, `s3.js`, … | No (fork only) | `packages/server/scripts/` |
+| **Plugin** | `plugin/<id>` | Yes | `data/plugins/<id>/` |
+
+- App version is **`0.1.0`** (root `package.json`). Plugin manifests declare `jerapah: ">=0.1.0 <1.0.0"`.
+- Install plugins via admin API: zip (base64), HTTPS git URL, example, or fork a core script.
+- Install/update/uninstall sets **restart-needed** — drain-restart HTTP + workers under `pnpm dev:pm2`.
+- Example plugin: `examples/plugins/get-current-time` → `plugin/get-current-time`.
+
+```bash
+# Smoke
+JFLOW_PLUGINS_DIR=packages/server/data/plugins-smoke-test \
+JFLOW_DB_PATH=packages/server/data/plugins-smoke.db \
+node packages/server/test/plugins-smoke.js
+```
+
+
 ## Script contract
 
 Each script is `async function main(ctx)` and **must** return:

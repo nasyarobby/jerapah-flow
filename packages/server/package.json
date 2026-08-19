@@ -1,6 +1,6 @@
 {
   "name": "@jerapah-flow/server",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "runner.js",
@@ -11,7 +11,8 @@
     "start:api": "node server.js",
     "start:worker": "node worker.js",
     "start:control": "node control.js",
-    "migrate": "node -e \"import('./db.js').then((m) => m.migrate().then(() => process.exit(0)))\""
+    "migrate": "node -e \"import('./db.js').then((m) => m.migrate().then(() => process.exit(0)))\"",
+    "test:plugins": "JFLOW_PLUGINS_DIR=./data/plugins-smoke-test JFLOW_DB_PATH=./data/plugins-smoke.db node test/plugins-smoke.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1111.0",

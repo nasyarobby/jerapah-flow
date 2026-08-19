@@ -1,6 +1,6 @@
 name: jsonata
 scripts:
-  - get-current-time.js
+  - plugin/get-current-time
   - script: jsonata.js
     config: 
       expression: '{"message": data.datetime & " " & data.processId}'
