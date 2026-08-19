@@ -21,7 +21,7 @@ export function EventsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Events</h1>
+      <h1 className="text-xl font-semibold">{status === "failed" ? "Failed events" : "Events"}</h1>
       <div className="flex flex-col sm:flex-row gap-2">
         <input
           className="input input-sm w-full sm:max-w-sm"

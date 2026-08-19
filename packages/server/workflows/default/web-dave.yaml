@@ -1,0 +1,14 @@
+name: Dab 0dev
+scripts:
+  - script: list-webdav.js
+    config:
+      url: https://dav.0dev.web.id/books
+      path: /
+      includeDirectories: true
+      recursive: false
+      username: nsrb
+      passwordSecret: dav_0dev_password
+triggers:
+  - type: HTTP
+    method: POST
+    path: /new
