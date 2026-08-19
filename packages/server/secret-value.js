@@ -1,6 +1,7 @@
 import { inspect } from "node:util";
 
 export const REDACTED = "[secret]";
+/** Short values are stored, but skipped in log redaction to avoid false positives. */
 export const MIN_SECRET_LENGTH = 8;
 
 /** @type {Set<string>} */

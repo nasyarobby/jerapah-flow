@@ -418,7 +418,7 @@ export default function workflowsPluginFactory(registry) {
       return {
         runId: result.runId,
         status: result.status,
-        result: result.result,
+        result: store.toDisplayValue(result.result),
       };
     });
 
