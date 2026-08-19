@@ -180,11 +180,11 @@ export function SecretsPage() {
             value={form.value}
             onChange={(e) => setForm({ ...form, value: e.target.value })}
             required
-            minLength={8}
             autoComplete="new-password"
           />
           <p className="text-xs opacity-60 mt-1">
             Values are encrypted at rest and never shown again after save.
+            Values shorter than 8 characters are not redacted from logs.
           </p>
           {upsert.isError ? (
             <p className="text-error text-sm">{errorMessage(upsert.error)}</p>
