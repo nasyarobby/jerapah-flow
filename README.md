@@ -16,7 +16,7 @@ pnpm install
 pnpm dev
 ```
 
-- API: http://localhost:9000
+- API: http://localhost:8700
 - UI (dev): http://localhost:5173
 
 The first account created becomes **admin**. Later accounts are created from Users.
@@ -52,9 +52,9 @@ Optional `script.meta.reads = "ctx"` documents expression hosts. `meta.input` / 
 |---|---|
 | `pnpm dev` | Server + Vite together |
 | `pnpm dev:server` | API/runner only |
-| `pnpm dev:web` | UI only (proxies `/api` to :9000) |
+| `pnpm dev:web` | UI only (proxies `/api` to :8700) |
 | `pnpm build` | Production UI build |
-| `pnpm start` | Serve API and built UI from :9000 |
+| `pnpm start` | Serve API and built UI from :8700 |
 | `pnpm migrate` | Apply SQLite migrations |
 
 ## Environment
@@ -67,7 +67,7 @@ Optional `script.meta.reads = "ctx"` documents expression hosts. `meta.input` / 
 | `JFLOW_LOG_LEVEL` | `debug` | Pino level |
 | `JFLOW_RETENTION_DAYS` | `30` | Run history prune |
 | `JFLOW_CORS_ORIGIN` | `http://localhost:5173` | Vite origin in dev |
-| `PORT` | `9000` | HTTP port |
+| `PORT` | `8700` | HTTP port |
 | `NODE_ENV` | — | Set `production` for secure cookies |
 
 ## Production

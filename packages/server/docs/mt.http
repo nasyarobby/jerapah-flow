@@ -1,41 +1,34 @@
 ### Manual trigger (default owner)
-POST http://localhost:9000/u/default/mt
+POST http://localhost:8700/u/default/mt
 Content-Type: application/json
 
 0
-
 ###
-POST http://localhost:9000/u/default/time-to-ntfy
+POST http://localhost:8700/u/default/time-to-ntfy
 Content-Type: application/json
 
 {}
-
-### Auth bootstrap
-GET http://localhost:9000/api/auth/bootstrap
-
-### Login
-POST http://localhost:9000/api/auth/login
+###
+GET http://localhost:8700/api/auth/bootstrap
+###
+POST http://localhost:8700/api/auth/login
 Content-Type: application/json
 
 {
   "username": "admin",
   "password": "changeme1"
 }
-
-### Dashboard
-GET http://localhost:9000/api/dashboard
-
-### Runs
-GET http://localhost:9000/api/runs?owner=default&limit=20
-
-### Reregister
-POST http://localhost:9000/api/workflows/reregister
+###
+GET http://localhost:8700/api/dashboard
+###
+GET http://localhost:8700/api/runs?owner=default&limit=20
+###
+POST http://localhost:8700/api/workflows/reregister
 Content-Type: application/json
 
 {}
-
-### Run workflow manually
-POST http://localhost:9000/api/workflows/default/manual-trigger.yaml/run
+###
+POST http://localhost:8700/api/workflows/default/manual-trigger.yaml/run
 Content-Type: application/json
 
 {}
