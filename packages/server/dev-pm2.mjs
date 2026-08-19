@@ -93,7 +93,7 @@ if (!(await redisReachable())) {
 }
 
 console.log("[dev:pm2] starting control on :8600 (PM2 will start HTTP :8700 + workers)");
-run(process.execPath, [path.join(root, "packages/server/control.js")], {
+run(process.execPath, [path.join(root, "server/control.js")], {
   env: {
     JFLOW_CONTROL_PORT: "8600",
   },
