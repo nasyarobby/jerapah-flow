@@ -24,8 +24,8 @@ import {
 } from "./step-result.js";
 import * as fsStore from "./fs-store.js";
 import {
-  checkHttpAuth,
-  resolveAuthMechanism,
+  checkAnyHttpAuth,
+  resolveAuthMechanisms,
   resolveUnauthorizedSpec,
   sendHttpPageOrJson,
   sendSuccessPage,
@@ -36,6 +36,7 @@ import {
   resolveFailureTriggerConfig,
 } from "./trigger-failure.js";
 import { enqueueWorkflowJob } from "./workflow-queue.js";
+import { ensureInitialRevision } from "./workflow-history.js";
 
 /**
  * @typedef {{ owner: string, file: string, workflow: any }} WorkflowEntry
@@ -57,10 +58,16 @@ function hasWorkflowTrigger(workflow) {
 
 /**
  * @param {import("fastify").FastifyInstance} server
- * @param {{ queue?: import("bullmq").Queue | null }} [opts]
+ * @param {{
+ *   queue?: import("bullmq").Queue | null,
+ *   enableTriggers?: boolean,
+ * }} [opts]
+ * `enableTriggers` must be true only on the API (or all-in-one) process.
+ * Workers reload workflow defs but must not own cron/HTTP trigger registration.
  */
 export function createRegistry(server, opts = {}) {
   const queue = opts.queue ?? null;
+  const enableTriggers = opts.enableTriggers ?? true;
   /** @type {Map<string, WorkflowEntry>} */
   const workflows = new Map();
   /** @type {Map<string, string>} */
@@ -241,22 +248,26 @@ export function createRegistry(server, opts = {}) {
         return m === method && p === url;
       }) ?? mapped.trigger;
 
-    if (liveTrigger.auth != null && liveTrigger.auth !== false) {
-      const mechanism = await resolveAuthMechanism(liveTrigger.auth);
-      if (!mechanism) {
+    if (
+      liveTrigger.auth != null &&
+      liveTrigger.auth !== false &&
+      !(Array.isArray(liveTrigger.auth) && liveTrigger.auth.length === 0)
+    ) {
+      const mechanisms = await resolveAuthMechanisms(liveTrigger.auth);
+      if (mechanisms.length === 0) {
         const { status, pageName } = resolveUnauthorizedSpec(liveTrigger, null);
         return sendHttpPageOrJson(reply, status, pageName, {
           error: "unauthorized",
         });
       }
-      const ok = await checkHttpAuth(req, mechanism, {
+      const ok = await checkAnyHttpAuth(req, mechanisms, {
         owner: entry.owner,
         workflowKey: mapped.key,
       });
       if (!ok) {
         const { status, pageName } = resolveUnauthorizedSpec(
           liveTrigger,
-          mechanism,
+          mechanisms[0],
         );
         return sendHttpPageOrJson(reply, status, pageName, {
           error: "unauthorized",
@@ -736,13 +747,14 @@ export function createRegistry(server, opts = {}) {
       return { runId: null, status: "failed", error: "workflow not found" };
     }
 
-    const { owner, workflow } = entry;
+    const { owner, file, workflow } = entry;
     if (workflow?.enabled === false && trigger.type !== "manual") {
       log.debug({ workflow: key, trigger }, "skipping disabled workflow");
       return { runId: null, status: "failed", error: "workflow disabled" };
     }
 
     const input = context.data ?? workflow.data ?? null;
+    const ensured = await ensureInitialRevision({ owner, file });
     const run = await store.startRun({
       owner,
       workflow: key,
@@ -751,6 +763,7 @@ export function createRegistry(server, opts = {}) {
       input,
       parentRunId,
       status: "queued",
+      workflowRevision: ensured?.revision ?? null,
     });
     const runLog = log.child({ runId: run.id, owner, workflow: key });
 
@@ -808,9 +821,17 @@ export function createRegistry(server, opts = {}) {
       type: existing.trigger_type,
       detail: existing.trigger_detail,
     };
+    // jobId is BullMQ's id; enqueue uses runId as jobId, so they match today.
+    const jobId =
+      existing.job_id != null && String(existing.job_id).length > 0
+        ? String(existing.job_id)
+        : runId;
     const initialCtx = {
       data: existing.input ?? workflow.data ?? null,
-      context: normalizeContext(null),
+      context: {
+        runId,
+        jobId,
+      },
     };
 
     try {
@@ -869,6 +890,10 @@ export function createRegistry(server, opts = {}) {
 
   function reregister() {
     registerWorkflows();
+    // Cron/HTTP triggers are API-owned. Workers also subscribe to reload and
+    // must only refresh the in-memory workflow map — otherwise N workers each
+    // schedule the same cron and enqueue N duplicate jobs.
+    if (!enableTriggers) return;
     registerHttpTriggers();
     registerCronTriggers();
   }

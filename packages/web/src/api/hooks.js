@@ -395,13 +395,14 @@ export function useDeleteSecret() {
   });
 }
 
-export function useVariables(owner) {
+export function useVariables(owner, options = {}) {
   return useQuery({
     queryKey: ["variables", owner ?? "all"],
     queryFn: async () => {
       const params = owner ? { owner } : {};
       return (await api.get("/variables", { params })).data.variables;
     },
+    ...options,
   });
 }
 
@@ -493,8 +494,8 @@ export function useDeleteHttpAuth() {
 }
 
 /** Fetch plaintext literals only (not encrypted secrets). */
-export async function fetchHttpAuthLiterals(name) {
-  return (await api.get(`/http-auths/${encodeURIComponent(name)}/reveal`)).data;
+export async function fetchHttpAuthLiterals(id) {
+  return (await api.get(`/http-auths/${encodeURIComponent(id)}/reveal`)).data;
 }
 
 export function useOpsStatus(enabled = true) {
@@ -568,6 +569,15 @@ export function useOpsHttpStop() {
   });
 }
 
+export function useOpsProcessRestart() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ pmId }) =>
+      (await opsApi.post("/restart", { pmId: Number(pmId) })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops-status"] }),
+  });
+}
+
 export function useOpsBumpGeneration() {
   const qc = useQueryClient();
   return useMutation({
@@ -619,6 +629,19 @@ export function useWorkflowRevisions(owner, file, enabled = true) {
         )
       ).data,
     enabled: Boolean(owner && file) && enabled,
+  });
+}
+
+export function useWorkflowRevision(owner, file, revision) {
+  return useQuery({
+    queryKey: ["workflows", owner, file, "revisions", revision],
+    queryFn: async () =>
+      (
+        await api.get(
+          `/workflows/${encodeURIComponent(owner)}/${encodeURIComponent(file)}/revisions/${revision}`,
+        )
+      ).data,
+    enabled: Boolean(owner && file && revision != null),
   });
 }
 

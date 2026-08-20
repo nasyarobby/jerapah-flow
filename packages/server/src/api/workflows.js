@@ -10,6 +10,7 @@ import {
   authLabel,
   validateWorkflowHttpTriggers,
 } from "../../workflow-http-validate.js";
+import { listHttpAuths } from "../../http-auths-store.js";
 import { validateWorkflowFailureTriggers } from "../../trigger-failure.js";
 import {
   duplicateWorkflowYaml,
@@ -29,6 +30,7 @@ import {
   recordRevision,
   listRevisions,
   getRevision,
+  ensureInitialRevision,
 } from "../../workflow-history.js";
 import {
   moveWorkflowToTrash,
@@ -55,7 +57,7 @@ async function reregisterAll(registry) {
   }
 }
 
-function triggerSummary(owner, workflow) {
+function triggerSummary(owner, workflow, nameById) {
   if (!workflow || typeof workflow !== "object") return [];
   return (workflow.triggers ?? []).map((t) => {
     const type = t?.type ?? "unknown";
@@ -67,7 +69,7 @@ function triggerSummary(owner, workflow) {
       schedule: t?.schedule ?? null,
       onConsecutiveFailures: t?.onConsecutiveFailures ?? null,
       onFailureWorkflow: t?.onFailureWorkflow ?? null,
-      auth: isHttp ? authLabel(t?.auth) : null,
+      auth: isHttp ? authLabel(t?.auth, nameById) : null,
     };
   });
 }
@@ -258,6 +260,9 @@ export default function workflowsPluginFactory(registry) {
       const owners = q.owner
         ? [fsStore.assertOwner(q.owner)]
         : fsStore.listOwners();
+      const authNameById = Object.fromEntries(
+        (await listHttpAuths()).map((a) => [a.id, a.name]),
+      );
 
       const items = [];
       for (const owner of owners) {
@@ -304,7 +309,7 @@ export default function workflowsPluginFactory(registry) {
             lastInvokedAt: st.lastInvokedAt,
             lastStatus: st.lastStatus ?? null,
             invocationCount: st.invocationCount,
-            triggers: triggerSummary(owner, parsed),
+            triggers: triggerSummary(owner, parsed, authNameById),
             scripts: scriptNames(parsed),
           });
         }
@@ -322,6 +327,10 @@ export default function workflowsPluginFactory(registry) {
       } catch (err) {
         return reply.code(err.statusCode ?? 400).send({ error: err.message });
       }
+      if (fsStore.readWorkflowYaml(owner, file) == null) {
+        return reply.code(404).send({ error: "workflow not found" });
+      }
+      await ensureInitialRevision({ owner, file });
       const workflowId = workflowIdFromFile(file);
       return { workflow_id: workflowId, revisions: await listRevisions(workflowId) };
     });
