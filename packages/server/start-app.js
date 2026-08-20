@@ -126,7 +126,11 @@ export async function startApp(opts = {}) {
     }
   });
 
-  const registry = createRegistry(server, { queue: workflowQueue });
+  const registry = createRegistry(server, {
+    queue: workflowQueue,
+    // Cron + HTTP triggers enqueue jobs; only the API process may own them.
+    enableTriggers: runApi,
+  });
   registry.registerWorkflows();
   if (runApi) {
     registry.registerHttpTriggers();
