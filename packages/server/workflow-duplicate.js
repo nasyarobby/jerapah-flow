@@ -1,4 +1,8 @@
 import yaml from "yaml";
+import {
+  newWorkflowFilename,
+  workflowFileStem,
+} from "./workflow-normalize.js";
 
 export function ensureWorkflowFilename(file) {
   const trimmed = String(file ?? "").trim();
@@ -6,13 +10,8 @@ export function ensureWorkflowFilename(file) {
   return /\.ya?ml$/i.test(trimmed) ? trimmed : `${trimmed}.yaml`;
 }
 
-export function workflowFileStem(file) {
-  return String(file).replace(/\.ya?ml$/i, "");
-}
-
 /**
- * Next unused copy filename: `track.yaml` → `track-copy.yaml`,
- * `track-copy.yaml` → `track-copy-2.yaml`.
+ * Legacy human-readable copy name (kept for UI hints).
  * @param {string} file
  * @param {string[]} existingFiles
  */
@@ -31,6 +30,19 @@ export function suggestCopyFilename(file, existingFiles = []) {
   let n = copyMatch ? Number(copyMatch[2] || 1) + 1 : 1;
   while (existing.has(candidate(n))) n += 1;
   return candidate(n);
+}
+
+/**
+ * UUID-based duplicate filename (default for new duplicates).
+ * @param {string[]} existingFiles
+ */
+export function suggestDuplicateFilename(existingFiles = []) {
+  const existing = new Set(existingFiles);
+  let file = newWorkflowFilename();
+  while (existing.has(file)) {
+    file = newWorkflowFilename();
+  }
+  return file;
 }
 
 export function nextCopyName(name) {
@@ -55,7 +67,10 @@ export function httpPathCopySuffix(sourceFile, destFile) {
 function suffixHttpPath(path, suffix) {
   const trimmed = String(path).replace(/\/+$/, "");
   const withSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-  const safe = String(suffix).replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "copy";
+  const safe =
+    String(suffix)
+      .replace(/[^A-Za-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "copy";
   return `${withSlash}-${safe}`;
 }
 

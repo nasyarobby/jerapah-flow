@@ -12,9 +12,12 @@ import {
   getHttpAuthInternal,
 } from "../http-auths-store.js";
 import {
+  authLabel,
+  checkAnyHttpAuth,
   checkHttpAuth,
   coerceCredentialString,
   resolveAuthMechanism,
+  resolveAuthMechanisms,
   resolveCredentialValue,
   resolveUnauthorizedSpec,
   sendHttpPageOrJson,
@@ -176,11 +179,11 @@ const secret = await upsertSecret({
       config: { token: { secret: "does_not_exist_xyz" } },
     },
     ctx,
-    );
+  );
   assert(!missingSec, "missing secret fails closed");
 }
 
-// --- named profile ---
+// --- named profile (by id) ---
 const profile = await upsertHttpAuth({
   name: "webhook-smoke",
   type: "bearer",
@@ -188,9 +191,10 @@ const profile = await upsertHttpAuth({
   unauthorized_status: 403,
   unauthorized_response: "deny-smoke",
 });
+assert(typeof profile.id === "string" && profile.id.length > 0, "profile has id");
 {
-  const mech = await resolveAuthMechanism("webhook-smoke");
-  assert(mech?.label === "webhook-smoke", "named profile");
+  const mech = await resolveAuthMechanism(profile.id);
+  assert(mech?.label === "webhook-smoke", "profile by id");
   const ok = await checkHttpAuth(
     mockReq({ authorization: "Bearer named-token" }),
     mech,
@@ -202,9 +206,68 @@ const profile = await upsertHttpAuth({
   assert(pageName === "deny-smoke", "profile unauth page");
 }
 
+// --- rename keeps id ---
+{
+  const renamed = await upsertHttpAuth({
+    id: profile.id,
+    name: "webhook-renamed",
+    type: "bearer",
+    config: { token: { keep: true } },
+    unauthorized_status: 403,
+    unauthorized_response: "deny-smoke",
+  });
+  assert(renamed.id === profile.id, "rename keeps id");
+  assert(renamed.name === "webhook-renamed", "rename updates name");
+  const mech = await resolveAuthMechanism(profile.id);
+  assert(mech?.label === "webhook-renamed", "resolve uses new name label");
+  const ok = await checkHttpAuth(
+    mockReq({ authorization: "Bearer named-token" }),
+    mech,
+    ctx,
+  );
+  assert(ok, "credentials survive rename");
+}
+
+// --- multi-auth OR ---
+const basicProfile = await upsertHttpAuth({
+  name: "basic-smoke",
+  type: "basic",
+  config: { user: "bob", password: "p@ss" },
+});
+{
+  const mechs = await resolveAuthMechanisms([profile.id, basicProfile.id]);
+  assert(mechs.length === 2, "resolve two mechanisms");
+  assert(
+    authLabel([profile.id, basicProfile.id], {
+      [profile.id]: "webhook-renamed",
+      [basicProfile.id]: "basic-smoke",
+    }) === "webhook-renamed|basic-smoke",
+    "authLabel",
+  );
+  const viaBearer = await checkAnyHttpAuth(
+    mockReq({ authorization: "Bearer named-token" }),
+    mechs,
+    ctx,
+  );
+  assert(viaBearer, "OR accepts bearer");
+  const encoded = Buffer.from("bob:p@ss").toString("base64");
+  const viaBasic = await checkAnyHttpAuth(
+    mockReq({ authorization: `Basic ${encoded}` }),
+    mechs,
+    ctx,
+  );
+  assert(viaBasic, "OR accepts basic");
+  const neither = await checkAnyHttpAuth(
+    mockReq({ authorization: "Bearer wrong" }),
+    mechs,
+    ctx,
+  );
+  assert(!neither, "OR rejects when none match");
+}
+
 // trigger-level override
 {
-  const mech = await getHttpAuthInternal("webhook-smoke");
+  const mech = await getHttpAuthInternal(profile.id);
   const { status, pageName } = resolveUnauthorizedSpec(
     { unauthorized: { status: 401, response: "deny-smoke" } },
     mech,
@@ -226,7 +289,7 @@ await validateWorkflowHttpTriggers({
       type: "HTTP",
       method: "POST",
       path: "/x",
-      auth: "webhook-smoke",
+      auth: [profile.id, basicProfile.id],
       response: "deny-smoke",
     },
   ],
@@ -235,12 +298,38 @@ await validateWorkflowHttpTriggers({
 let threw = false;
 try {
   await validateWorkflowHttpTriggers({
-    triggers: [{ type: "HTTP", path: "/x", auth: "no-such-profile" }],
+    triggers: [{ type: "HTTP", path: "/x", auth: profile.id }],
   });
 } catch {
   threw = true;
 }
-assert(threw, "unknown auth fails validation");
+assert(threw, "non-array auth fails validation");
+
+threw = false;
+try {
+  await validateWorkflowHttpTriggers({
+    triggers: [{ type: "HTTP", path: "/x", auth: ["webhook-renamed"] }],
+  });
+} catch {
+  threw = true;
+}
+assert(threw, "name string fails validation");
+
+threw = false;
+try {
+  await validateWorkflowHttpTriggers({
+    triggers: [
+      {
+        type: "HTTP",
+        path: "/x",
+        auth: ["00000000-0000-4000-8000-000000000000"],
+      },
+    ],
+  });
+} catch {
+  threw = true;
+}
+assert(threw, "unknown auth id fails validation");
 
 threw = false;
 try {
@@ -280,6 +369,7 @@ assert(threw, "unknown page fails validation");
 
 // cleanup
 await deleteHttpAuth(profile.id);
+await deleteHttpAuth(basicProfile.id);
 await deleteHttpPage(page.id);
 await deleteSecret(secret.id);
 const leftover = (await listSecrets({ owner })).find(

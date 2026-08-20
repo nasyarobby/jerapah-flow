@@ -10,6 +10,7 @@ import { ScriptDryRunPage } from "./pages/ScriptDryRunPage.jsx";
 import { ScriptEditPage, ScriptNewPage } from "./pages/ScriptEditPage.jsx";
 import { WorkflowsPage } from "./pages/WorkflowsPage.jsx";
 import { WorkflowEditPage, WorkflowNewPage } from "./pages/WorkflowEditPage.jsx";
+import { WorkflowTrashPage } from "./pages/WorkflowTrashPage.jsx";
 import { EventsPage } from "./pages/EventsPage.jsx";
 import { EventDetailPage } from "./pages/EventDetailPage.jsx";
 import { FailuresPage } from "./pages/FailuresPage.jsx";
@@ -20,6 +21,7 @@ import { UsersPage } from "./pages/UsersPage.jsx";
 import { SecretsPage } from "./pages/SecretsPage.jsx";
 import { VariablesPage } from "./pages/VariablesPage.jsx";
 import { OpsPage } from "./pages/OpsPage.jsx";
+import { BackupPage } from "./pages/BackupPage.jsx";
 
 export function App() {
   const qc = useQueryClient();
@@ -59,6 +61,7 @@ export function App() {
         <Route path="/scripts/:name/dry-run" element={<ScriptDryRunPage />} />
         <Route path="/scripts/:name/edit" element={<ScriptEditPage />} />
         <Route path="/workflows" element={<WorkflowsPage />} />
+        <Route path="/workflows/trash" element={<WorkflowTrashPage />} />
         <Route path="/workflows/new" element={<WorkflowNewPage />} />
         <Route path="/workflows/:owner/:file/edit" element={<WorkflowEditPage />} />
         <Route path="/events" element={<EventsPage />} />
@@ -66,19 +69,33 @@ export function App() {
         <Route path="/failures" element={<FailuresPage />} />
         <Route path="/kv" element={<KvPage />} />
         <Route path="/variables" element={<VariablesPage />} />
+        <Route path="/variables/new" element={<VariablesPage />} />
+        <Route path="/variables/:owner/:name/edit" element={<VariablesPage />} />
         <Route path="/auth" element={<AuthProfilesPage />} />
+        <Route path="/auth/new" element={<AuthProfilesPage />} />
+        <Route path="/auth/:name/edit" element={<AuthProfilesPage />} />
         <Route path="/responses" element={<ResponsesPage />} />
         {user.role === "admin" ? (
           <>
             <Route path="/users" element={<UsersPage />} />
+            <Route path="/users/new" element={<UsersPage />} />
+            <Route path="/users/:username/edit" element={<UsersPage />} />
             <Route path="/secrets" element={<SecretsPage />} />
-            <Route path="/ops" element={<OpsPage />} />
+            <Route path="/secrets/new" element={<SecretsPage />} />
+            <Route path="/secrets/:owner/:name/edit" element={<SecretsPage />} />
+            <Route path="/manage" element={<OpsPage />} />
+            <Route path="/ops" element={<Navigate to="/manage" replace />} />
+            <Route path="/backup" element={<BackupPage />} />
           </>
         ) : (
           <>
             <Route path="/users" element={<Navigate to="/" replace />} />
+            <Route path="/users/*" element={<Navigate to="/" replace />} />
             <Route path="/secrets" element={<Navigate to="/" replace />} />
+            <Route path="/secrets/*" element={<Navigate to="/" replace />} />
+            <Route path="/manage" element={<Navigate to="/" replace />} />
             <Route path="/ops" element={<Navigate to="/" replace />} />
+            <Route path="/backup" element={<Navigate to="/" replace />} />
           </>
         )}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -131,6 +131,40 @@ export function restartPm2App(name) {
 }
 
 /**
+ * Restart a single PM2 process by id. Only jflow-http / jflow-worker.
+ * @param {number} pmId
+ * @returns {Promise<{ name: string, pmId: number }>}
+ */
+export async function restartPm2Process(pmId) {
+  const id = Math.floor(Number(pmId));
+  if (!Number.isFinite(id) || id < 0) {
+    const err = new Error("invalid pmId");
+    err.code = "BAD_REQUEST";
+    throw err;
+  }
+
+  const list = await listPm2();
+  const proc = list.find((p) => Number(p.pm_id) === id);
+  if (!proc) {
+    const err = new Error("process not found");
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+  if (proc.name !== PM2_HTTP_NAME && proc.name !== PM2_WORKER_NAME) {
+    const err = new Error("process is not a JerapahFlow child");
+    err.code = "FORBIDDEN";
+    throw err;
+  }
+  await new Promise((resolve, reject) => {
+    pm2.restart(id, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+  return { name: proc.name, pmId: id };
+}
+
+/**
  * Shared env for child processes.
  * @param {{ generation: number }} opts
  */
@@ -251,19 +285,29 @@ export async function describeChildren() {
 
   const mapOne = (p) => ({
     name: p.name,
-    pmId: p.pm_id,
+    pmId: Number(p.pm_id),
     status: p.pm2_env?.status ?? "unknown",
     pid: p.pid ?? null,
     restarts: p.pm2_env?.restart_time ?? 0,
     uptime: p.pm2_env?.pm_uptime ?? null,
     generation: Number(p.pm2_env?.JFLOW_CONFIG_GENERATION ?? 0) || null,
+    memory: Number(p.monit?.memory) || 0,
+    cpu: Number(p.monit?.cpu) || 0,
   });
 
+  const httpMapped = http.map(mapOne);
+  const workersMapped = workers.map(mapOne);
+  const all = [...httpMapped, ...workersMapped];
+
   return {
-    http: http.map(mapOne),
-    workers: workers.map(mapOne),
+    http: httpMapped,
+    workers: workersMapped,
     httpOnline: http.some((p) => p.pm2_env?.status === "online"),
     workerOnlineCount: workers.filter((p) => p.pm2_env?.status === "online").length,
+    totals: {
+      memory: all.reduce((sum, p) => sum + p.memory, 0),
+      cpu: all.reduce((sum, p) => sum + p.cpu, 0),
+    },
   };
 }
 

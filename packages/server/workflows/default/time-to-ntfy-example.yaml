@@ -1,6 +1,7 @@
 name: time to ntfy example
 description: |
   this workflow will send a message to ntfy with the current time
+enabled: false
 scripts:
   - script: plugin/get-current-time
     config:
@@ -12,3 +13,5 @@ triggers:
   - type: HTTP
     method: POST
     path: /time-to-ntfy
+    auth:
+      - 0f78d6d7-bd44-45d7-a826-f51c027b767f

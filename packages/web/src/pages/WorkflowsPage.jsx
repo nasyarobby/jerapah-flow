@@ -72,6 +72,10 @@ export function WorkflowsPage() {
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Workflows</h1>
         <div className="flex items-center gap-2">
+          <Link to="/workflows/trash" className="btn btn-ghost btn-sm">
+            <LuTrash2 className="size-4" />
+            Trash
+          </Link>
           <button
             type="button"
             className="btn btn-ghost btn-sm"
@@ -128,6 +132,7 @@ export function WorkflowsPage() {
                     >
                       <WorkflowFileIcon className="size-7 shrink-0" />
                       {w.name}
+                      <span className="block font-mono text-xs opacity-50">{w.file}</span>
                     </Link>
                     {!w.registered ? (
                       <span
@@ -151,7 +156,7 @@ export function WorkflowsPage() {
                     <label className="inline-flex items-center mr-1" title={w.enabled ? "Disable" : "Enable"}>
                       <input
                         type="checkbox"
-                        className="toggle toggle-xs"
+                        className="toggle toggle-success toggle-xs"
                         checked={Boolean(w.enabled)}
                         disabled={Boolean(w.loadError) || togglingKey === w.key}
                         onChange={() =>
@@ -202,7 +207,7 @@ export function WorkflowsPage() {
                     <button
                       type="button"
                       className="btn btn-ghost btn-xs text-error"
-                      title="Delete"
+                      title="Move to trash"
                       onClick={() => setConfirmDelete(w)}
                     >
                       <LuTrash2 className="size-4" />
@@ -231,7 +236,11 @@ export function WorkflowsPage() {
       {confirmDelete ? (
         <dialog className="modal modal-open">
           <div className="modal-box">
-            <h3 className="font-bold">Delete {confirmDelete.key}?</h3>
+            <h3 className="font-bold">Move {confirmDelete.key} to trash?</h3>
+            <p className="mt-2 text-sm opacity-70">
+              The workflow is removed from the list but kept in trash for 7 days. Revision history
+              is preserved.
+            </p>
             {del.isError ? (
               <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
             ) : null}
@@ -250,7 +259,7 @@ export function WorkflowsPage() {
                   )
                 }
               >
-                Delete
+                Move to trash
               </button>
             </div>
           </div>

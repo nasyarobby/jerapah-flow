@@ -4,7 +4,7 @@ import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import { migrate, db } from "./db.js";
 import { log, enableLogPersistence, flushLogs } from "./logger.js";
-import { COOKIE } from "./src/api/auth.js";
+import authPlugin, { addApiAuthGuard, COOKIE } from "./src/api/auth.js";
 import {
   clearRestartNeeded,
   bumpGeneration,
@@ -35,6 +35,7 @@ import {
   PM2_HTTP_NAME,
   PM2_WORKER_NAME,
   recreateChildren,
+  restartPm2Process,
   stopPm2App,
 } from "./pm2-bridge.js";
 
@@ -124,6 +125,14 @@ server.decorate("requireAdmin", async function requireAdmin(req, reply) {
   }
 });
 
+await server.register(
+  async (api) => {
+    addApiAuthGuard(api, server);
+    await api.register(authPlugin);
+  },
+  { prefix: "/api" },
+);
+
 /**
  * @param {number} timeoutMs
  * @param {string} lockToken
@@ -139,6 +148,43 @@ async function waitUntilIdle(timeoutMs, lockToken) {
   }
   const active = await workflowQueue.getActiveCount();
   return { ok: active === 0, active };
+}
+
+/** @param {unknown} raw */
+function parsePmId(raw) {
+  if (raw == null || raw === "") return null;
+  const id = Math.floor(Number(raw));
+  if (!Number.isFinite(id) || id < 0) return Number.NaN;
+  return id;
+}
+
+async function handleProcessRestart(pmId, reply) {
+  const lock = tryAcquireOpsLock(`process-restart:${process.pid}`);
+  if (!lock.ok) {
+    return reply.code(409).send({ error: lock.error, holder: lock.holder });
+  }
+
+  try {
+    const restarted = await restartPm2Process(pmId);
+    return reply.send({ ok: true, ...restarted, status: await buildStatus() });
+  } catch (err) {
+    const code = err && typeof err === "object" ? err.code : undefined;
+    if (code === "BAD_REQUEST") {
+      return reply.code(400).send({ error: "pmId is required" });
+    }
+    if (code === "NOT_FOUND") {
+      return reply.code(404).send({ error: "process not found" });
+    }
+    if (code === "FORBIDDEN") {
+      return reply.code(403).send({ error: "process is not a JerapahFlow child" });
+    }
+    log.error({ err, pmId }, "process restart failed");
+    return reply.code(500).send({
+      error: err instanceof Error ? err.message : String(err),
+    });
+  } finally {
+    releaseOpsLock(lock.token);
+  }
 }
 
 async function buildStatus() {
@@ -250,9 +296,18 @@ server.post(
   "/ops/restart",
   { onRequest: [server.authenticate, server.requireAdmin] },
   async (req, reply) => {
-    const body = /** @type {{ force?: boolean, timeoutMs?: number }} */ (
+    const body = /** @type {{ force?: boolean, timeoutMs?: number, pmId?: number }} */ (
       req.body ?? {}
     );
+
+    const pmId = parsePmId(body.pmId);
+    if (pmId != null) {
+      if (Number.isNaN(pmId)) {
+        return reply.code(400).send({ error: "pmId is required" });
+      }
+      return handleProcessRestart(pmId, reply);
+    }
+
     const force = Boolean(body.force);
     const timeoutMs = Math.min(
       Math.max(Number(body.timeoutMs) || DRAIN_DEFAULT_MS, 1_000),
@@ -331,6 +386,19 @@ server.post(
     } finally {
       releaseOpsLock(lock.token);
     }
+  },
+);
+
+server.post(
+  "/ops/process/restart",
+  { onRequest: [server.authenticate, server.requireAdmin] },
+  async (req, reply) => {
+    const body = /** @type {{ pmId?: number }} */ (req.body ?? {});
+    const pmId = parsePmId(body.pmId);
+    if (pmId == null || Number.isNaN(pmId)) {
+      return reply.code(400).send({ error: "pmId is required" });
+    }
+    return handleProcessRestart(pmId, reply);
   },
 );
 

@@ -1,6 +1,8 @@
+import { Fragment } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   LuActivity,
+  LuArchive,
   LuCode,
   LuDatabase,
   LuFileText,
@@ -20,16 +22,49 @@ import { useLogout, useOpsStatus } from "../api/hooks.js";
 import { brandMark } from "../theme/brand.js";
 import { useTheme } from "../theme.jsx";
 
-const links = [
-  { to: "/", label: "Home", icon: LuHouse, end: true },
-  { to: "/scripts", label: "Scripts", icon: LuCode },
-  { to: "/workflows", label: "Workflows", icon: LuGitBranch },
-  { to: "/events", label: "Events", icon: LuActivity },
-  { to: "/kv", label: "KV", icon: LuDatabase },
-  { to: "/variables", label: "Variables", icon: LuTags },
-  { to: "/auth", label: "Auth", icon: LuShield },
-  { to: "/responses", label: "Responses", icon: LuFileText },
+const navSections = [
+  {
+    items: [{ to: "/", label: "Home", icon: LuHouse, end: true }],
+  },
+  {
+    title: "Automate",
+    items: [
+      { to: "/workflows", label: "Workflows", icon: LuGitBranch },
+      { to: "/scripts", label: "Scripts", icon: LuCode },
+      { to: "/events", label: "Events", icon: LuActivity },
+    ],
+  },
+  {
+    title: "Platform",
+    items: [
+      { to: "/variables", label: "Variables", icon: LuTags },
+      { to: "/kv", label: "KV", icon: LuDatabase },
+      { to: "/auth", label: "Auth", icon: LuShield },
+      { to: "/responses", label: "Responses", icon: LuFileText },
+      { to: "/secrets", label: "Secrets", icon: LuKey, admin: true },
+    ],
+  },
+  {
+    title: "Admin",
+    admin: true,
+    items: [
+      { to: "/manage", label: "Manage", icon: LuServer },
+      { to: "/backup", label: "Backup", icon: LuArchive },
+      { to: "/users", label: "Users", icon: LuUsers },
+    ],
+  },
 ];
+
+function visibleSections(role) {
+  const isAdmin = role === "admin";
+  return navSections
+    .filter((s) => !s.admin || isAdmin)
+    .map((s) => ({
+      ...s,
+      items: s.items.filter((item) => !item.admin || isAdmin),
+    }))
+    .filter((s) => s.items.length > 0);
+}
 
 export function Layout({ user, children }) {
   const { theme, toggle } = useTheme();
@@ -37,17 +72,6 @@ export function Layout({ user, children }) {
   const navigate = useNavigate();
   const ops = useOpsStatus(user.role === "admin");
   const restartNeeded = Boolean(ops.data?.desired?.restartNeeded);
-
-  const navItems = [
-    ...links,
-    ...(user.role === "admin"
-      ? [
-          { to: "/secrets", label: "Secrets", icon: LuKey },
-          { to: "/users", label: "Users", icon: LuUsers },
-          { to: "/ops", label: "Ops", icon: LuServer },
-        ]
-      : []),
-  ];
 
   function closeDrawer() {
     const el = document.getElementById("nav-drawer");
@@ -101,8 +125,8 @@ export function Layout({ user, children }) {
                   ? ` (${ops.data.desired.restartReason})`
                   : ""}
                 .{" "}
-                <Link to="/ops" className="link font-medium">
-                  Drain restart from Ops
+                <Link to="/manage" className="link font-medium">
+                  Drain restart from Manage
                 </Link>{" "}
                 to apply on HTTP + workers.
               </span>
@@ -120,13 +144,20 @@ export function Layout({ user, children }) {
               <span className="text-base font-semibold text-base-content">JerapahFlow</span>
             </div>
           </li>
-          {navItems.map(({ to, label, icon: Icon, end }) => (
-            <li key={to}>
-              <NavLink to={to} end={end} onClick={closeDrawer}>
-                <Icon className="size-4" />
-                {label}
-              </NavLink>
-            </li>
+          {visibleSections(user.role).map((section) => (
+            <Fragment key={section.title ?? "overview"}>
+              {section.title ? (
+                <li className="menu-title">{section.title}</li>
+              ) : null}
+              {section.items.map(({ to, label, icon: Icon, end }) => (
+                <li key={to}>
+                  <NavLink to={to} end={end} onClick={closeDrawer}>
+                    <Icon className="size-4" />
+                    {label}
+                  </NavLink>
+                </li>
+              ))}
+            </Fragment>
           ))}
         </ul>
       </div>

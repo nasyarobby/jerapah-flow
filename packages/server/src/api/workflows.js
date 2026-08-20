@@ -10,13 +10,39 @@ import {
   authLabel,
   validateWorkflowHttpTriggers,
 } from "../../workflow-http-validate.js";
+import { listHttpAuths } from "../../http-auths-store.js";
 import { validateWorkflowFailureTriggers } from "../../trigger-failure.js";
 import {
   duplicateWorkflowYaml,
   ensureWorkflowFilename,
-  suggestCopyFilename,
+  suggestDuplicateFilename,
 } from "../../workflow-duplicate.js";
 import { publishReload } from "../../control-bus.js";
+import {
+  workflowIdFromFile,
+  newWorkflowFilename,
+} from "../../workflow-normalize.js";
+import {
+  collectWorkflowWarnings,
+  parseWorkflowDocument,
+} from "../../workflow-validate-warnings.js";
+import {
+  recordRevision,
+  listRevisions,
+  getRevision,
+  ensureInitialRevision,
+} from "../../workflow-history.js";
+import {
+  moveWorkflowToTrash,
+  listTrash,
+  restoreFromTrash,
+  purgeTrashItem,
+  isInTrash,
+} from "../../workflow-trash.js";
+import {
+  createWorkflowBackupBuffer,
+  restoreWorkflowBackup,
+} from "../../workflow-backup.js";
 
 /**
  * Reload this process and notify other HTTP/worker processes via Redis.
@@ -31,7 +57,7 @@ async function reregisterAll(registry) {
   }
 }
 
-function triggerSummary(owner, workflow) {
+function triggerSummary(owner, workflow, nameById) {
   if (!workflow || typeof workflow !== "object") return [];
   return (workflow.triggers ?? []).map((t) => {
     const type = t?.type ?? "unknown";
@@ -43,7 +69,7 @@ function triggerSummary(owner, workflow) {
       schedule: t?.schedule ?? null,
       onConsecutiveFailures: t?.onConsecutiveFailures ?? null,
       onFailureWorkflow: t?.onFailureWorkflow ?? null,
-      auth: isHttp ? authLabel(t?.auth) : null,
+      auth: isHttp ? authLabel(t?.auth, nameById) : null,
     };
   });
 }
@@ -63,6 +89,92 @@ function scriptNames(workflow) {
 }
 
 /**
+ * @param {unknown} parsed
+ */
+async function validateStrictWorkflow(parsed) {
+  compileWorkflowScripts(parsed?.scripts);
+  await validateWorkflowHttpTriggers(parsed);
+  await validateWorkflowFailureTriggers(parsed);
+}
+
+/**
+ * @param {{
+ *   owner: string,
+ *   file: string,
+ *   content: string,
+ *   saveAnyway?: boolean,
+ *   reason?: string | null,
+ *   meta?: Record<string, unknown> | null,
+ *   forceRevision?: boolean,
+ * }} opts
+ */
+async function saveWorkflowContent(opts) {
+  const { warnings, parsed, parseError } = collectWorkflowWarnings(opts.content);
+  const saveAnyway = Boolean(opts.saveAnyway);
+
+  if (!saveAnyway) {
+    if (parseError) {
+      const err = new Error("workflow has validation warnings");
+      err.statusCode = 422;
+      err.warnings = warnings;
+      throw err;
+    }
+    try {
+      await validateStrictWorkflow(parsed);
+    } catch (validationErr) {
+      const err = new Error("workflow has validation warnings");
+      err.statusCode = 422;
+      err.warnings = [
+        ...warnings,
+        {
+          code: "validation_error",
+          message:
+            validationErr instanceof Error
+              ? validationErr.message
+              : String(validationErr),
+        },
+      ];
+      throw err;
+    }
+    if (warnings.length) {
+      const err = new Error("workflow has validation warnings");
+      err.statusCode = 422;
+      err.warnings = warnings;
+      throw err;
+    }
+  }
+
+  const workflowId = workflowIdFromFile(opts.file);
+  const existed = fsStore.readWorkflowYaml(opts.owner, opts.file) != null;
+  fsStore.writeWorkflowYaml(opts.owner, opts.file, opts.content);
+
+  const registered = fsStore.readRegisters(opts.owner);
+  if (!registered.includes(opts.file)) {
+    registered.push(opts.file);
+    fsStore.writeRegisters(opts.owner, registered);
+  }
+
+  const revision = await recordRevision({
+    workflowId,
+    owner: opts.owner,
+    file: opts.file,
+    content: opts.content,
+    reason: opts.reason ?? "save",
+    meta: opts.meta ?? null,
+    force: opts.forceRevision,
+  });
+
+  return {
+    owner: opts.owner,
+    file: opts.file,
+    workflow_id: workflowId,
+    existed,
+    warnings,
+    revision,
+  };
+}
+
+/**
  * @param {{ workflows: Map<string, any>, loadErrors: Map<string, string>, reregister: () => void }} registry
  */
 export default function workflowsPluginFactory(registry) {
@@ -74,12 +186,83 @@ export default function workflowsPluginFactory(registry) {
       return { owners: fsStore.listOwners() };
     });
 
+    fastify.get("/workflows/trash", async () => {
+      return { items: await listTrash() };
+    });
+
+    fastify.post("/workflows/trash/:id/restore", async (req, reply) => {
+      const { id } = /** @type {{ id: string }} */ (req.params);
+      try {
+        const restored = await restoreFromTrash(id);
+        await recordRevision({
+          workflowId: restored.workflow_id,
+          owner: restored.owner,
+          file: restored.file,
+          content: restored.content,
+          reason: "restored-from-trash",
+          force: true,
+        });
+        await reregisterAll(registry);
+        return { owner: restored.owner, file: restored.file };
+      } catch (err) {
+        return reply.code(err.statusCode ?? 500).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+
+    fastify.delete("/workflows/trash/:id", async (req, reply) => {
+      const { id } = /** @type {{ id: string }} */ (req.params);
+      try {
+        return await purgeTrashItem(id);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 500).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+
+    fastify.get("/workflows/backup", async (_req, reply) => {
+      const buffer = await createWorkflowBackupBuffer();
+      const stamp = new Date().toISOString().slice(0, 10);
+      return reply
+        .header("Content-Type", "application/zip")
+        .header(
+          "Content-Disposition",
+          `attachment; filename="jerapah-flow-backup-${stamp}.zip"`,
+        )
+        .send(buffer);
+    });
+
+    fastify.post("/workflows/backup/restore", async (req, reply) => {
+      const body = /** @type {{ zipBase64?: string, mode?: string }} */ (
+        req.body ?? {}
+      );
+      if (typeof body.zipBase64 !== "string" || !body.zipBase64.trim()) {
+        return reply.code(400).send({ error: "zipBase64 is required" });
+      }
+      const mode = body.mode === "replace" ? "replace" : "merge";
+      try {
+        const buffer = Buffer.from(body.zipBase64, "base64");
+        const result = await restoreWorkflowBackup(buffer, { mode });
+        await reregisterAll(registry);
+        return result;
+      } catch (err) {
+        return reply.code(400).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+
     fastify.get("/workflows", async (req) => {
       const q = /** @type {{ owner?: string }} */ (req.query ?? {});
       const stats = await store.workflowStats();
       const owners = q.owner
         ? [fsStore.assertOwner(q.owner)]
         : fsStore.listOwners();
+      const authNameById = Object.fromEntries(
+        (await listHttpAuths()).map((a) => [a.id, a.name]),
+      );
 
       const items = [];
       for (const owner of owners) {
@@ -93,6 +276,7 @@ export default function workflowsPluginFactory(registry) {
         const files = [...new Set([...registered, ...onDisk])];
 
         for (const file of files) {
+          if (await isInTrash(owner, file)) continue;
           const key = `${owner}/${file}`;
           const loaded = registry.workflows.get(key);
           const loadError = registry.loadErrors.get(key) ?? null;
@@ -102,11 +286,8 @@ export default function workflowsPluginFactory(registry) {
             if (raw != null) {
               try {
                 parsed = yaml.parse(raw);
-              } catch (err) {
+              } catch {
                 // keep loadError
-                if (!loadError) {
-                  // file on disk but unparseable and not in registers
-                }
               }
             }
           }
@@ -118,24 +299,115 @@ export default function workflowsPluginFactory(registry) {
           items.push({
             owner,
             file,
+            workflow_id: workflowIdFromFile(file),
             key,
             name: parsed?.name ?? file,
             description: parsed?.description ?? null,
             enabled: parsed ? parsed.enabled !== false : false,
             registered: registered.includes(file),
-            loadError:
-              loadError ??
-              (parsed ? null : "unreadable"),
+            loadError: loadError ?? (parsed ? null : "unreadable"),
             lastInvokedAt: st.lastInvokedAt,
             lastStatus: st.lastStatus ?? null,
             invocationCount: st.invocationCount,
-            triggers: triggerSummary(owner, parsed),
+            triggers: triggerSummary(owner, parsed, authNameById),
             scripts: scriptNames(parsed),
           });
         }
       }
       return { workflows: items };
     });
+
+    fastify.get("/workflows/:owner/:file/revisions", async (req, reply) => {
+      const { owner, file } = /** @type {{ owner: string, file: string }} */ (
+        req.params
+      );
+      try {
+        fsStore.assertOwner(owner);
+        fsStore.assertWorkflowFile(file);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({ error: err.message });
+      }
+      if (fsStore.readWorkflowYaml(owner, file) == null) {
+        return reply.code(404).send({ error: "workflow not found" });
+      }
+      await ensureInitialRevision({ owner, file });
+      const workflowId = workflowIdFromFile(file);
+      return { workflow_id: workflowId, revisions: await listRevisions(workflowId) };
+    });
+
+    fastify.get(
+      "/workflows/:owner/:file/revisions/:revision",
+      async (req, reply) => {
+        const { owner, file, revision } = /** @type {{ owner: string, file: string, revision: string }} */ (
+          req.params
+        );
+        try {
+          fsStore.assertOwner(owner);
+          fsStore.assertWorkflowFile(file);
+        } catch (err) {
+          return reply.code(err.statusCode ?? 400).send({ error: err.message });
+        }
+        const workflowId = workflowIdFromFile(file);
+        const rev = await getRevision(workflowId, Number(revision));
+        if (!rev) {
+          return reply.code(404).send({ error: "revision not found" });
+        }
+        return {
+          workflow_id: workflowId,
+          revision: rev.revision,
+          content: rev.content,
+          reason: rev.reason,
+          meta: rev.meta,
+          created_at: rev.created_at,
+        };
+      },
+    );
+
+    fastify.post(
+      "/workflows/:owner/:file/revisions/:revision/revert",
+      async (req, reply) => {
+        const { owner, file, revision } = /** @type {{ owner: string, file: string, revision: string }} */ (
+          req.params
+        );
+        try {
+          fsStore.assertOwner(owner);
+          fsStore.assertWorkflowFile(file);
+        } catch (err) {
+          return reply.code(err.statusCode ?? 400).send({ error: err.message });
+        }
+        if (fsStore.readWorkflowYaml(owner, file) == null) {
+          return reply.code(404).send({ error: "workflow not found" });
+        }
+        const workflowId = workflowIdFromFile(file);
+        const rev = await getRevision(workflowId, Number(revision));
+        if (!rev) {
+          return reply.code(404).send({ error: "revision not found" });
+        }
+        const body = /** @type {{ saveAnyway?: boolean }} */ (req.body ?? {});
+        try {
+          const saved = await saveWorkflowContent({
+            owner,
+            file,
+            content: rev.content,
+            saveAnyway: body.saveAnyway,
+            reason: "revert",
+            meta: { fromRevision: rev.revision },
+          });
+          await reregisterAll(registry);
+          return saved;
+        } catch (err) {
+          if (err.statusCode === 422) {
+            return reply.code(422).send({
+              error: err.message,
+              warnings: err.warnings ?? [],
+            });
+          }
+          return reply.code(err.statusCode ?? 500).send({
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      },
+    );
 
     fastify.get("/workflows/:owner/:file", async (req, reply) => {
       const { owner, file } = /** @type {{ owner: string, file: string }} */ (
@@ -167,6 +439,7 @@ export default function workflowsPluginFactory(registry) {
       return {
         owner,
         file,
+        workflow_id: workflowIdFromFile(file),
         key,
         content,
         parsed,
@@ -188,48 +461,95 @@ export default function workflowsPluginFactory(registry) {
       } catch (err) {
         return reply.code(err.statusCode ?? 400).send({ error: err.message });
       }
-      const body = /** @type {{ content?: string }} */ (req.body ?? {});
+      const body = /** @type {{ content?: string, saveAnyway?: boolean }} */ (
+        req.body ?? {}
+      );
       if (typeof body.content !== "string") {
         return reply.code(400).send({ error: "content is required" });
       }
-      let parsed;
       try {
-        parsed = yaml.parse(body.content);
-      } catch (err) {
-        return reply.code(400).send({
-          error: `invalid yaml: ${err instanceof Error ? err.message : String(err)}`,
+        const saved = await saveWorkflowContent({
+          owner,
+          file,
+          content: body.content,
+          saveAnyway: body.saveAnyway,
+          reason: "save",
         });
-      }
-      try {
-        compileWorkflowScripts(parsed?.scripts);
+        await reregisterAll(registry);
+        return reply.code(saved.existed ? 200 : 201).send({
+          owner: saved.owner,
+          file: saved.file,
+          workflow_id: saved.workflow_id,
+          warnings: saved.warnings,
+          revision: saved.revision,
+        });
       } catch (err) {
-        return reply.code(400).send({
+        if (err.statusCode === 422) {
+          return reply.code(422).send({
+            error: err.message,
+            warnings: err.warnings ?? [],
+          });
+        }
+        return reply.code(err.statusCode ?? 500).send({
           error: err instanceof Error ? err.message : String(err),
         });
       }
+    });
+
+    fastify.post("/workflows/:owner", async (req, reply) => {
+      const { owner } = /** @type {{ owner: string }} */ (req.params);
       try {
-        await validateWorkflowHttpTriggers(parsed);
+        fsStore.assertOwner(owner);
       } catch (err) {
-        return reply.code(err.statusCode ?? 400).send({
+        return reply.code(err.statusCode ?? 400).send({ error: err.message });
+      }
+      const body = /** @type {{ content?: string, file?: string, saveAnyway?: boolean }} */ (
+        req.body ?? {}
+      );
+      if (typeof body.content !== "string") {
+        return reply.code(400).send({ error: "content is required" });
+      }
+      let file = body.file?.trim() ? ensureWorkflowFilename(body.file) : "";
+      if (!file) {
+        const existing = fsStore.listOwnerYamlFiles(owner);
+        file = suggestDuplicateFilename(existing);
+      }
+      try {
+        fsStore.assertWorkflowFile(file);
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({ error: err.message });
+      }
+      if (fsStore.readWorkflowYaml(owner, file) != null) {
+        return reply.code(409).send({ error: "workflow already exists" });
+      }
+      try {
+        const saved = await saveWorkflowContent({
+          owner,
+          file,
+          content: body.content,
+          saveAnyway: body.saveAnyway,
+          reason: "create",
+          forceRevision: true,
+        });
+        await reregisterAll(registry);
+        return reply.code(201).send({
+          owner: saved.owner,
+          file: saved.file,
+          workflow_id: saved.workflow_id,
+          warnings: saved.warnings,
+          revision: saved.revision,
+        });
+      } catch (err) {
+        if (err.statusCode === 422) {
+          return reply.code(422).send({
+            error: err.message,
+            warnings: err.warnings ?? [],
+          });
+        }
+        return reply.code(err.statusCode ?? 500).send({
           error: err instanceof Error ? err.message : String(err),
         });
       }
-      try {
-        await validateWorkflowFailureTriggers(parsed);
-      } catch (err) {
-        return reply.code(err.statusCode ?? 400).send({
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-      const existed = fsStore.readWorkflowYaml(owner, file) != null;
-      fsStore.writeWorkflowYaml(owner, file, body.content);
-      const registered = fsStore.readRegisters(owner);
-      if (!registered.includes(file)) {
-        registered.push(file);
-        fsStore.writeRegisters(owner, registered);
-      }
-      await reregisterAll(registry);
-      return reply.code(existed ? 200 : 201).send({ owner, file });
     });
 
     fastify.patch("/workflows/:owner/:file", async (req, reply) => {
@@ -250,23 +570,39 @@ export default function workflowsPluginFactory(registry) {
       if (content == null) {
         return reply.code(404).send({ error: "workflow not found" });
       }
-      const doc = yaml.parseDocument(content);
-      if (doc.errors?.length) {
-        const msg = doc.errors[0]?.message ?? "invalid yaml";
-        return reply.code(400).send({ error: msg });
-      }
-      const parsed = doc.toJSON();
-      if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return reply.code(400).send({ error: "workflow yaml must be an object" });
+      let doc;
+      try {
+        ({ doc } = parseWorkflowDocument(content));
+      } catch (err) {
+        return reply.code(err.statusCode ?? 400).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
       if (body.enabled) {
         doc.delete("enabled");
       } else {
         doc.set("enabled", false);
       }
-      fsStore.writeWorkflowYaml(owner, file, String(doc));
-      await reregisterAll(registry);
-      return { owner, file, enabled: body.enabled };
+      const nextContent = String(doc);
+      try {
+        const saved = await saveWorkflowContent({
+          owner,
+          file,
+          content: nextContent,
+          reason: body.enabled ? "enable" : "disable",
+        });
+        await reregisterAll(registry);
+        return {
+          owner,
+          file,
+          enabled: body.enabled,
+          revision: saved.revision,
+        };
+      } catch (err) {
+        return reply.code(err.statusCode ?? 500).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     });
 
     fastify.delete("/workflows/:owner/:file", async (req, reply) => {
@@ -279,13 +615,31 @@ export default function workflowsPluginFactory(registry) {
       } catch (err) {
         return reply.code(err.statusCode ?? 400).send({ error: err.message });
       }
-      if (!fsStore.deleteWorkflowYaml(owner, file)) {
+      const raw = fsStore.readWorkflowYaml(owner, file);
+      if (raw == null) {
         return reply.code(404).send({ error: "workflow not found" });
       }
-      const registered = fsStore.readRegisters(owner).filter((f) => f !== file);
-      fsStore.writeRegisters(owner, registered);
-      await reregisterAll(registry);
-      return { ok: true };
+      let name = null;
+      try {
+        const parsed = yaml.parse(raw);
+        name = parsed?.name ?? null;
+      } catch {
+        // ignore
+      }
+      try {
+        const item = await moveWorkflowToTrash({
+          workflowId: workflowIdFromFile(file),
+          owner,
+          file,
+          name,
+        });
+        await reregisterAll(registry);
+        return { ok: true, trash: item };
+      } catch (err) {
+        return reply.code(err.statusCode ?? 500).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     });
 
     fastify.post("/workflows/:owner/:file/duplicate", async (req, reply) => {
@@ -303,7 +657,9 @@ export default function workflowsPluginFactory(registry) {
         return reply.code(404).send({ error: "workflow not found" });
       }
 
-      const body = /** @type {{ file?: unknown, owner?: unknown }} */ (req.body ?? {});
+      const body = /** @type {{ file?: unknown, owner?: unknown, saveAnyway?: boolean }} */ (
+        req.body ?? {}
+      );
       let destOwner = owner;
       if (body.owner != null && body.owner !== "") {
         if (typeof body.owner !== "string") {
@@ -319,7 +675,9 @@ export default function workflowsPluginFactory(registry) {
       let destFile;
       try {
         if (body.file == null || body.file === "") {
-          destFile = suggestCopyFilename(file, fsStore.listOwnerYamlFiles(destOwner));
+          destFile = suggestDuplicateFilename(
+            fsStore.listOwnerYamlFiles(destOwner),
+          );
         } else if (typeof body.file !== "string") {
           return reply.code(400).send({ error: "file must be a string" });
         } else {
@@ -350,44 +708,34 @@ export default function workflowsPluginFactory(registry) {
         });
       }
 
-      let parsed;
       try {
-        parsed = yaml.parse(content);
-      } catch (err) {
-        return reply.code(400).send({
-          error: `invalid yaml: ${err instanceof Error ? err.message : String(err)}`,
+        const saved = await saveWorkflowContent({
+          owner: destOwner,
+          file: destFile,
+          content,
+          saveAnyway: body.saveAnyway,
+          reason: "duplicated",
+          meta: { from: `${owner}/${file}` },
+          forceRevision: true,
         });
-      }
-      try {
-        compileWorkflowScripts(parsed?.scripts);
+        await reregisterAll(registry);
+        return reply.code(201).send({
+          owner: destOwner,
+          file: destFile,
+          workflow_id: saved.workflow_id,
+          revision: saved.revision,
+        });
       } catch (err) {
-        return reply.code(400).send({
+        if (err.statusCode === 422) {
+          return reply.code(422).send({
+            error: err.message,
+            warnings: err.warnings ?? [],
+          });
+        }
+        return reply.code(err.statusCode ?? 500).send({
           error: err instanceof Error ? err.message : String(err),
         });
       }
-      try {
-        await validateWorkflowHttpTriggers(parsed);
-      } catch (err) {
-        return reply.code(err.statusCode ?? 400).send({
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-      try {
-        await validateWorkflowFailureTriggers(parsed);
-      } catch (err) {
-        return reply.code(err.statusCode ?? 400).send({
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-
-      fsStore.writeWorkflowYaml(destOwner, destFile, content);
-      const registered = fsStore.readRegisters(destOwner);
-      if (!registered.includes(destFile)) {
-        registered.push(destFile);
-        fsStore.writeRegisters(destOwner, registered);
-      }
-      await reregisterAll(registry);
-      return reply.code(201).send({ owner: destOwner, file: destFile });
     });
 
     fastify.post("/workflows/:owner/:file/run", async (req, reply) => {
@@ -443,3 +791,5 @@ export default function workflowsPluginFactory(registry) {
     });
   };
 }
+
+export { newWorkflowFilename };

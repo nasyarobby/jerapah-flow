@@ -8,7 +8,7 @@ import { migrate, db } from "./db.js";
 import { log, enableLogPersistence, flushLogs } from "./logger.js";
 import * as store from "./store.js";
 import { createRegistry } from "./registry.js";
-import { COOKIE, OPEN_API_ROUTES } from "./src/api/auth.js";
+import { addApiAuthGuard, COOKIE } from "./src/api/auth.js";
 import authPlugin from "./src/api/auth.js";
 import usersPlugin from "./src/api/users.js";
 import scriptsPluginFactory from "./src/api/scripts.js";
@@ -28,6 +28,7 @@ import {
   createWorkflowWorker,
   getRedisUrlForLog,
 } from "./workflow-queue.js";
+import { purgeExpiredTrash } from "./workflow-trash.js";
 import {
   getConfigGeneration,
   startHeartbeatLoop,
@@ -48,6 +49,14 @@ export async function startApp(opts = {}) {
 
   if (shouldMigrate) {
     await migrate();
+    try {
+      const purged = await purgeExpiredTrash();
+      if (purged > 0) {
+        log.info({ purged }, "purged expired workflow trash");
+      }
+    } catch (err) {
+      log.warn({ err }, "workflow trash purge failed");
+    }
   }
   enableLogPersistence();
 
@@ -117,7 +126,11 @@ export async function startApp(opts = {}) {
     }
   });
 
-  const registry = createRegistry(server, { queue: workflowQueue });
+  const registry = createRegistry(server, {
+    queue: workflowQueue,
+    // Cron + HTTP triggers enqueue jobs; only the API process may own them.
+    enableTriggers: runApi,
+  });
   registry.registerWorkflows();
   if (runApi) {
     registry.registerHttpTriggers();
@@ -150,16 +163,7 @@ export async function startApp(opts = {}) {
   if (runApi) {
     await server.register(
       async (api) => {
-        api.addHook("onRequest", async (req, reply) => {
-          const raw = (req.url || "").split("?")[0];
-          const stripped = raw.replace(/^\/api/, "") || "/";
-          const routeUrl = req.routeOptions?.url || stripped;
-          const open =
-            OPEN_API_ROUTES.has(`${req.method} ${routeUrl}`) ||
-            OPEN_API_ROUTES.has(`${req.method} ${stripped}`);
-          if (open) return;
-          await server.authenticate(req, reply);
-        });
+        addApiAuthGuard(api, server);
         await api.register(authPlugin);
         await api.register(usersPlugin);
         await api.register(secretsPlugin);

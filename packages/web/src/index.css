@@ -3,10 +3,26 @@
   themes: light --default, dark --prefersdark;
 }
 
+@property --value {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
 html,
 body,
 #root {
   min-height: 100%;
+}
+
+.radial-progress {
+  transition:
+    --value 0.7s ease-out,
+    --radialprogress 0.7s ease-out;
+}
+
+.radial-progress::after {
+  transition: transform 0.7s ease-out;
 }
 
 .mermaid-clickable [id^="s"] {

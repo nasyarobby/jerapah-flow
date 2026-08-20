@@ -291,7 +291,7 @@ function normalizeTrigger(raw) {
         ? ""
         : String(raw.onConsecutiveFailures),
     onFailureWorkflow: readOnFailureWorkflow(raw),
-    auth: raw.auth ?? null,
+    auth: Array.isArray(raw.auth) ? raw.auth : null,
     response: typeof raw.response === "string" ? raw.response : "",
     unauthorized: raw.unauthorized ?? null,
     extra: Object.keys(extra).length ? extra : undefined,
@@ -345,7 +345,7 @@ function dumpTrigger(t) {
       method: t.method || "POST",
       path: t.path || "/",
     };
-    if (t.auth != null && t.auth !== false && t.auth !== "") out.auth = t.auth;
+    if (Array.isArray(t.auth) && t.auth.length > 0) out.auth = t.auth;
     if (t.response) out.response = t.response;
     if (t.unauthorized != null && t.unauthorized !== "") out.unauthorized = t.unauthorized;
     dumpFailureTriggerFields(t, out);
