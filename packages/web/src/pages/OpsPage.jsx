@@ -55,7 +55,7 @@ export function OpsPage() {
   if (unavailable) {
     return (
       <div className="mx-auto max-w-3xl space-y-4">
-        <h1 className="text-2xl font-semibold">Ops</h1>
+        <h1 className="text-2xl font-semibold">Manage</h1>
         <div className="alert alert-warning">
           <span>
             Control plane is not reachable on <code>/ops</code>. Use{" "}
@@ -74,14 +74,10 @@ export function OpsPage() {
   const children = data?.children;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Ops</h1>
-          <p className="text-sm opacity-70">
-            Process control via PM2. Pause stops workers from opening jobs;
-            cron/HTTP can still enqueue. Restart drains active jobs unless forced.
-          </p>
+          <h1 className="text-2xl font-semibold">Manage</h1>
         </div>
         <button
           type="button"

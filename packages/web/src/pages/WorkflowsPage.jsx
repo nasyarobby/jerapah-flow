@@ -4,8 +4,6 @@ import { LuActivity, LuCopy, LuPencil, LuPlay, LuPlus, LuRefreshCw, LuTrash2, Lu
 import { errorMessage } from "../api/client.js";
 import {
   useDeleteWorkflow,
-  useDownloadWorkflowBackup,
-  useRestoreWorkflowBackup,
   useReregisterWorkflows,
   useRunWorkflow,
   useSetWorkflowEnabled,
@@ -14,7 +12,6 @@ import {
 import { DuplicateWorkflowDialog } from "../components/DuplicateWorkflowDialog.jsx";
 import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
 import { formatTime, WorkflowStatusBadge } from "../lib/format.jsx";
-import { useNotifications } from "../notifications.jsx";
 
 export function WorkflowsPage() {
   const navigate = useNavigate();
@@ -28,10 +25,6 @@ export function WorkflowsPage() {
   const run = useRunWorkflow();
   const setEnabled = useSetWorkflowEnabled();
   const reregister = useReregisterWorkflows();
-  const backup = useDownloadWorkflowBackup();
-  const restoreBackup = useRestoreWorkflowBackup();
-  const { notify } = useNotifications();
-  const [restoreMode, setRestoreMode] = useState("merge");
 
   if (editParam) {
     const slash = editParam.indexOf("/");
@@ -112,56 +105,6 @@ export function WorkflowsPage() {
       {setEnabled.isError ? (
         <p className="text-error text-sm">{errorMessage(setEnabled.error)}</p>
       ) : null}
-
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <button
-          type="button"
-          className="btn btn-ghost btn-xs"
-          disabled={backup.isPending}
-          onClick={() =>
-            backup.mutate(undefined, {
-              onSuccess: () => notify.success("Backup downloaded"),
-              onError: (err) => notify.error(errorMessage(err)),
-            })
-          }
-        >
-          Download backup
-        </button>
-        <label className="btn btn-ghost btn-xs cursor-pointer">
-          Restore backup
-          <input
-            type="file"
-            accept=".zip,application/zip"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (!file) return;
-              restoreBackup.mutate(
-                { file, mode: restoreMode },
-                {
-                  onSuccess: (data) => {
-                    notify.success("Backup restored");
-                    if (data.warnings?.length) {
-                      notify.warning(data.warnings.join("; "));
-                    }
-                  },
-                  onError: (err) => notify.error(errorMessage(err)),
-                },
-              );
-            }}
-          />
-        </label>
-        <select
-          className="select select-xs"
-          value={restoreMode}
-          onChange={(e) => setRestoreMode(e.target.value)}
-          aria-label="Restore mode"
-        >
-          <option value="merge">Merge restore</option>
-          <option value="replace">Replace restore</option>
-        </select>
-      </div>
 
       {isLoading ? (
         <span className="loading loading-spinner" />
