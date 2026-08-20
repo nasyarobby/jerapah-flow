@@ -11,6 +11,14 @@ jobs:
       - name: Deploy
         run: |
           set -euo pipefail
+
+          # act_runner uses bash --noprofile --norc; load nvm/pnpm explicitly
+          export NVM_DIR="/home/nsrb/.nvm"
+          export PNPM_HOME="/home/nsrb/.local/share/pnpm"
+          # shellcheck disable=SC1091
+          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+          export PATH="$PNPM_HOME/bin:$PATH"
+
           APP_DIR=/home/nsrb/apps/jerapah-flow
           cd "$APP_DIR"
 
