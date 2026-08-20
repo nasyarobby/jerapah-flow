@@ -14,10 +14,10 @@ import {
   resolveScriptRef,
   uninstallPlugin,
   createBlankPlugin,
+  installPluginFromDirectory,
 } from "../../plugin-store.js";
 import {
   installExamplePlugin,
-  installPluginFromDirectory,
   installPluginFromGit,
   installPluginFromZipBuffer,
 } from "../../plugin-install.js";
