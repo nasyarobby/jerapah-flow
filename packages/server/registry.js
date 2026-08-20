@@ -36,7 +36,9 @@ import {
   resolveFailureTriggerConfig,
 } from "./trigger-failure.js";
 import { enqueueWorkflowJob } from "./workflow-queue.js";
-import { ensureInitialRevision } from "./workflow-history.js";
+import { ensureInitialRevision, recordRevision } from "./workflow-history.js";
+import { workflowIdFromFile } from "./workflow-normalize.js";
+import { publishReload } from "./control-bus.js";
 
 /**
  * @typedef {{ owner: string, file: string, workflow: any }} WorkflowEntry
@@ -653,6 +655,45 @@ export function createRegistry(server, opts = {}) {
   }
 
   /**
+   * Persist `enabled: false` for a workflow and reload registries across processes.
+   * @param {string} owner
+   * @param {string} file
+   * @param {string} key
+   */
+  async function disableWorkflowForConsecutiveFailures(owner, file, key) {
+    const content = fsStore.readWorkflowYaml(owner, file);
+    if (content == null) {
+      throw new Error(`workflow file missing for ${key}`);
+    }
+    const doc = yaml.parseDocument(content);
+    if (doc.errors?.length) {
+      throw new Error(doc.errors[0]?.message ?? "invalid yaml");
+    }
+    const parsed = doc.toJSON();
+    if (parsed?.enabled === false) {
+      log.debug({ workflow: key }, "workflow already disabled");
+      return;
+    }
+    doc.set("enabled", false);
+    const nextContent = String(doc);
+    fsStore.writeWorkflowYaml(owner, file, nextContent);
+    await recordRevision({
+      workflowId: workflowIdFromFile(file),
+      owner,
+      file,
+      content: nextContent,
+      reason: "disable-on-consecutive-failures",
+    });
+    reregister();
+    try {
+      await publishReload({ type: "workflows" });
+    } catch {
+      // Redis may be briefly unavailable; local reload already applied.
+    }
+    log.warn({ workflow: key }, "disabled workflow after consecutive failures");
+  }
+
+  /**
    * @param {{
    *   key: string,
    *   owner: string,
@@ -687,6 +728,17 @@ export function createRegistry(server, opts = {}) {
       );
       return;
     }
+
+    if (failureConfig.disableOnConsecutiveFailures) {
+      const entry = workflows.get(opts.key);
+      if (entry) {
+        await disableWorkflowForConsecutiveFailures(entry.owner, entry.file, opts.key);
+      } else {
+        log.warn({ workflow: opts.key }, "cannot disable missing workflow entry");
+      }
+    }
+
+    if (!failureConfig.workflowName) return;
 
     const destKey = resolveWorkflowTriggerKey(opts.owner, failureConfig.workflowName);
     const alertData = buildFailureAlertData({

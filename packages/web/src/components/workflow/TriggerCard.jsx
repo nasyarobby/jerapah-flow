@@ -117,10 +117,15 @@ export function TriggerCard({
 
 function triggerSummary(trigger, owner) {
   const type = trigger?.type;
-  const failure =
-    trigger.onConsecutiveFailures && trigger.onFailureWorkflow
-      ? ` · onFailure@${trigger.onFailureWorkflow}`
-      : "";
+  /** @type {string[]} */
+  const failureParts = [];
+  if (trigger.onConsecutiveFailures && trigger.onFailureWorkflow) {
+    failureParts.push(`onFailure@${trigger.onFailureWorkflow}`);
+  }
+  if (trigger.disableOnConsecutiveFailures) {
+    failureParts.push("auto-disable");
+  }
+  const failure = failureParts.length ? ` · ${failureParts.join(", ")}` : "";
   if (type === "HTTP") {
     return `${trigger.method || "POST"} ${namespacedPath(owner || "owner", trigger.path || "/")}${failure}`;
   }
@@ -516,6 +521,20 @@ function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) 
           ) : null}
         </select>
       </Field>
+      <label className="label cursor-pointer justify-start gap-3 py-0">
+        <input
+          type="checkbox"
+          className="checkbox checkbox-sm"
+          checked={Boolean(trigger.disableOnConsecutiveFailures)}
+          disabled={disabled}
+          onChange={(e) =>
+            onChange({ ...trigger, disableOnConsecutiveFailures: e.target.checked })
+          }
+        />
+        <span className="label-text">
+          Disable this workflow when the consecutive failure threshold is reached
+        </span>
+      </label>
     </div>
   );
 }

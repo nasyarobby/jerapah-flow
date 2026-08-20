@@ -124,7 +124,8 @@ Desired state is stored in `packages/server/data/control-state.json` (generation
 | `JFLOW_RETENTION_DAYS` | `30` | Run history prune |
 | `JFLOW_CORS_ORIGIN` | `http://localhost:8500` | Vite origin in dev |
 | `PORT` | `8700` | HTTP API port |
-| `NODE_ENV` | — | Set `production` for secure cookies |
+| `NODE_ENV` | — | Set `production` for secure cookies (unless overridden) |
+| `COOKIE_SECURE` | (from `NODE_ENV`) | `true`/`false` — force Secure cookie flag. Use `false` for plain HTTP LAN access (`http://192.168.x.x`) |
 
 Workflow runs are **queued** via BullMQ. HTTP and manual triggers return `202 { runId, status: "queued" }` immediately; poll `GET /api/runs/:id` for progress (`queued` → `running` → `success` \| `failed`). Cron remains an in-process producer that enqueues jobs on each tick.
 

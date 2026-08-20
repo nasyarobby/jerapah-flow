@@ -144,6 +144,7 @@ export function newHttpTrigger() {
     unauthorized: null,
     onConsecutiveFailures: "",
     onFailureWorkflow: "",
+    disableOnConsecutiveFailures: false,
   };
 }
 
@@ -159,6 +160,7 @@ export function newCronTrigger() {
     unauthorized: null,
     onConsecutiveFailures: "",
     onFailureWorkflow: "",
+    disableOnConsecutiveFailures: false,
   };
 }
 
@@ -174,6 +176,7 @@ export function newWorkflowTrigger() {
     unauthorized: null,
     onConsecutiveFailures: "",
     onFailureWorkflow: "",
+    disableOnConsecutiveFailures: false,
   };
 }
 
@@ -271,9 +274,16 @@ function normalizeTrigger(raw) {
           "unauthorized",
           "onConsecutiveFailures",
           "onFailureWorkflow",
+          "disableOnConsecutiveFailures",
         ])
       : type === "cron"
-        ? new Set(["type", "schedule", "onConsecutiveFailures", "onFailureWorkflow"])
+        ? new Set([
+            "type",
+            "schedule",
+            "onConsecutiveFailures",
+            "onFailureWorkflow",
+            "disableOnConsecutiveFailures",
+          ])
         : new Set(["type"]);
   /** @type {Record<string, unknown>} */
   const extra = {};
@@ -291,6 +301,7 @@ function normalizeTrigger(raw) {
         ? ""
         : String(raw.onConsecutiveFailures),
     onFailureWorkflow: readOnFailureWorkflow(raw),
+    disableOnConsecutiveFailures: raw.disableOnConsecutiveFailures === true,
     auth: Array.isArray(raw.auth) ? raw.auth : null,
     response: typeof raw.response === "string" ? raw.response : "",
     unauthorized: raw.unauthorized ?? null,
@@ -333,6 +344,9 @@ function dumpFailureTriggerFields(t, out) {
   }
   if (typeof t.onFailureWorkflow === "string" && t.onFailureWorkflow.trim()) {
     out.onFailureWorkflow = t.onFailureWorkflow.trim();
+  }
+  if (t.disableOnConsecutiveFailures === true) {
+    out.disableOnConsecutiveFailures = true;
   }
 }
 

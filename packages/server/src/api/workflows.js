@@ -69,6 +69,7 @@ function triggerSummary(owner, workflow, nameById) {
       schedule: t?.schedule ?? null,
       onConsecutiveFailures: t?.onConsecutiveFailures ?? null,
       onFailureWorkflow: t?.onFailureWorkflow ?? null,
+      disableOnConsecutiveFailures: t?.disableOnConsecutiveFailures === true,
       auth: isHttp ? authLabel(t?.auth, nameById) : null,
     };
   });
