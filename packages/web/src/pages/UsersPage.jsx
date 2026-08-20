@@ -1,66 +1,64 @@
-import { useState } from "react";
-import { LuPencil, LuPlus, LuTrash2, LuX } from "react-icons/lu";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
-import {
-  useCreateUser,
-  useDeleteUser,
-  useUpdateUser,
-  useUsers,
-} from "../api/hooks.js";
+import { useDeleteUser, useUsers } from "../api/hooks.js";
+import { UserEditorModal } from "../components/UserEditorModal.jsx";
 
 export function UsersPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { username: routeUsername } = useParams();
+  const isNewRoute = /\/users\/new\/?$/.test(location.pathname);
+  const isEditRoute = Boolean(routeUsername) && !isNewRoute;
+
   const { data: users = [], isLoading } = useUsers();
-  const create = useCreateUser();
-  const update = useUpdateUser();
   const del = useDeleteUser();
-  const [mode, setMode] = useState(null);
-  const [form, setForm] = useState({
-    username: "",
-    password: "",
-    role: "operator",
-    id: null,
-  });
+  const [editor, setEditor] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const openedRouteKey = useRef(null);
 
-  function openAdd() {
-    setMode("add");
-    setForm({ username: "", password: "", role: "operator", id: null });
-  }
-
-  function openEdit(u) {
-    setMode("edit");
-    setForm({ username: u.username, password: "", role: u.role, id: u.id });
-  }
-
-  function closeForm() {
-    setMode(null);
-  }
-
-  function onSubmit(e) {
-    e.preventDefault();
-    if (mode === "add") {
-      create.mutate(
-        {
-          username: form.username,
-          password: form.password,
-          role: form.role,
-        },
-        { onSuccess: closeForm },
-      );
-    } else {
-      const body = { id: form.id, role: form.role };
-      if (form.password) body.password = form.password;
-      update.mutate(body, { onSuccess: closeForm });
+  function closeEditor() {
+    setEditor(null);
+    openedRouteKey.current = null;
+    if (isNewRoute || isEditRoute) {
+      navigate("/users", { replace: true });
     }
   }
 
-  const mutation = mode === "add" ? create : update;
+  useEffect(() => {
+    if (!isNewRoute) return;
+    if (openedRouteKey.current === "new") return;
+    openedRouteKey.current = "new";
+    setEditor({ mode: "add" });
+  }, [isNewRoute]);
+
+  useEffect(() => {
+    if (!isEditRoute) {
+      if (!isNewRoute) openedRouteKey.current = null;
+      return;
+    }
+    if (isLoading) return;
+    const key = `edit:${routeUsername}`;
+    if (openedRouteKey.current === key) return;
+    openedRouteKey.current = key;
+    const user = users.find((u) => u.username === routeUsername);
+    if (!user) {
+      setEditor({ mode: "add" });
+      return;
+    }
+    setEditor({ mode: "edit", user });
+  }, [isEditRoute, isNewRoute, routeUsername, isLoading, users]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Users</h1>
-        <button type="button" className="btn btn-primary btn-sm" onClick={openAdd}>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => navigate("/users/new")}
+        >
           <LuPlus className="size-4" />
           Add
         </button>
@@ -90,7 +88,9 @@ export function UsersPage() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Edit"
-                      onClick={() => openEdit(u)}
+                      onClick={() =>
+                        navigate(`/users/${encodeURIComponent(u.username)}/edit`)
+                      }
                     >
                       <LuPencil className="size-4" />
                     </button>
@@ -110,53 +110,12 @@ export function UsersPage() {
         </div>
       )}
 
-      {mode ? (
-        <form onSubmit={onSubmit} className="fieldset bg-base-100 border-base-300 rounded-box max-w-md border p-4">
-          <div className="flex items-center justify-between">
-            <legend className="fieldset-legend">
-              {mode === "add" ? "New user" : form.username}
-            </legend>
-            <button type="button" className="btn btn-ghost btn-sm btn-square" onClick={closeForm} aria-label="Close">
-              <LuX className="size-4" />
-            </button>
-          </div>
-          {mode === "add" ? (
-            <>
-              <label className="label">Username</label>
-              <input
-                className="input w-full"
-                value={form.username}
-                onChange={(e) => setForm({ ...form, username: e.target.value })}
-                required
-              />
-            </>
-          ) : null}
-          <label className="label">{mode === "add" ? "Password" : "New password"}</label>
-          <input
-            type="password"
-            className="input w-full"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            required={mode === "add"}
-            minLength={mode === "add" ? 8 : undefined}
-            placeholder={mode === "edit" ? "leave blank to keep" : ""}
-          />
-          <label className="label">Role</label>
-          <select
-            className="select w-full"
-            value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value })}
-          >
-            <option value="operator">operator</option>
-            <option value="admin">admin</option>
-          </select>
-          {mutation.isError ? (
-            <p className="text-error text-sm">{errorMessage(mutation.error)}</p>
-          ) : null}
-          <button type="submit" className="btn btn-primary mt-2" disabled={mutation.isPending}>
-            Save
-          </button>
-        </form>
+      {editor ? (
+        <UserEditorModal
+          mode={editor.mode}
+          user={editor.user}
+          onClose={closeEditor}
+        />
       ) : null}
 
       {confirmDelete ? (

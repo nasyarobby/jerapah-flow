@@ -69,12 +69,20 @@ export function App() {
         <Route path="/failures" element={<FailuresPage />} />
         <Route path="/kv" element={<KvPage />} />
         <Route path="/variables" element={<VariablesPage />} />
+        <Route path="/variables/new" element={<VariablesPage />} />
+        <Route path="/variables/:owner/:name/edit" element={<VariablesPage />} />
         <Route path="/auth" element={<AuthProfilesPage />} />
+        <Route path="/auth/new" element={<AuthProfilesPage />} />
+        <Route path="/auth/:name/edit" element={<AuthProfilesPage />} />
         <Route path="/responses" element={<ResponsesPage />} />
         {user.role === "admin" ? (
           <>
             <Route path="/users" element={<UsersPage />} />
+            <Route path="/users/new" element={<UsersPage />} />
+            <Route path="/users/:username/edit" element={<UsersPage />} />
             <Route path="/secrets" element={<SecretsPage />} />
+            <Route path="/secrets/new" element={<SecretsPage />} />
+            <Route path="/secrets/:owner/:name/edit" element={<SecretsPage />} />
             <Route path="/manage" element={<OpsPage />} />
             <Route path="/ops" element={<Navigate to="/manage" replace />} />
             <Route path="/backup" element={<BackupPage />} />
@@ -82,7 +90,9 @@ export function App() {
         ) : (
           <>
             <Route path="/users" element={<Navigate to="/" replace />} />
+            <Route path="/users/*" element={<Navigate to="/" replace />} />
             <Route path="/secrets" element={<Navigate to="/" replace />} />
+            <Route path="/secrets/*" element={<Navigate to="/" replace />} />
             <Route path="/manage" element={<Navigate to="/" replace />} />
             <Route path="/ops" element={<Navigate to="/" replace />} />
             <Route path="/backup" element={<Navigate to="/" replace />} />

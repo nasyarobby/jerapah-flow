@@ -1,54 +1,80 @@
-import { useState } from "react";
-import { LuPencil, LuPlus, LuTrash2, LuX } from "react-icons/lu";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
-import {
-  useDeleteSecret,
-  useOwners,
-  useSecrets,
-  useUpsertSecret,
-} from "../api/hooks.js";
+import { useDeleteSecret, useOwners, useSecrets } from "../api/hooks.js";
+import { SecretEditorModal } from "../components/SecretEditorModal.jsx";
 import { formatTime } from "../lib/format.jsx";
 
 export function SecretsPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { owner: routeOwner, name: routeName } = useParams();
+  const [params] = useSearchParams();
+  const isNewRoute = /\/secrets\/new\/?$/.test(location.pathname);
+  const isEditRoute = Boolean(routeOwner && routeName);
+
   const { data: owners = [] } = useOwners();
-  const [ownerFilter, setOwnerFilter] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState(
+    () => routeOwner || params.get("owner") || "",
+  );
   const { data: secrets = [], isLoading } = useSecrets(ownerFilter || undefined);
-  const upsert = useUpsertSecret();
   const del = useDeleteSecret();
-  const [mode, setMode] = useState(null);
-  const [form, setForm] = useState({
-    owner: "",
-    name: "",
-    value: "",
-  });
+  const [editor, setEditor] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [highlightName, setHighlightName] = useState(() => routeName || "");
+  const highlightRef = useRef(null);
+  const openedRouteKey = useRef(null);
 
-  function openAdd() {
-    setMode("add");
-    setForm({
-      owner: ownerFilter || owners[0] || "default",
-      name: "",
-      value: "",
+  const listPath = ownerFilter
+    ? `/secrets?owner=${encodeURIComponent(ownerFilter)}`
+    : "/secrets";
+
+  function closeEditor() {
+    setEditor(null);
+    openedRouteKey.current = null;
+    if (isNewRoute || isEditRoute) {
+      navigate(listPath, { replace: true });
+    }
+  }
+
+  useEffect(() => {
+    if (!isNewRoute) return;
+    const key = `new:${params.get("owner") || ""}:${params.get("name") || ""}`;
+    if (openedRouteKey.current === key) return;
+    if (!params.get("owner") && !ownerFilter && owners.length === 0) return;
+    const owner = params.get("owner") || ownerFilter || owners[0] || "default";
+    if (params.get("owner")) setOwnerFilter(params.get("owner"));
+    openedRouteKey.current = key;
+    setEditor({
+      mode: "add",
+      initial: { owner, name: params.get("name") || "" },
     });
-  }
+  }, [isNewRoute, params, owners, ownerFilter]);
 
-  function openReplace(s) {
-    setMode("replace");
-    setForm({ owner: s.owner, name: s.name, value: "" });
-  }
+  useEffect(() => {
+    if (!isEditRoute) {
+      if (!isNewRoute) openedRouteKey.current = null;
+      return;
+    }
+    if (ownerFilter !== routeOwner) {
+      setOwnerFilter(routeOwner);
+      return;
+    }
+    const key = `edit:${routeOwner}/${routeName}`;
+    if (openedRouteKey.current === key) return;
+    openedRouteKey.current = key;
+    setHighlightName(routeName);
+    setEditor({
+      mode: "replace",
+      initial: { owner: routeOwner, name: routeName },
+    });
+  }, [isEditRoute, isNewRoute, routeOwner, routeName, ownerFilter]);
 
-  function closeForm() {
-    setMode(null);
-    setForm({ owner: "", name: "", value: "" });
-  }
-
-  function onSubmit(e) {
-    e.preventDefault();
-    upsert.mutate(
-      { owner: form.owner, name: form.name, value: form.value },
-      { onSuccess: closeForm },
-    );
-  }
+  useEffect(() => {
+    if (!highlightName || isLoading) return;
+    highlightRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [highlightName, isLoading, secrets]);
 
   return (
     <div className="space-y-4">
@@ -58,7 +84,16 @@ export function SecretsPage() {
           <select
             className="select select-sm"
             value={ownerFilter}
-            onChange={(e) => setOwnerFilter(e.target.value)}
+            onChange={(e) => {
+              setOwnerFilter(e.target.value);
+              setHighlightName("");
+              navigate(
+                e.target.value
+                  ? `/secrets?owner=${encodeURIComponent(e.target.value)}`
+                  : "/secrets",
+                { replace: true },
+              );
+            }}
           >
             <option value="">all owners</option>
             {owners.map((o) => (
@@ -67,7 +102,17 @@ export function SecretsPage() {
               </option>
             ))}
           </select>
-          <button type="button" className="btn btn-primary btn-sm" onClick={openAdd}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() =>
+              navigate(
+                ownerFilter
+                  ? `/secrets/new?owner=${encodeURIComponent(ownerFilter)}`
+                  : "/secrets/new",
+              )
+            }
+          >
             <LuPlus className="size-4" />
             Add
           </button>
@@ -90,109 +135,59 @@ export function SecretsPage() {
               </tr>
             </thead>
             <tbody>
-              {secrets.map((s) => (
-                <tr key={s.id} className="hover">
-                  <td className="font-mono">{s.owner}</td>
-                  <td className="font-mono">{s.name}</td>
-                  <td className="whitespace-nowrap">{formatTime(s.updated_at)}</td>
-                  <td className="text-right whitespace-nowrap">
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-xs"
-                      title="Replace value"
-                      onClick={() => openReplace(s)}
-                    >
-                      <LuPencil className="size-4" />
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-xs text-error"
-                      title="Delete"
-                      onClick={() => setConfirmDelete(s)}
-                    >
-                      <LuTrash2 className="size-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {secrets.map((s) => {
+                const highlighted =
+                  highlightName &&
+                  s.name === highlightName &&
+                  (!ownerFilter || s.owner === ownerFilter);
+                return (
+                  <tr
+                    key={s.id}
+                    ref={highlighted ? highlightRef : undefined}
+                    className={`hover ${highlighted ? "bg-primary/10 outline outline-1 outline-primary/40" : ""}`}
+                  >
+                    <td className="font-mono">{s.owner}</td>
+                    <td className="font-mono">{s.name}</td>
+                    <td className="whitespace-nowrap">{formatTime(s.updated_at)}</td>
+                    <td className="text-right whitespace-nowrap">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs"
+                        title="Replace value"
+                        onClick={() =>
+                          navigate(
+                            `/secrets/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.name)}/edit`,
+                          )
+                        }
+                      >
+                        <LuPencil className="size-4" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-error"
+                        title="Delete"
+                        onClick={() => setConfirmDelete(s)}
+                      >
+                        <LuTrash2 className="size-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {mode ? (
-        <form
-          onSubmit={onSubmit}
-          className="fieldset bg-base-100 border-base-300 rounded-box max-w-md border p-4"
-        >
-          <div className="flex items-center justify-between">
-            <legend className="fieldset-legend">
-              {mode === "add" ? "New secret" : `Replace ${form.owner}/${form.name}`}
-            </legend>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm btn-square"
-              onClick={closeForm}
-              aria-label="Close"
-            >
-              <LuX className="size-4" />
-            </button>
-          </div>
-          {mode === "add" ? (
-            <>
-              <label className="label">Owner</label>
-              {owners.length > 0 ? (
-                <select
-                  className="select w-full"
-                  value={form.owner}
-                  onChange={(e) => setForm({ ...form, owner: e.target.value })}
-                  required
-                >
-                  {owners.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  className="input w-full"
-                  value={form.owner}
-                  onChange={(e) => setForm({ ...form, owner: e.target.value })}
-                  required
-                />
-              )}
-              <label className="label">Name</label>
-              <input
-                className="input w-full font-mono"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-                pattern="[A-Za-z0-9._-]+"
-                title="Letters, numbers, dots, underscores, hyphens"
-              />
-            </>
-          ) : null}
-          <label className="label">Value</label>
-          <input
-            type="password"
-            className="input w-full"
-            value={form.value}
-            onChange={(e) => setForm({ ...form, value: e.target.value })}
-            required
-            autoComplete="new-password"
-          />
-          <p className="text-xs opacity-60 mt-1">
-            Values are encrypted at rest and never shown again after save.
-            Values shorter than 8 characters are not redacted from logs.
-          </p>
-          {upsert.isError ? (
-            <p className="text-error text-sm">{errorMessage(upsert.error)}</p>
-          ) : null}
-          <button type="submit" className="btn btn-primary mt-2" disabled={upsert.isPending}>
-            Save
-          </button>
-        </form>
+      {editor ? (
+        <SecretEditorModal
+          mode={editor.mode}
+          initial={editor.initial}
+          onClose={closeEditor}
+          onSaved={(saved) => {
+            setHighlightName(saved?.name || editor.initial.name);
+          }}
+        />
       ) : null}
 
       {confirmDelete ? (
@@ -201,7 +196,9 @@ export function SecretsPage() {
             <h3 className="font-bold">
               Delete {confirmDelete.owner}/{confirmDelete.name}?
             </h3>
-            <p className="text-sm mt-2">This cannot be undone. Workflows that retrieve this name will fail.</p>
+            <p className="text-sm mt-2">
+              This cannot be undone. Workflows that retrieve this name will fail.
+            </p>
             {del.isError ? (
               <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
             ) : null}
