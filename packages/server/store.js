@@ -65,6 +65,7 @@ function nowIso() {
  *   input?: unknown,
  *   parentRunId?: string | null,
  *   status?: "queued" | "running",
+ *   workflowRevision?: number | null,
  * }} opts
  */
 export async function startRun({
@@ -75,6 +76,7 @@ export async function startRun({
   input = null,
   parentRunId = null,
   status = "queued",
+  workflowRevision = null,
 }) {
   const id = randomUUID();
   const now = nowIso();
@@ -91,6 +93,7 @@ export async function startRun({
     queued_at: isQueued ? now : null,
     input: serialize(input),
     parent_run_id: parentRunId ?? null,
+    workflow_revision: workflowRevision ?? null,
   });
   return { id, started_at: now, queued_at: isQueued ? now : null };
 }

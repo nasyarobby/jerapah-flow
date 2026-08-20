@@ -25,11 +25,21 @@ export function parseWorkflowObject(content) {
 }
 
 /**
+ * Drop `enabled` before hashing so enable/disable does not create revision points.
+ * @param {unknown} parsed
+ */
+function stripEnabledForHash(parsed) {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return parsed;
+  const { enabled, ...rest } = parsed;
+  return rest;
+}
+
+/**
  * SHA256 of normalized workflow content (YAML → object → canonical JSON).
  * @param {string} content
  */
 export function workflowContentSha(content) {
-  const parsed = parseWorkflowObject(content);
+  const parsed = stripEnabledForHash(parseWorkflowObject(content));
   const canonical = canonicalize(parsed);
   const json = JSON.stringify(canonical);
   return createHash("sha256").update(json, "utf8").digest("hex");

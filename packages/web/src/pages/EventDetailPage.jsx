@@ -103,6 +103,12 @@ export function EventDetailPage() {
           <dt className="opacity-60">Duration</dt>
           <dd>{run.duration_ms != null ? `${run.duration_ms}ms` : "—"}</dd>
         </div>
+        <div>
+          <dt className="opacity-60">Revision</dt>
+          <dd>
+            {run.workflow_revision != null ? `#${run.workflow_revision}` : "unknown version"}
+          </dd>
+        </div>
       </dl>
 
       {run.error ? (
@@ -111,7 +117,7 @@ export function EventDetailPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-3">
         <JsonViewBlock title="Run input (data)" value={run.input} />
         <JsonViewBlock title="Run output" value={runParts.output} />
         <JsonViewBlock title="Run context" value={runParts.context} />

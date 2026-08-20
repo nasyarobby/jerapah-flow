@@ -50,6 +50,7 @@ export function EventsPage() {
               <tr>
                 <th>Status</th>
                 <th>Workflow</th>
+                <th>Revision</th>
                 <th>Trigger</th>
                 <th>Started</th>
                 <th>Duration</th>
@@ -65,6 +66,9 @@ export function EventsPage() {
                     <Link className="link" to={`/events/${r.id}`}>
                       {r.workflow_name || r.workflow}
                     </Link>
+                  </td>
+                  <td className="text-xs opacity-70">
+                    {r.workflow_revision != null ? `#${r.workflow_revision}` : "unknown"}
                   </td>
                   <td className="text-xs">
                     {r.trigger_type}

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./db.js";
-import { workflowContentSha } from "./workflow-normalize.js";
+import * as fsStore from "./fs-store.js";
+import { workflowContentSha, workflowIdFromFile } from "./workflow-normalize.js";
 
 const MAX_REVISIONS = 50;
 
@@ -67,6 +68,50 @@ export async function getRevision(workflowId, revision) {
   return {
     ...row,
     meta: parseMeta(row.meta),
+  };
+}
+
+/**
+ * Ensure a workflow has at least revision #1 (seed from disk when history is empty).
+ * @param {{ owner: string, file: string }} opts
+ * @returns {Promise<{ revision: number, id: string, content_sha: string, created_at: string, seeded: boolean } | null>}
+ */
+export async function ensureInitialRevision(opts) {
+  const workflowId = workflowIdFromFile(opts.file);
+  const latest = await getLatestRevision(workflowId);
+  if (latest) {
+    return {
+      revision: latest.revision,
+      id: latest.id,
+      content_sha: latest.content_sha,
+      created_at: latest.created_at,
+      seeded: false,
+    };
+  }
+
+  const content = fsStore.readWorkflowYaml(opts.owner, opts.file);
+  if (content == null) return null;
+
+  const recorded = await recordRevision({
+    workflowId,
+    owner: opts.owner,
+    file: opts.file,
+    content,
+    reason: "seed",
+    force: true,
+  });
+
+  if (recorded.revision == null || recorded.id == null) return null;
+
+  const row = await getLatestRevision(workflowId);
+  if (!row) return null;
+
+  return {
+    revision: row.revision,
+    id: row.id,
+    content_sha: row.content_sha,
+    created_at: row.created_at,
+    seeded: true,
   };
 }
 

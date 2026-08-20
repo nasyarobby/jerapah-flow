@@ -8,6 +8,7 @@ import {
   useSaveWorkflow,
   useSetWorkflowEnabled,
   useWorkflow,
+  useWorkflowRevision,
 } from "../api/hooks.js";
 import { DuplicateWorkflowDialog } from "../components/DuplicateWorkflowDialog.jsx";
 import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
@@ -19,6 +20,10 @@ import {
   saveErrorMessage,
   saveWarningsFromError,
 } from "../components/workflow/SaveWorkflowWarningsDialog.jsx";
+import {
+  ConfirmDialog,
+  WorkflowRevisionBanner,
+} from "../components/workflow/WorkflowRevisionBanner.jsx";
 import { NEW_WORKFLOW_YAML, parseWorkflowYaml } from "../lib/workflow-doc.js";
 import { useNotifications } from "../notifications.jsx";
 
@@ -190,8 +195,14 @@ export function WorkflowEditPage() {
   const [testOpen, setTestOpen] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [saveWarnings, setSaveWarnings] = useState(null);
+  const [previewRevision, setPreviewRevision] = useState(null);
+  const [previewMeta, setPreviewMeta] = useState(null);
+  const [previewBaseline, setPreviewBaseline] = useState(null);
+  const [discardConfirm, setDiscardConfirm] = useState(null);
+  const [savePreviewConfirm, setSavePreviewConfirm] = useState(false);
   const routeKey = `${owner}/${file}`;
   const [activeKey, setActiveKey] = useState(routeKey);
+  const previewQuery = useWorkflowRevision(owner, file, previewRevision);
 
   if (activeKey !== routeKey) {
     setActiveKey(routeKey);
@@ -200,16 +211,89 @@ export function WorkflowEditPage() {
     setContentReady(false);
     setTestOpen(false);
     setDuplicateOpen(false);
+    setPreviewRevision(null);
+    setPreviewMeta(null);
+    setPreviewBaseline(null);
+    setDiscardConfirm(null);
+    setSavePreviewConfirm(false);
   }
 
   useEffect(() => {
     if (existing.isLoading) return;
+    if (previewRevision != null) return;
     if (!contentReady && existing.data?.content != null) {
       setContent(existing.data.content);
       setSavedYaml(existing.data.content);
       setContentReady(true);
     }
-  }, [existing.data, existing.isLoading, contentReady]);
+  }, [existing.data, existing.isLoading, contentReady, previewRevision]);
+
+  useEffect(() => {
+    if (previewRevision == null || previewQuery.isLoading) return;
+    if (previewQuery.data?.content != null) {
+      setContent(previewQuery.data.content);
+      setPreviewBaseline(previewQuery.data.content);
+      setPreviewMeta({ created_at: previewQuery.data.created_at });
+    }
+  }, [previewRevision, previewQuery.data, previewQuery.isLoading]);
+
+  function isDirty() {
+    const baseline = previewRevision != null ? previewBaseline : savedYaml;
+    return contentReady && baseline != null && content !== baseline;
+  }
+
+  function exitPreview() {
+    setPreviewRevision(null);
+    setPreviewMeta(null);
+    setPreviewBaseline(null);
+    existing.refetch().then((result) => {
+      const next = result.data?.content;
+      if (next != null) {
+        setContent(next);
+        setSavedYaml(next);
+      }
+    });
+  }
+
+  function applySelectRevision(revision, meta) {
+    if (revision == null) {
+      exitPreview();
+      return;
+    }
+    setPreviewRevision(revision);
+    if (meta?.created_at) {
+      setPreviewMeta({ created_at: meta.created_at });
+    }
+  }
+
+  function onSelectRevision(revision, meta) {
+    if (isDirty()) {
+      setDiscardConfirm(() => () => applySelectRevision(revision, meta));
+      return;
+    }
+    applySelectRevision(revision, meta);
+  }
+
+  function onBackToCurrent() {
+    if (isDirty()) {
+      setDiscardConfirm(() => () => exitPreview());
+      return;
+    }
+    exitPreview();
+  }
+
+  function onReverted() {
+    setPreviewRevision(null);
+    setPreviewMeta(null);
+    setPreviewBaseline(null);
+    existing.refetch().then((result) => {
+      const next = result.data?.content;
+      if (next != null) {
+        setContent(next);
+        setSavedYaml(next);
+      }
+    });
+  }
 
   function onSave(saveAnyway = false) {
     save.mutate(
@@ -218,7 +302,13 @@ export function WorkflowEditPage() {
         onSuccess: () => {
           setSavedYaml(content);
           setSaveWarnings(null);
+          setSavePreviewConfirm(false);
           notify.success("Workflow saved");
+          if (previewRevision != null) {
+            setPreviewRevision(null);
+            setPreviewMeta(null);
+            setPreviewBaseline(null);
+          }
         },
         onError: (err) => {
           if (isSaveWarningsError(err)) {
@@ -228,6 +318,15 @@ export function WorkflowEditPage() {
         },
       },
     );
+  }
+
+  function onSaveRequest() {
+    const liveYaml = existing.data?.content;
+    if (previewRevision != null && content !== liveYaml) {
+      setSavePreviewConfirm(true);
+      return;
+    }
+    onSave(false);
   }
 
   if (existing.isLoading) {
@@ -254,6 +353,8 @@ export function WorkflowEditPage() {
   const yamlOk = !parsedDoc.parseError;
   const workflowName = parsedDoc.doc?.name?.trim();
   const pageTitle = workflowName ? `${workflowName}` : file;
+  const isPreviewing = previewRevision != null;
+  const previewLoading = isPreviewing && previewQuery.isLoading;
 
   return (
     <>
@@ -265,17 +366,20 @@ export function WorkflowEditPage() {
           </span>
         }
         savePending={save.isPending}
-        saveDisabled={!contentReady}
+        saveDisabled={!contentReady || previewLoading}
         saveError={save.isError && !saveWarnings ? saveErrorMessage(save.error) : null}
-        onSave={() => onSave(false)}
-        onTest={() => setTestOpen(true)}
-        onDuplicate={() => setDuplicateOpen(true)}
-        onToggleEnabled={() =>
-          setEnabled.mutate({
-            owner,
-            file,
-            enabled: existing.data?.parsed?.enabled === false,
-          })
+        onSave={() => onSaveRequest()}
+        onTest={isPreviewing ? undefined : () => setTestOpen(true)}
+        onDuplicate={isPreviewing ? undefined : () => setDuplicateOpen(true)}
+        onToggleEnabled={
+          isPreviewing
+            ? undefined
+            : () =>
+                setEnabled.mutate({
+                  owner,
+                  file,
+                  enabled: existing.data?.parsed?.enabled === false,
+                })
         }
         enabled={existing.data?.parsed?.enabled !== false}
         enablePending={setEnabled.isPending}
@@ -284,30 +388,40 @@ export function WorkflowEditPage() {
       >
         <div className="flex min-h-0 flex-1 gap-3">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
-            <WorkflowVisualEditor
-              yaml={content}
-              onYamlChange={setContent}
-              owner={owner}
-              file={file}
-              savedYaml={savedYaml}
-              showTest
-              testOpen={testOpen}
-              onTestClose={() => setTestOpen(false)}
-            />
+            {isPreviewing && previewMeta ? (
+              <WorkflowRevisionBanner
+                owner={owner}
+                file={file}
+                revision={previewRevision}
+                createdAt={previewMeta.created_at}
+                onBackToCurrent={onBackToCurrent}
+                onReverted={onReverted}
+              />
+            ) : null}
+            {previewLoading ? (
+              <div className="flex min-h-[12rem] flex-1 items-center justify-center">
+                <span className="loading loading-spinner loading-lg" />
+              </div>
+            ) : (
+              <WorkflowVisualEditor
+                yaml={content}
+                onYamlChange={setContent}
+                owner={owner}
+                file={file}
+                savedYaml={savedYaml}
+                showTest={!isPreviewing}
+                testOpen={testOpen}
+                onTestClose={() => setTestOpen(false)}
+              />
+            )}
           </div>
           <div className="hidden w-64 shrink-0 xl:block">
             <WorkflowHistoryPanel
-                owner={owner}
-                file={file}
-                onReverted={() => {
-                  existing.refetch().then((result) => {
-                    const next = result.data?.content;
-                    if (next != null) {
-                      setContent(next);
-                      setSavedYaml(next);
-                    }
-                  });
-                }}
+              owner={owner}
+              file={file}
+              previewRevision={previewRevision}
+              onSelectRevision={onSelectRevision}
+              onReverted={onReverted}
             />
           </div>
         </div>
@@ -331,6 +445,33 @@ export function WorkflowEditPage() {
           pending={save.isPending}
           onCancel={() => setSaveWarnings(null)}
           onSaveAnyway={() => onSave(true)}
+        />
+      ) : null}
+      {savePreviewConfirm ? (
+        <ConfirmDialog
+          open
+          title="Save over current workflow?"
+          message="This will replace the current live workflow with the content you are viewing."
+          confirmLabel="Save"
+          confirmClass="btn-primary"
+          pending={save.isPending}
+          onCancel={() => setSavePreviewConfirm(false)}
+          onConfirm={() => onSave(false)}
+        />
+      ) : null}
+      {discardConfirm ? (
+        <ConfirmDialog
+          open
+          title="Discard unsaved changes?"
+          message="You have unsaved edits. Switching versions will discard them."
+          confirmLabel="Discard"
+          pending={false}
+          onCancel={() => setDiscardConfirm(null)}
+          onConfirm={() => {
+            const action = discardConfirm;
+            setDiscardConfirm(null);
+            action?.();
+          }}
         />
       ) : null}
     </>

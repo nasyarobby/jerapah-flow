@@ -20,6 +20,7 @@ import {
   listRevisions,
   getLatestRevision,
   deleteRevisionHistory,
+  ensureInitialRevision,
 } from "../workflow-history.js";
 import {
   moveWorkflowToTrash,
@@ -88,6 +89,47 @@ const rev2 = await recordRevision({
 });
 assert.equal(rev2.revision, 2);
 assert.equal((await listRevisions(workflowId)).length, 2);
+
+const yamlDisabled = `${yamlV2}\nenabled: false\n`;
+assert.equal(
+  workflowContentSha(yamlV2),
+  workflowContentSha(yamlDisabled),
+  "enabled-only change should not change content SHA",
+);
+const revDisable = await recordRevision({
+  workflowId,
+  owner,
+  file,
+  content: yamlDisabled,
+  reason: "disable",
+});
+assert.equal(revDisable.skipped, true, "enable/disable should not create a revision");
+assert.equal((await listRevisions(workflowId)).length, 2);
+
+const { startRun, getRun } = await import("../store.js");
+const latest = await getLatestRevision(workflowId);
+assert.equal(latest?.revision, 2);
+const run = await startRun({
+  owner,
+  workflow: `${owner}/${file}`,
+  workflowName: "smoke test v2",
+  trigger: { type: "manual", detail: "smoke" },
+  input: null,
+  workflowRevision: latest?.revision ?? null,
+});
+const loaded = await getRun(run.id);
+assert.equal(loaded.workflow_revision, 2);
+await db("workflow_runs").where({ id: run.id }).del();
+
+await deleteRevisionHistory(workflowId);
+assert.equal(await getLatestRevision(workflowId), null);
+const seeded = await ensureInitialRevision({ owner, file });
+assert.ok(seeded);
+assert.equal(seeded.revision, 1);
+assert.equal(seeded.seeded, true);
+const again = await ensureInitialRevision({ owner, file });
+assert.equal(again?.revision, 1);
+assert.equal(again?.seeded, false);
 
 const warnings = collectWorkflowWarnings(
   `name: bad\nscripts:\n  - unknown-script-xyz\n`,
