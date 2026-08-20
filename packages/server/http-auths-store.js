@@ -4,10 +4,25 @@ import { assertHttpStatus } from "./http-pages-store.js";
 
 const MAX_NAME_LENGTH = 128;
 const NAME_RE = /^[A-Za-z0-9._-]+$/;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ALLOWED_TYPES = new Set(["bearer", "basic", "header"]);
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+/**
+ * @param {unknown} id
+ * @returns {string}
+ */
+export function assertAuthId(id) {
+  if (typeof id !== "string" || !UUID_RE.test(id)) {
+    const err = new Error("invalid auth id");
+    err.statusCode = 400;
+    throw err;
+  }
+  return id.toLowerCase();
 }
 
 /**
@@ -218,10 +233,11 @@ function publicAuth(row, { includeConfig = true } = {}) {
 
 /**
  * Internal: full config including literals (for runtime auth checks).
- * @param {string} name
+ * @param {string} id
  */
-export async function getHttpAuthInternal(name) {
-  const row = await db("http_auths").where({ name: assertAuthName(name) }).first();
+export async function getHttpAuthInternal(id) {
+  const authId = assertAuthId(id);
+  const row = await db("http_auths").where({ id: authId }).first();
   if (!row) return null;
   return {
     id: row.id,
@@ -235,11 +251,11 @@ export async function getHttpAuthInternal(name) {
 
 /**
  * Return only plaintext literal credential fields (not KV refs or encrypted secrets).
- * @param {string} name
- * @returns {Promise<{ name: string, type: string, literals: Record<string, string> } | null>}
+ * @param {string} id
+ * @returns {Promise<{ id: string, name: string, type: string, literals: Record<string, string> } | null>}
  */
-export async function revealHttpAuthLiterals(name) {
-  const internal = await getHttpAuthInternal(name);
+export async function revealHttpAuthLiterals(id) {
+  const internal = await getHttpAuthInternal(id);
   if (!internal) return null;
   /** @type {Record<string, string>} */
   const literals = {};
@@ -248,7 +264,12 @@ export async function revealHttpAuthLiterals(name) {
     const v = cfg[key];
     if (typeof v === "string") literals[key] = v;
   }
-  return { name: internal.name, type: internal.type, literals };
+  return {
+    id: internal.id,
+    name: internal.name,
+    type: internal.type,
+    literals,
+  };
 }
 
 export async function listHttpAuths() {
@@ -257,23 +278,22 @@ export async function listHttpAuths() {
 }
 
 /**
- * @param {string} name
- */
-export async function getHttpAuthByName(name) {
-  const row = await db("http_auths").where({ name: assertAuthName(name) }).first();
-  return row ? publicAuth(row) : null;
-}
-
-/**
  * @param {string} id
  */
 export async function getHttpAuthById(id) {
-  const row = await db("http_auths").where({ id }).first();
+  let authId;
+  try {
+    authId = assertAuthId(id);
+  } catch {
+    return null;
+  }
+  const row = await db("http_auths").where({ id: authId }).first();
   return row ? publicAuth(row) : null;
 }
 
 /**
  * @param {{
+ *   id?: string | null,
  *   name: string,
  *   type: string,
  *   config?: unknown,
@@ -282,6 +302,7 @@ export async function getHttpAuthById(id) {
  * }} opts
  */
 export async function upsertHttpAuth({
+  id,
   name,
   type,
   config,
@@ -290,7 +311,26 @@ export async function upsertHttpAuth({
 }) {
   const authName = assertAuthName(name);
   const authType = assertAuthType(type);
-  const existing = await db("http_auths").where({ name: authName }).first();
+
+  /** @type {Record<string, unknown> | null} */
+  let existing = null;
+  if (id != null && String(id).length > 0) {
+    const authId = assertAuthId(id);
+    existing = await db("http_auths").where({ id: authId }).first();
+    if (!existing) {
+      const err = new Error("auth not found");
+      err.statusCode = 404;
+      throw err;
+    }
+  }
+
+  const nameClash = await db("http_auths").where({ name: authName }).first();
+  if (nameClash && (!existing || nameClash.id !== existing.id)) {
+    const err = new Error(`auth name "${authName}" already exists`);
+    err.statusCode = 409;
+    throw err;
+  }
+
   const prevConfig = existing ? parseConfig(existing.config) : {};
   const normalized = normalizeAuthConfig(authType, config, {
     keepLiteralsFrom: prevConfig,
@@ -315,18 +355,19 @@ export async function upsertHttpAuth({
     await db("http_auths")
       .where({ id: existing.id })
       .update({
+        name: authName,
         type: authType,
         config: configJson,
         unauthorized_status: unauthStatus,
         unauthorized_response: unauthResponse,
         updated_at: now,
       });
-    return getHttpAuthById(existing.id);
+    return getHttpAuthById(/** @type {string} */ (existing.id));
   }
 
-  const id = randomUUID();
+  const newId = randomUUID();
   await db("http_auths").insert({
-    id,
+    id: newId,
     name: authName,
     type: authType,
     config: configJson,
@@ -335,7 +376,7 @@ export async function upsertHttpAuth({
     created_at: now,
     updated_at: now,
   });
-  return getHttpAuthById(id);
+  return getHttpAuthById(newId);
 }
 
 /**
@@ -343,6 +384,7 @@ export async function upsertHttpAuth({
  * @returns {Promise<boolean>}
  */
 export async function deleteHttpAuth(id) {
-  const n = await db("http_auths").where({ id }).del();
+  const authId = assertAuthId(id);
+  const n = await db("http_auths").where({ id: authId }).del();
   return n > 0;
 }

@@ -1,9 +1,9 @@
 import {
+  assertAuthId,
   assertAuthName,
   assertAuthType,
   listHttpAuths,
   getHttpAuthById,
-  getHttpAuthByName,
   upsertHttpAuth,
   deleteHttpAuth,
   revealHttpAuthLiterals,
@@ -18,28 +18,28 @@ export default async function httpAuthsPlugin(fastify) {
     return { auths: await listHttpAuths() };
   });
 
-  fastify.get("/http-auths/:name/reveal", async (req, reply) => {
-    const { name } = /** @type {{ name: string }} */ (req.params);
+  fastify.get("/http-auths/:id/reveal", async (req, reply) => {
+    const { id } = /** @type {{ id: string }} */ (req.params);
     try {
-      assertAuthName(name);
+      assertAuthId(id);
     } catch (err) {
       return reply.code(err.statusCode ?? 400).send({ error: err.message });
     }
-    const revealed = await revealHttpAuthLiterals(name);
+    const revealed = await revealHttpAuthLiterals(id);
     if (!revealed) {
       return reply.code(404).send({ error: "auth not found" });
     }
     return revealed;
   });
 
-  fastify.get("/http-auths/:name", async (req, reply) => {
-    const { name } = /** @type {{ name: string }} */ (req.params);
+  fastify.get("/http-auths/:id", async (req, reply) => {
+    const { id } = /** @type {{ id: string }} */ (req.params);
     try {
-      assertAuthName(name);
+      assertAuthId(id);
     } catch (err) {
       return reply.code(err.statusCode ?? 400).send({ error: err.message });
     }
-    const auth = await getHttpAuthByName(name);
+    const auth = await getHttpAuthById(id);
     if (!auth) {
       return reply.code(404).send({ error: "auth not found" });
     }
@@ -48,6 +48,7 @@ export default async function httpAuthsPlugin(fastify) {
 
   fastify.put("/http-auths", async (req, reply) => {
     const body = /** @type {{
+      id?: string | null,
       name?: string,
       type?: string,
       config?: unknown,
@@ -57,6 +58,9 @@ export default async function httpAuthsPlugin(fastify) {
     try {
       assertAuthName(String(body.name ?? ""));
       assertAuthType(body.type);
+      if (body.id != null && String(body.id).length > 0) {
+        assertAuthId(String(body.id));
+      }
       if (
         body.unauthorized_response != null &&
         String(body.unauthorized_response).length > 0
@@ -69,6 +73,7 @@ export default async function httpAuthsPlugin(fastify) {
         );
       }
       const auth = await upsertHttpAuth({
+        id: body.id != null && String(body.id).length > 0 ? String(body.id) : null,
         name: String(body.name),
         type: String(body.type),
         config: body.config,
@@ -83,6 +88,11 @@ export default async function httpAuthsPlugin(fastify) {
 
   fastify.delete("/http-auths/:id", async (req, reply) => {
     const { id } = /** @type {{ id: string }} */ (req.params);
+    try {
+      assertAuthId(id);
+    } catch (err) {
+      return reply.code(err.statusCode ?? 400).send({ error: err.message });
+    }
     const existing = await getHttpAuthById(id);
     if (!existing) {
       return reply.code(404).send({ error: "auth not found" });

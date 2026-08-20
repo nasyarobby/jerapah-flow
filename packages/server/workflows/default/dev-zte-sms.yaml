@@ -13,4 +13,5 @@ triggers:
   - type: HTTP
     method: POST
     path: /dev-zte-sms
-    auth: basic-auth
+    auth:
+      - 0f78d6d7-bd44-45d7-a826-f51c027b767f

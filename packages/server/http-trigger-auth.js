@@ -77,38 +77,47 @@ export async function resolveCredentialValue(field, ctx) {
 }
 
 /**
- * Normalize trigger.auth into an inline auth mechanism object.
- * @param {unknown} authField
- * @returns {Promise<{
+ * @typedef {{
  *   type: string,
  *   config: Record<string, unknown>,
  *   unauthorized_status?: number | null,
  *   unauthorized_response?: string | null,
  *   label: string,
- * } | null>}
+ * }} AuthMechanism
  */
-export async function resolveAuthMechanism(authField) {
-  if (authField == null || authField === false) return null;
 
-  if (typeof authField === "string") {
-    const named = await getHttpAuthInternal(authField);
-    if (!named) {
-      log.warn({ name: authField }, "http auth: named profile not found");
+/**
+ * Resolve one auth entry (auth profile id UUID, or inline object).
+ * @param {unknown} entry
+ * @returns {Promise<AuthMechanism | null>}
+ */
+export async function resolveAuthMechanism(entry) {
+  if (entry == null || entry === false) return null;
+
+  if (typeof entry === "string") {
+    try {
+      const named = await getHttpAuthInternal(entry);
+      if (!named) {
+        log.warn({ id: entry }, "http auth: profile id not found");
+        return null;
+      }
+      return {
+        type: named.type,
+        config: named.config,
+        unauthorized_status: named.unauthorized_status,
+        unauthorized_response: named.unauthorized_response,
+        label: named.name,
+      };
+    } catch (err) {
+      log.warn({ err, id: entry }, "http auth: invalid profile id");
       return null;
     }
-    return {
-      type: named.type,
-      config: named.config,
-      unauthorized_status: named.unauthorized_status,
-      unauthorized_response: named.unauthorized_response,
-      label: authField,
-    };
   }
 
-  if (typeof authField === "object" && !Array.isArray(authField)) {
-    const obj = /** @type {Record<string, unknown>} */ (authField);
-    if (typeof obj.name === "string" && obj.name.length > 0 && !obj.type) {
-      return resolveAuthMechanism(obj.name);
+  if (typeof entry === "object" && !Array.isArray(entry)) {
+    const obj = /** @type {Record<string, unknown>} */ (entry);
+    if (typeof obj.id === "string" && obj.id.length > 0 && !obj.type) {
+      return resolveAuthMechanism(obj.id);
     }
     try {
       const type = assertAuthType(obj.type);
@@ -116,6 +125,7 @@ export async function resolveAuthMechanism(authField) {
       const config = { ...obj };
       delete config.type;
       delete config.name;
+      delete config.id;
       return {
         type,
         config,
@@ -133,18 +143,64 @@ export async function resolveAuthMechanism(authField) {
 }
 
 /**
- * Label for mermaid / summary (sync, no DB).
+ * Normalize trigger.auth (array of auth ids / inline objects) into mechanisms.
+ * Empty / null / false → no auth. Any entry that fails to resolve is skipped;
+ * if the field was non-empty but nothing resolves, returns [] (caller treats as unauthorized).
  * @param {unknown} authField
+ * @returns {Promise<AuthMechanism[]>}
  */
-export function authLabel(authField) {
-  if (authField == null) return null;
-  if (typeof authField === "string") return authField;
-  if (typeof authField === "object" && !Array.isArray(authField)) {
-    const o = /** @type {Record<string, unknown>} */ (authField);
-    if (typeof o.name === "string" && o.name) return o.name;
-    if (typeof o.type === "string" && o.type) return o.type;
+export async function resolveAuthMechanisms(authField) {
+  if (authField == null || authField === false) return [];
+  if (!Array.isArray(authField) || authField.length === 0) return [];
+
+  /** @type {AuthMechanism[]} */
+  const out = [];
+  for (const entry of authField) {
+    const mech = await resolveAuthMechanism(entry);
+    if (mech) out.push(mech);
   }
-  return "auth";
+  return out;
+}
+
+/**
+ * True if any mechanism accepts the request (OR).
+ * @param {import("fastify").FastifyRequest} req
+ * @param {AuthMechanism[]} mechanisms
+ * @param {{ owner: string, workflowKey: string }} ctx
+ */
+export async function checkAnyHttpAuth(req, mechanisms, ctx) {
+  for (const mechanism of mechanisms) {
+    if (await checkHttpAuth(req, mechanism, ctx)) return true;
+  }
+  return false;
+}
+
+/**
+ * Label for mermaid / summary (sync). Prefer resolved display names when provided.
+ * @param {unknown} authField
+ * @param {Map<string, string> | Record<string, string>} [nameById]
+ */
+export function authLabel(authField, nameById) {
+  if (authField == null || authField === false) return null;
+  if (!Array.isArray(authField) || authField.length === 0) return null;
+  const lookup =
+    nameById instanceof Map
+      ? (id) => nameById.get(id)
+      : nameById
+        ? (id) => nameById[id]
+        : () => undefined;
+  const parts = authField.map((entry) => {
+    if (typeof entry === "string") return lookup(entry) ?? entry;
+    if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+      const o = /** @type {Record<string, unknown>} */ (entry);
+      if (typeof o.id === "string" && o.id && !o.type) {
+        return lookup(o.id) ?? o.id;
+      }
+      if (typeof o.type === "string" && o.type) return o.type;
+    }
+    return "auth";
+  });
+  return parts.join("|");
 }
 
 /**

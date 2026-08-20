@@ -1,7 +1,11 @@
 /**
  * Validate HTTP trigger auth / response fields on workflow save.
  */
-import { assertAuthType, getHttpAuthByName } from "./http-auths-store.js";
+import {
+  assertAuthId,
+  assertAuthType,
+  getHttpAuthById,
+} from "./http-auths-store.js";
 import { getHttpPageByName, assertHttpResponsePage } from "./http-pages-store.js";
 import { authLabel } from "./http-trigger-auth.js";
 
@@ -24,49 +28,78 @@ function assertCredentialFieldShape(field, label) {
 }
 
 /**
- * @param {unknown} auth
+ * @param {unknown} entry
+ * @param {string} path
  */
-async function validateAuthField(auth) {
-  if (auth == null || auth === false) return;
-
-  if (typeof auth === "string") {
-    const named = await getHttpAuthByName(auth);
+async function validateAuthEntry(entry, path) {
+  if (typeof entry === "string") {
+    try {
+      assertAuthId(entry);
+    } catch {
+      const err = new Error(`${path} must be an auth profile UUID`);
+      err.statusCode = 400;
+      throw err;
+    }
+    const named = await getHttpAuthById(entry);
     if (!named) {
-      const err = new Error(`unknown auth profile "${auth}"`);
+      const err = new Error(`unknown auth profile id "${entry}"`);
       err.statusCode = 400;
       throw err;
     }
     return;
   }
 
-  if (typeof auth === "object" && !Array.isArray(auth)) {
-    const obj = /** @type {Record<string, unknown>} */ (auth);
-    if (typeof obj.name === "string" && obj.name.length > 0 && !obj.type) {
-      await validateAuthField(obj.name);
+  if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+    const obj = /** @type {Record<string, unknown>} */ (entry);
+    if (typeof obj.id === "string" && obj.id.length > 0 && !obj.type) {
+      await validateAuthEntry(obj.id, path);
       return;
     }
     const type = assertAuthType(obj.type);
     if (type === "bearer") {
-      assertCredentialFieldShape(obj.token, "auth.token");
+      assertCredentialFieldShape(obj.token, `${path}.token`);
     } else if (type === "basic") {
-      assertCredentialFieldShape(obj.user, "auth.user");
+      assertCredentialFieldShape(obj.user, `${path}.user`);
       if (obj.password != null && obj.password !== "") {
-        assertCredentialFieldShape(obj.password, "auth.password");
+        assertCredentialFieldShape(obj.password, `${path}.password`);
       }
     } else if (type === "header") {
       if (typeof obj.header !== "string" || obj.header.length === 0) {
-        const err = new Error("auth.header must be a non-empty string");
+        const err = new Error(`${path}.header must be a non-empty string`);
         err.statusCode = 400;
         throw err;
       }
-      assertCredentialFieldShape(obj.value, "auth.value");
+      assertCredentialFieldShape(obj.value, `${path}.value`);
     }
     return;
   }
 
-  const err = new Error("auth must be a profile name or an auth object");
+  const err = new Error(
+    `${path} must be an auth profile UUID or an inline auth object`,
+  );
   err.statusCode = 400;
   throw err;
+}
+
+/**
+ * auth is an array of auth profile UUIDs and/or inline auth objects (OR).
+ * null / false / [] = no auth.
+ * @param {unknown} auth
+ */
+async function validateAuthField(auth) {
+  if (auth == null || auth === false) return;
+
+  if (!Array.isArray(auth)) {
+    const err = new Error(
+      "auth must be an array of auth profile UUIDs and/or inline auth objects",
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  for (let i = 0; i < auth.length; i++) {
+    await validateAuthEntry(auth[i], `auth[${i}]`);
+  }
 }
 
 /**

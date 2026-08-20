@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { LuChevronDown, LuCopy, LuGripVertical, LuTrash2 } from "react-icons/lu";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { LuChevronDown, LuCopy, LuGripVertical, LuTrash2, LuX } from "react-icons/lu";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import cronstrue from "cronstrue";
@@ -138,15 +138,27 @@ function typeLabel(type) {
   return type || "Trigger";
 }
 
+function Field({ label, children, hint }) {
+  return (
+    <div className="flex w-full flex-col gap-1">
+      {label ? <span className="text-sm font-medium opacity-80">{label}</span> : null}
+      {children}
+      {hint ? <span className="text-xs opacity-60">{hint}</span> : null}
+    </div>
+  );
+}
+
 function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDestinations }) {
   const path = trigger.path || "/";
   const url = namespacedPath(owner || "owner", path);
-  const authIsInline = trigger.auth != null && typeof trigger.auth === "object";
-  const authSelect = authIsInline
-    ? "__inline__"
-    : typeof trigger.auth === "string" && trigger.auth
-      ? trigger.auth
-      : "";
+  const authEntries = Array.isArray(trigger.auth) ? trigger.auth : [];
+  const selectedIds = authEntries.filter((e) => typeof e === "string" && e).map(String);
+  const inlineEntries = authEntries.filter((e) => e && typeof e === "object");
+
+  function setAuthIds(nextIds) {
+    const next = [...nextIds, ...inlineEntries];
+    onChange({ ...trigger, auth: next.length ? next : null });
+  }
 
   function copyUrl() {
     if (typeof navigator?.clipboard?.writeText === "function") {
@@ -155,11 +167,10 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
   }
 
   return (
-    <div className="space-y-2">
-      <label className="form-control">
-        <span className="label py-0 text-sm">Method</span>
+    <div className="space-y-3">
+      <Field label="Method">
         <select
-          className="select select-sm"
+          className="select select-bordered select-sm w-full"
           value={trigger.method || "POST"}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, method: e.target.value })}
@@ -173,51 +184,48 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
             <option value={trigger.method}>{trigger.method}</option>
           )}
         </select>
-      </label>
-      <label className="form-control">
-        <span className="label py-0 text-sm">Path</span>
+      </Field>
+
+      <Field label="Path">
         <input
-          className="input input-sm font-mono"
+          className="input input-bordered input-sm w-full font-mono"
           value={trigger.path ?? ""}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, path: e.target.value })}
           placeholder="/hook"
         />
-      </label>
-      <div className="flex items-center gap-2 text-xs font-mono opacity-80">
-        <span className="truncate">{url}</span>
-        <button type="button" className="btn btn-ghost btn-xs btn-square" title="Copy URL" onClick={copyUrl}>
-          <LuCopy className="size-3.5" />
-        </button>
-      </div>
-      <label className="form-control">
-        <span className="label py-0 text-sm">Auth</span>
+      </Field>
+
+      <Field label="URL">
+        <div className="flex w-full items-center gap-1">
+          <input
+            className="input input-bordered input-sm w-full font-mono opacity-80"
+            value={url}
+            readOnly
+            tabIndex={-1}
+          />
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm btn-square shrink-0"
+            title="Copy URL"
+            onClick={copyUrl}
+          >
+            <LuCopy className="size-3.5" />
+          </button>
+        </div>
+      </Field>
+
+      <AuthPicker
+        auths={auths}
+        selectedIds={selectedIds}
+        inlineCount={inlineEntries.length}
+        disabled={disabled}
+        onChange={setAuthIds}
+      />
+
+      <Field label="Response page">
         <select
-          className="select select-sm"
-          value={authSelect}
-          disabled={disabled}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v === "" || v === "__inline__") {
-              onChange({ ...trigger, auth: v === "__inline__" ? trigger.auth : null });
-            } else {
-              onChange({ ...trigger, auth: v });
-            }
-          }}
-        >
-          <option value="">None</option>
-          {auths.map((a) => (
-            <option key={a.name} value={a.name}>
-              {a.name}
-            </option>
-          ))}
-          {authIsInline ? <option value="__inline__">Inline (edit in YAML)</option> : null}
-        </select>
-      </label>
-      <label className="form-control">
-        <span className="label py-0 text-sm">Response page</span>
-        <select
-          className="select select-sm"
+          className="select select-bordered select-sm w-full"
           value={trigger.response ?? ""}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, response: e.target.value })}
@@ -232,13 +240,173 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
             <option value={trigger.response}>{trigger.response}</option>
           ) : null}
         </select>
-      </label>
+      </Field>
+
       <FailureAlertFields
         trigger={trigger}
         disabled={disabled}
         onChange={onChange}
         alertDestinations={alertDestinations}
       />
+    </div>
+  );
+}
+
+/**
+ * Searchable dropdown: pick an auth to add; chips with X to remove.
+ * YAML stores profile UUIDs; UI shows names.
+ */
+function AuthPicker({ auths, selectedIds, inlineCount, disabled, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const byId = useMemo(() => new Map(auths.map((a) => [a.id, a])), [auths]);
+
+  const available = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return auths
+      .filter((a) => !selectedSet.has(a.id))
+      .filter((a) => {
+        if (!q) return true;
+        return (
+          a.name.toLowerCase().includes(q) ||
+          String(a.type).toLowerCase().includes(q) ||
+          a.id.toLowerCase().includes(q)
+        );
+      });
+  }, [auths, selectedSet, query]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e) {
+      if (rootRef.current && !rootRef.current.contains(e.target)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  function addAuth(id) {
+    if (selectedSet.has(id)) return;
+    onChange([...selectedIds, id]);
+    setQuery("");
+    setOpen(false);
+  }
+
+  function removeAuth(id) {
+    onChange(selectedIds.filter((x) => x !== id));
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-1" ref={rootRef}>
+      <span className="text-sm font-medium opacity-80">Auth (any of)</span>
+
+      {selectedIds.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {selectedIds.map((id) => {
+            const auth = byId.get(id);
+            return (
+              <span
+                key={id}
+                className="badge badge-outline gap-1 h-7 px-2 font-normal"
+                title={id}
+              >
+                <span className="max-w-[10rem] truncate">
+                  {auth ? (
+                    <>
+                      {auth.name}
+                      <span className="opacity-60"> · {auth.type}</span>
+                    </>
+                  ) : (
+                    <span className="opacity-60">missing</span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs btn-square -mr-1"
+                  title="Remove"
+                  aria-label={`Remove ${auth?.name ?? id}`}
+                  disabled={disabled}
+                  onClick={() => removeAuth(id)}
+                >
+                  <LuX className="size-3.5" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div className="relative w-full">
+        <div className="join w-full">
+          <input
+            ref={inputRef}
+            type="search"
+            className="input input-bordered input-sm join-item w-full min-w-0"
+            placeholder={auths.length === 0 ? "No auth profiles yet" : "Add auth…"}
+            value={query}
+            disabled={disabled || auths.length === 0}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setOpen(false);
+                setQuery("");
+                inputRef.current?.blur();
+              }
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (available[0]) addAuth(available[0].id);
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="btn btn-sm join-item btn-square"
+            disabled={disabled || auths.length === 0}
+            aria-label="Open auth list"
+            onClick={() => {
+              setOpen((v) => !v);
+              if (!open) inputRef.current?.focus();
+            }}
+          >
+            <LuChevronDown className={`size-4 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+        </div>
+        {open && !disabled && auths.length > 0 ? (
+          <ul className="menu menu-sm absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-box border border-base-300 bg-base-100 shadow-lg p-1">
+            {available.length === 0 ? (
+              <li className="disabled">
+                <span className="opacity-60">
+                  {query.trim() ? "No matches" : "All profiles selected"}
+                </span>
+              </li>
+            ) : (
+              available.map((a) => (
+                <li key={a.id}>
+                  <button type="button" onClick={() => addAuth(a.id)}>
+                    <span className="font-mono text-sm">{a.name}</span>
+                    <span className="opacity-60 text-xs">{a.type}</span>
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        ) : null}
+      </div>
+
+      {inlineCount > 0 ? (
+        <span className="text-xs opacity-60">
+          + {inlineCount} inline auth{inlineCount === 1 ? "" : "s"} (edit in YAML)
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -302,12 +470,11 @@ function CronFields({ trigger, disabled, onChange, alertDestinations }) {
 
 function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) {
   return (
-    <div className="space-y-2 border-t border-base-300 pt-3">
-      <p className="text-xs font-medium opacity-80">Failure alert</p>
-      <label className="form-control">
-        <span className="label py-0 text-sm">Consecutive failures</span>
+    <div className="space-y-3 border-t border-base-300 pt-3">
+      <p className="text-sm font-medium opacity-80">Failure alert</p>
+      <Field label="Consecutive failures">
         <input
-          className="input input-sm"
+          className="input input-bordered input-sm w-full"
           type="number"
           min="1"
           step="1"
@@ -318,11 +485,19 @@ function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) 
           }
           placeholder="e.g. 3"
         />
-      </label>
-      <label className="form-control">
-        <span className="label py-0 text-sm">On failure, start</span>
+      </Field>
+      <Field
+        label="On failure, start"
+        hint={
+          <>
+            After this many sequential failed runs for this trigger, JerapahFlow starts the
+            selected workflow (it must declare a <span className="font-mono">workflow</span>{" "}
+            trigger).
+          </>
+        }
+      >
         <select
-          className="select select-sm"
+          className="select select-bordered select-sm w-full"
           value={trigger.onFailureWorkflow ?? ""}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, onFailureWorkflow: e.target.value })}
@@ -340,12 +515,7 @@ function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) 
             <option value={trigger.onFailureWorkflow}>{trigger.onFailureWorkflow}</option>
           ) : null}
         </select>
-      </label>
-      <p className="text-xs opacity-60">
-        After this many sequential failed runs for this trigger, JerapahFlow starts the
-        selected workflow (it must declare a <span className="font-mono">workflow</span>{" "}
-        trigger).
-      </p>
+      </Field>
     </div>
   );
 }
