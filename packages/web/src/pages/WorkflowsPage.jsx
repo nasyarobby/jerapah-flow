@@ -156,7 +156,7 @@ export function WorkflowsPage() {
                     <label className="inline-flex items-center mr-1" title={w.enabled ? "Disable" : "Enable"}>
                       <input
                         type="checkbox"
-                        className="toggle toggle-xs"
+                        className="toggle toggle-success toggle-xs"
                         checked={Boolean(w.enabled)}
                         disabled={Boolean(w.loadError) || togglingKey === w.key}
                         onChange={() =>
