@@ -8,12 +8,25 @@ export const OPEN_API_ROUTES = new Set([
   "POST /auth/login",
 ]);
 
+/**
+ * Cookie flags for auth JWT.
+ * Secure defaults on in production (HTTPS). Override with COOKIE_SECURE=false
+ * when serving over plain HTTP (e.g. LAN IP http://192.168.x.x) — browsers
+ * refuse to store Secure cookies on non-HTTPS origins.
+ */
 export function cookieOpts() {
+  const flag = process.env.COOKIE_SECURE;
+  const secure =
+    flag === "true" || flag === "1"
+      ? true
+      : flag === "false" || flag === "0"
+        ? false
+        : process.env.NODE_ENV === "production";
   return {
     httpOnly: true,
     path: "/",
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure,
     maxAge: 7 * 24 * 60 * 60,
   };
 }
@@ -107,7 +120,7 @@ export default async function authPlugin(fastify) {
   });
 
   fastify.post("/auth/logout", async (_req, reply) => {
-    reply.clearCookie(COOKIE, { path: "/" });
+    reply.clearCookie(COOKIE, cookieOpts());
     return { ok: true };
   });
 
