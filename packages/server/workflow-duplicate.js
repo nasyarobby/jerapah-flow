@@ -4,8 +4,6 @@ import {
   workflowFileStem,
 } from "./workflow-normalize.js";
 
-export { workflowFileStem };
-
 export function ensureWorkflowFilename(file) {
   const trimmed = String(file ?? "").trim();
   if (!trimmed) return "";

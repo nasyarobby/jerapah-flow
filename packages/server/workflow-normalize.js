@@ -42,6 +42,11 @@ export function workflowIdFromFile(file) {
   return String(file).replace(/\.ya?ml$/i, "");
 }
 
+/** @param {string} file */
+export function workflowFileStem(file) {
+  return workflowIdFromFile(file);
+}
+
 /**
  * New on-disk workflow filename: `{uuid}.yaml`.
  * @param {string} [uuid]
