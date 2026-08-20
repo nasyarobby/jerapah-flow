@@ -18,6 +18,24 @@ export function cookieOpts() {
   };
 }
 
+/**
+ * Require JWT for /api routes except bootstrap, login, and register.
+ * @param {import("fastify").FastifyInstance} api
+ * @param {import("fastify").FastifyInstance} root
+ */
+export function addApiAuthGuard(api, root) {
+  api.addHook("onRequest", async (req, reply) => {
+    const raw = (req.url || "").split("?")[0];
+    const stripped = raw.replace(/^\/api/, "") || "/";
+    const routeUrl = req.routeOptions?.url || stripped;
+    const open =
+      OPEN_API_ROUTES.has(`${req.method} ${routeUrl}`) ||
+      OPEN_API_ROUTES.has(`${req.method} ${stripped}`);
+    if (open) return;
+    await root.authenticate(req, reply);
+  });
+}
+
 export function validateCredentials(username, password) {
   if (!/^[A-Za-z0-9_]{3,32}$/.test(username)) {
     return "username must be 3-32 letters, numbers, or underscore";

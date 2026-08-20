@@ -4,7 +4,7 @@ import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import { migrate, db } from "./db.js";
 import { log, enableLogPersistence, flushLogs } from "./logger.js";
-import { COOKIE } from "./src/api/auth.js";
+import authPlugin, { addApiAuthGuard, COOKIE } from "./src/api/auth.js";
 import {
   clearRestartNeeded,
   bumpGeneration,
@@ -123,6 +123,14 @@ server.decorate("requireAdmin", async function requireAdmin(req, reply) {
     return reply.code(403).send({ error: "forbidden" });
   }
 });
+
+await server.register(
+  async (api) => {
+    addApiAuthGuard(api, server);
+    await api.register(authPlugin);
+  },
+  { prefix: "/api" },
+);
 
 /**
  * @param {number} timeoutMs

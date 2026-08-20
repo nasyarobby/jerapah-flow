@@ -8,7 +8,7 @@ import { migrate, db } from "./db.js";
 import { log, enableLogPersistence, flushLogs } from "./logger.js";
 import * as store from "./store.js";
 import { createRegistry } from "./registry.js";
-import { COOKIE, OPEN_API_ROUTES } from "./src/api/auth.js";
+import { addApiAuthGuard, COOKIE } from "./src/api/auth.js";
 import authPlugin from "./src/api/auth.js";
 import usersPlugin from "./src/api/users.js";
 import scriptsPluginFactory from "./src/api/scripts.js";
@@ -159,16 +159,7 @@ export async function startApp(opts = {}) {
   if (runApi) {
     await server.register(
       async (api) => {
-        api.addHook("onRequest", async (req, reply) => {
-          const raw = (req.url || "").split("?")[0];
-          const stripped = raw.replace(/^\/api/, "") || "/";
-          const routeUrl = req.routeOptions?.url || stripped;
-          const open =
-            OPEN_API_ROUTES.has(`${req.method} ${routeUrl}`) ||
-            OPEN_API_ROUTES.has(`${req.method} ${stripped}`);
-          if (open) return;
-          await server.authenticate(req, reply);
-        });
+        addApiAuthGuard(api, server);
         await api.register(authPlugin);
         await api.register(usersPlugin);
         await api.register(secretsPlugin);
