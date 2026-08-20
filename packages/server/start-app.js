@@ -29,6 +29,11 @@ import {
   getRedisUrlForLog,
 } from "./workflow-queue.js";
 import { purgeExpiredTrash } from "./workflow-trash.js";
+import {
+  getConfigGeneration,
+  startHeartbeatLoop,
+  subscribeReload,
+} from "./control-bus.js";
 
 /**
  * @param {{
