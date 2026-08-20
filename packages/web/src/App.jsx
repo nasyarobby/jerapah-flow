@@ -10,6 +10,7 @@ import { ScriptDryRunPage } from "./pages/ScriptDryRunPage.jsx";
 import { ScriptEditPage, ScriptNewPage } from "./pages/ScriptEditPage.jsx";
 import { WorkflowsPage } from "./pages/WorkflowsPage.jsx";
 import { WorkflowEditPage, WorkflowNewPage } from "./pages/WorkflowEditPage.jsx";
+import { WorkflowTrashPage } from "./pages/WorkflowTrashPage.jsx";
 import { EventsPage } from "./pages/EventsPage.jsx";
 import { EventDetailPage } from "./pages/EventDetailPage.jsx";
 import { FailuresPage } from "./pages/FailuresPage.jsx";
@@ -59,6 +60,7 @@ export function App() {
         <Route path="/scripts/:name/dry-run" element={<ScriptDryRunPage />} />
         <Route path="/scripts/:name/edit" element={<ScriptEditPage />} />
         <Route path="/workflows" element={<WorkflowsPage />} />
+        <Route path="/workflows/trash" element={<WorkflowTrashPage />} />
         <Route path="/workflows/new" element={<WorkflowNewPage />} />
         <Route path="/workflows/:owner/:file/edit" element={<WorkflowEditPage />} />
         <Route path="/events" element={<EventsPage />} />

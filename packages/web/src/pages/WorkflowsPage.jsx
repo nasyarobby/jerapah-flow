@@ -4,6 +4,8 @@ import { LuActivity, LuCopy, LuPencil, LuPlay, LuPlus, LuRefreshCw, LuTrash2, Lu
 import { errorMessage } from "../api/client.js";
 import {
   useDeleteWorkflow,
+  useDownloadWorkflowBackup,
+  useRestoreWorkflowBackup,
   useReregisterWorkflows,
   useRunWorkflow,
   useSetWorkflowEnabled,
@@ -12,6 +14,7 @@ import {
 import { DuplicateWorkflowDialog } from "../components/DuplicateWorkflowDialog.jsx";
 import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
 import { formatTime, WorkflowStatusBadge } from "../lib/format.jsx";
+import { useNotifications } from "../notifications.jsx";
 
 export function WorkflowsPage() {
   const navigate = useNavigate();
@@ -25,6 +28,10 @@ export function WorkflowsPage() {
   const run = useRunWorkflow();
   const setEnabled = useSetWorkflowEnabled();
   const reregister = useReregisterWorkflows();
+  const backup = useDownloadWorkflowBackup();
+  const restoreBackup = useRestoreWorkflowBackup();
+  const { notify } = useNotifications();
+  const [restoreMode, setRestoreMode] = useState("merge");
 
   if (editParam) {
     const slash = editParam.indexOf("/");
@@ -72,6 +79,10 @@ export function WorkflowsPage() {
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Workflows</h1>
         <div className="flex items-center gap-2">
+          <Link to="/workflows/trash" className="btn btn-ghost btn-sm">
+            <LuTrash2 className="size-4" />
+            Trash
+          </Link>
           <button
             type="button"
             className="btn btn-ghost btn-sm"
@@ -102,6 +113,56 @@ export function WorkflowsPage() {
         <p className="text-error text-sm">{errorMessage(setEnabled.error)}</p>
       ) : null}
 
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <button
+          type="button"
+          className="btn btn-ghost btn-xs"
+          disabled={backup.isPending}
+          onClick={() =>
+            backup.mutate(undefined, {
+              onSuccess: () => notify.success("Backup downloaded"),
+              onError: (err) => notify.error(errorMessage(err)),
+            })
+          }
+        >
+          Download backup
+        </button>
+        <label className="btn btn-ghost btn-xs cursor-pointer">
+          Restore backup
+          <input
+            type="file"
+            accept=".zip,application/zip"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              restoreBackup.mutate(
+                { file, mode: restoreMode },
+                {
+                  onSuccess: (data) => {
+                    notify.success("Backup restored");
+                    if (data.warnings?.length) {
+                      notify.warning(data.warnings.join("; "));
+                    }
+                  },
+                  onError: (err) => notify.error(errorMessage(err)),
+                },
+              );
+            }}
+          />
+        </label>
+        <select
+          className="select select-xs"
+          value={restoreMode}
+          onChange={(e) => setRestoreMode(e.target.value)}
+          aria-label="Restore mode"
+        >
+          <option value="merge">Merge restore</option>
+          <option value="replace">Replace restore</option>
+        </select>
+      </div>
+
       {isLoading ? (
         <span className="loading loading-spinner" />
       ) : (
@@ -128,6 +189,7 @@ export function WorkflowsPage() {
                     >
                       <WorkflowFileIcon className="size-7 shrink-0" />
                       {w.name}
+                      <span className="block font-mono text-xs opacity-50">{w.file}</span>
                     </Link>
                     {!w.registered ? (
                       <span
@@ -202,7 +264,7 @@ export function WorkflowsPage() {
                     <button
                       type="button"
                       className="btn btn-ghost btn-xs text-error"
-                      title="Delete"
+                      title="Move to trash"
                       onClick={() => setConfirmDelete(w)}
                     >
                       <LuTrash2 className="size-4" />
@@ -231,7 +293,11 @@ export function WorkflowsPage() {
       {confirmDelete ? (
         <dialog className="modal modal-open">
           <div className="modal-box">
-            <h3 className="font-bold">Delete {confirmDelete.key}?</h3>
+            <h3 className="font-bold">Move {confirmDelete.key} to trash?</h3>
+            <p className="mt-2 text-sm opacity-70">
+              The workflow is removed from the list but kept in trash for 7 days. Revision history
+              is preserved.
+            </p>
             {del.isError ? (
               <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
             ) : null}
@@ -250,7 +316,7 @@ export function WorkflowsPage() {
                   )
                 }
               >
-                Delete
+                Move to trash
               </button>
             </div>
           </div>

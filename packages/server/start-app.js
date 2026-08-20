@@ -28,11 +28,7 @@ import {
   createWorkflowWorker,
   getRedisUrlForLog,
 } from "./workflow-queue.js";
-import {
-  getConfigGeneration,
-  startHeartbeatLoop,
-  subscribeReload,
-} from "./control-bus.js";
+import { purgeExpiredTrash } from "./workflow-trash.js";
 
 /**
  * @param {{
@@ -48,6 +44,14 @@ export async function startApp(opts = {}) {
 
   if (shouldMigrate) {
     await migrate();
+    try {
+      const purged = await purgeExpiredTrash();
+      if (purged > 0) {
+        log.info({ purged }, "purged expired workflow trash");
+      }
+    } catch (err) {
+      log.warn({ err }, "workflow trash purge failed");
+    }
   }
   enableLogPersistence();
 
