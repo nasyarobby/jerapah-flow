@@ -1,0 +1,25 @@
+name: Deploy to Raspberry Pi
+
+on:
+  push:
+    branches: [dev]
+
+jobs:
+  deploy:
+    runs-on: self-hosted   # must match a label on your act_runner
+    steps:
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          APP_DIR=/home/nsrb/apps/jerapah-flow
+          cd "$APP_DIR"
+
+          git fetch origin dev
+          git checkout dev
+          git pull --ff-only origin dev
+
+          pnpm install --frozen-lockfile
+          pnpm build
+
+          pm2 startOrReload ecosystem.config.cjs --update-env
+          pm2 save
