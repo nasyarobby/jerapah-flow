@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted   # must match a label on your act_runner
+    runs-on: home   # must match a label on your act_runner
     steps:
       - name: Deploy
         run: |
