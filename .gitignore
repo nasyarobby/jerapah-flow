@@ -12,3 +12,5 @@ debug-*.js
 # Plugin install staging and per-plugin deps
 plugins/.staging-*
 plugins/*/node_modules/
+
+.gitea/workflows/
