@@ -2,7 +2,7 @@ name: time to ntfy example
 description: |
   this workflow will send a message to ntfy with the current time
 scripts:
-  - script: get-current-time.js
+  - script: plugin/get-current-time
     config:
       key: ""
   - script: ntfy.js

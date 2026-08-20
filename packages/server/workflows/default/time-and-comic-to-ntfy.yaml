@@ -3,7 +3,7 @@ description: >
   Fan-in from two scripts (current time + monkeyuser comic), then send to ntfy.
 scripts:
   - id: time
-    script: get-current-time.js
+    script: plugin/get-current-time
 
   - id: comic
     script: fetch-html.js

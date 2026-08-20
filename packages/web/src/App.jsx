@@ -19,6 +19,7 @@ import { ResponsesPage } from "./pages/ResponsesPage.jsx";
 import { UsersPage } from "./pages/UsersPage.jsx";
 import { SecretsPage } from "./pages/SecretsPage.jsx";
 import { VariablesPage } from "./pages/VariablesPage.jsx";
+import { OpsPage } from "./pages/OpsPage.jsx";
 
 export function App() {
   const qc = useQueryClient();
@@ -71,11 +72,13 @@ export function App() {
           <>
             <Route path="/users" element={<UsersPage />} />
             <Route path="/secrets" element={<SecretsPage />} />
+            <Route path="/ops" element={<OpsPage />} />
           </>
         ) : (
           <>
             <Route path="/users" element={<Navigate to="/" replace />} />
             <Route path="/secrets" element={<Navigate to="/" replace />} />
+            <Route path="/ops" element={<Navigate to="/" replace />} />
           </>
         )}
         <Route path="*" element={<Navigate to="/" replace />} />

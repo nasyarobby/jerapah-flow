@@ -7,6 +7,8 @@ logs/
 packages/web/dist
 
 # Personal/local scripts and workflows (not for the repo)
-packages/server/scripts/dev-*
-packages/server/workflows/**/dev-*
 debug-*.js
+
+# Plugin install staging and per-plugin deps
+plugins/.staging-*
+plugins/*/node_modules/

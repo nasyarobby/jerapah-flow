@@ -1,0 +1,29 @@
+name: Joplin nightly daily log
+description: |
+  POST joplin-auto /api/logs/run at 04:00 (sync + yearly/monthly/today), then ntfy.
+  Secret joplin_setup_token (SETUP_API_TOKEN). Variable ntfy_channel.
+scripts:
+  - script: plugin/joplin-api
+    config:
+      url: http://10.8.0.6:3040/api/logs/run
+      method: POST
+      token: $SECRET_joplin_setup_token
+      timeoutMs: 600000
+  - set:
+      expression: |
+        {
+          "title": data.ok ? "Bullet journal" : "Bullet journal failed",
+          "message": data.ok
+            ? "The bullet journal for " & data.httpResponse.date & " has been created."
+            : data.message
+        }
+  - script: ntfy.js
+    config:
+      url: $VAR_ntfy_channel
+triggers:
+  - type: cron
+    schedule: "0 4 * * *"
+  - type: HTTP
+    method: POST
+    path: /dev-joplin-daily
+enabled: false

@@ -1,0 +1,17 @@
+name: Joplin get note
+description: |
+  GET a Joplin note by id from joplin-api. Input (data): id (32-char hex).
+  Secret joplin_api_token (JOPLIN_API_TOKEN / API_KEYS). Returns the full note.
+scripts:
+  - script: plugin/joplin-api
+    config:
+      url: http://10.8.0.6:3030/notes
+      method: GET
+      token: $SECRET_joplin_api_token
+      timeoutMs: 60000
+triggers:
+  - type: workflow
+  - type: HTTP
+    method: POST
+    path: /dev-joplin-get-note
+enabled: false

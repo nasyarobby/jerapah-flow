@@ -6,7 +6,7 @@ import axios from "axios";
 import pino from "pino";
 import { createKvApi } from "./kv-store.js";
 import { createFingerprintApi } from "./script-fingerprint.js";
-import { SCRIPTS_DIR } from "./paths.js";
+import { resolveScriptRef, createPluginRequire } from "./plugin-store.js";
 import { isSecret, Secret, unwrapSecretsDeep } from "./secret-value.js";
 import { getHttpPageByName, getHttpTemplateByName } from "./http-pages-store.js";
 import { getSecretPlaintext } from "./secrets-store.js";
@@ -296,15 +296,60 @@ function createScreenedAxios(log) {
   });
 }
 
-function createRestrictedRequire(screenedAxios) {
+const BLOCKED_PLUGIN_MODULES = new Set([
+  "child_process",
+  "node:child_process",
+  "cluster",
+  "node:cluster",
+  "fs",
+  "node:fs",
+  "fs/promises",
+  "node:fs/promises",
+  "module",
+  "node:module",
+  "vm",
+  "node:vm",
+  "worker_threads",
+  "node:worker_threads",
+  "v8",
+  "node:v8",
+  "inspector",
+  "node:inspector",
+  "sqlite",
+  "node:sqlite",
+]);
+
+/**
+ * @param {import("axios").AxiosInstance} screenedAxios
+ * @param {string | null} [pluginDirectory]
+ */
+function createRestrictedRequire(screenedAxios, pluginDirectory = null) {
+  const pluginRequire = pluginDirectory
+    ? createPluginRequire(pluginDirectory)
+    : null;
+
   return function restrictedRequire(id) {
-    if (typeof id !== "string" || !ALLOWED_MODULES.has(id)) {
+    if (typeof id !== "string") {
       throw new Error(`require(${JSON.stringify(id)}) is not allowed`);
     }
-    if (id === "axios") {
-      return screenedAxios;
+    if (BLOCKED_PLUGIN_MODULES.has(id)) {
+      throw new Error(`require(${JSON.stringify(id)}) is not allowed`);
     }
-    return hostRequire(id);
+    if (ALLOWED_MODULES.has(id)) {
+      if (id === "axios") return screenedAxios;
+      return hostRequire(id);
+    }
+    if (pluginRequire) {
+      try {
+        return pluginRequire(id);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `require(${JSON.stringify(id)}) failed in plugin: ${msg}`,
+        );
+      }
+    }
+    throw new Error(`require(${JSON.stringify(id)}) is not allowed`);
   };
 }
 
@@ -391,6 +436,7 @@ const $workflowsStub = {
  *   workflowName: string,
  *   owner?: string,
  *   $workflows?: { trigger: (name: string, data?: unknown) => Promise<unknown> },
+ *   pluginDir?: string | null,
  * }} opts
  */
 function createScriptSandbox({
@@ -399,6 +445,7 @@ function createScriptSandbox({
   workflowName,
   owner = "default",
   $workflows = $workflowsStub,
+  pluginDir = null,
 }) {
   const scriptLog = log.child({ workflow: workflowName, script });
   const $axios = createScreenedAxios(scriptLog);
@@ -418,7 +465,7 @@ function createScriptSandbox({
     $vars,
     $responses,
     $workflows,
-    require: createRestrictedRequire($axios),
+    require: createRestrictedRequire($axios, pluginDir),
   };
 
   vm.createContext(sandbox, {
@@ -470,8 +517,29 @@ export function extractScriptMeta(fn) {
  *   $workflows?: { trigger: (name: string, data?: unknown) => Promise<unknown> },
  * }} opts
  */
-function instantiateCompiled(compiled, { log, script, workflowName, owner, $workflows }) {
-  const sandbox = createScriptSandbox({ log, script, workflowName, owner, $workflows });
+/**
+ * @param {import("vm").Script} compiled
+ * @param {{
+ *   log: import("pino").Logger,
+ *   script: string,
+ *   workflowName: string,
+ *   owner?: string,
+ *   $workflows?: { trigger: (name: string, data?: unknown) => Promise<unknown> },
+ *   pluginDir?: string | null,
+ * }} opts
+ */
+function instantiateCompiled(
+  compiled,
+  { log, script, workflowName, owner, $workflows, pluginDir = null },
+) {
+  const sandbox = createScriptSandbox({
+    log,
+    script,
+    workflowName,
+    owner,
+    $workflows,
+    pluginDir,
+  });
   return compiled.runInContext(sandbox);
 }
 
@@ -486,6 +554,7 @@ function instantiateCompiled(compiled, { log, script, workflowName, owner, $work
  *   workflowName?: string,
  *   owner?: string,
  *   $workflows?: { trigger: (name: string, data?: unknown) => Promise<unknown> },
+ *   pluginDir?: string | null,
  * }} [opts]
  */
 export function instantiateScriptSource(script, source, opts = {}) {
@@ -496,6 +565,7 @@ export function instantiateScriptSource(script, source, opts = {}) {
     workflowName: opts.workflowName ?? "inspect",
     owner: opts.owner ?? "default",
     $workflows: opts.$workflows,
+    pluginDir: opts.pluginDir ?? null,
   });
   return { fn, ...extractScriptMeta(fn) };
 }
@@ -519,17 +589,28 @@ export function inspectScriptSource(script, source) {
 }
 
 function loadCompiledScript(script) {
-  const filePath = path.join(SCRIPTS_DIR, script);
+  const resolved = resolveScriptRef(script);
+  if (resolved.error || !resolved.filePath) {
+    throw new Error(resolved.error || `script not found: ${script}`);
+  }
+  const filePath = resolved.filePath;
   const { mtimeMs } = fs.statSync(filePath);
-  const cached = scriptCache.get(script);
+  const cacheKey = `${resolved.kind}:${resolved.scriptRef}:${filePath}`;
+  const cached = scriptCache.get(cacheKey);
   if (cached && cached.mtimeMs === mtimeMs) {
-    return cached.compiled;
+    return cached;
   }
 
   const source = fs.readFileSync(filePath, "utf8");
   const compiled = compileScriptSource(source, filePath);
-  scriptCache.set(script, { compiled, mtimeMs });
-  return compiled;
+  const entry = {
+    compiled,
+    mtimeMs,
+    pluginDir: resolved.pluginDir ?? null,
+    scriptRef: resolved.scriptRef,
+  };
+  scriptCache.set(cacheKey, entry);
+  return entry;
 }
 
 /**
@@ -545,13 +626,14 @@ function loadCompiledScript(script) {
  * }} opts
  */
 export async function runScript(script, ctx, { log, workflowName, owner, $workflows }) {
-  const compiled = loadCompiledScript(script);
-  const fn = instantiateCompiled(compiled, {
+  const loaded = loadCompiledScript(script);
+  const fn = instantiateCompiled(loaded.compiled, {
     log,
-    script,
+    script: loaded.scriptRef,
     workflowName,
     owner,
     $workflows,
+    pluginDir: loaded.pluginDir,
   });
   return await fn(ctx);
 }

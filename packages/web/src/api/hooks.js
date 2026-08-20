@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "./client.js";
+import { api, opsApi } from "./client.js";
 
 export function useBootstrap() {
   return useQuery({
@@ -89,6 +89,47 @@ export function useSaveScript() {
       qc.invalidateQueries({ queryKey: ["scripts"] });
       qc.invalidateQueries({ queryKey: ["scripts", vars.name] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["ops-status"] });
+    },
+  });
+}
+
+export function useCreatePlugin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, content, description }) =>
+      (await api.post("/plugins/create", { id, content, description })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scripts"] });
+      qc.invalidateQueries({ queryKey: ["ops-status"] });
+    },
+  });
+}
+
+export function useForkScript() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, id, description }) =>
+      (
+        await api.post(`/scripts/${encodeURIComponent(name)}/fork`, {
+          id,
+          description,
+        })
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scripts"] });
+      qc.invalidateQueries({ queryKey: ["ops-status"] });
+    },
+  });
+}
+
+export function useInstallPlugin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body) => (await api.post("/plugins/install", body)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scripts"] });
+      qc.invalidateQueries({ queryKey: ["ops-status"] });
     },
   });
 }
@@ -450,3 +491,84 @@ export function useDeleteHttpAuth() {
 export async function fetchHttpAuthLiterals(name) {
   return (await api.get(`/http-auths/${encodeURIComponent(name)}/reveal`)).data;
 }
+
+export function useOpsStatus(enabled = true) {
+  return useQuery({
+    queryKey: ["ops-status"],
+    queryFn: async () => (await opsApi.get("/status")).data,
+    enabled,
+    retry: false,
+    refetchInterval: enabled ? 3000 : false,
+  });
+}
+
+export function useOpsPause() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await opsApi.post("/pause")).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops-status"] }),
+  });
+}
+
+export function useOpsResume() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await opsApi.post("/resume")).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops-status"] }),
+  });
+}
+
+export function useOpsReload() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await opsApi.post("/reload")).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ops-status"] });
+      qc.invalidateQueries({ queryKey: ["workflows"] });
+    },
+  });
+}
+
+export function useOpsRestart() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ force = false } = {}) =>
+      (await opsApi.post("/restart", { force })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops-status"] }),
+  });
+}
+
+export function useOpsScale() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ workers, force = false }) =>
+      (await opsApi.post("/scale", { workers, force })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops-status"] }),
+  });
+}
+
+export function useOpsHttpStart() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await opsApi.post("/http/start")).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops-status"] }),
+  });
+}
+
+export function useOpsHttpStop() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await opsApi.post("/http/stop")).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops-status"] }),
+  });
+}
+
+export function useOpsBumpGeneration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (reason) =>
+      (await opsApi.post("/generation/bump", { reason })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops-status"] }),
+  });
+}
+

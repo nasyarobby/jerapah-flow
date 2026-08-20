@@ -1,11 +1,17 @@
 import { useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { LuPencil, LuPlay, LuPlus, LuSearch, LuTrash2 } from "react-icons/lu";
+import { LuCopy, LuPencil, LuPlay, LuPlus, LuSearch, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
-import { useDeleteScript, useScripts } from "../api/hooks.js";
+import {
+  useDeleteScript,
+  useForkScript,
+  useInstallPlugin,
+  useScripts,
+} from "../api/hooks.js";
 import { ScriptIcon } from "../components/ScriptIcon.jsx";
 import { TagBadge } from "../components/TagBadge.jsx";
 import { scriptTags } from "../lib/script.js";
+import { useNotifications } from "../notifications.jsx";
 
 export function ScriptsPage() {
   const [params] = useSearchParams();
@@ -14,7 +20,12 @@ export function ScriptsPage() {
   const { data: scripts = [], isLoading } = useScripts();
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [query, setQuery] = useState("");
+  const [forkFor, setForkFor] = useState(null);
+  const [forkId, setForkId] = useState("");
   const del = useDeleteScript();
+  const fork = useForkScript();
+  const install = useInstallPlugin();
+  const { notify } = useNotifications();
 
   const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -23,9 +34,11 @@ export function ScriptsPage() {
       const name = typeof s === "string" ? s : s.name ?? "";
       const description = typeof s === "string" ? "" : s.meta?.description ?? "";
       const tags = typeof s === "string" ? [] : scriptTags(s.meta);
+      const kind = typeof s === "string" ? "" : s.kind ?? "";
       return (
         name.toLowerCase().includes(term) ||
         description.toLowerCase().includes(term) ||
+        kind.toLowerCase().includes(term) ||
         tags.some((t) => t.toLowerCase().includes(term))
       );
     });
@@ -50,12 +63,32 @@ export function ScriptsPage() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </label>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            disabled={install.isPending}
+            onClick={() =>
+              install.mutate(
+                { source: "example", exampleId: "get-current-time", overwrite: true },
+                {
+                  onSuccess: () =>
+                    notify.success("Installed example plugin/get-current-time"),
+                },
+              )
+            }
+          >
+            Install example
+          </button>
           <Link to="/scripts/new" className="btn btn-primary btn-sm">
             <LuPlus className="size-4" />
-            Add
+            Add plugin
           </Link>
         </div>
       </div>
+
+      {install.isError ? (
+        <p className="text-error text-sm">{errorMessage(install.error)}</p>
+      ) : null}
 
       {isLoading ? (
         <span className="loading loading-spinner" />
@@ -71,6 +104,8 @@ export function ScriptsPage() {
             const metaError = typeof s === "string" ? null : s.metaError;
             const hasIcon = typeof s === "string" ? undefined : s.hasIcon;
             const tags = typeof s === "string" ? [] : scriptTags(s.meta);
+            const kind = typeof s === "string" ? "core" : s.kind ?? "core";
+            const isCore = kind === "core";
             return (
               <article
                 key={name}
@@ -90,6 +125,13 @@ export function ScriptsPage() {
                       </span>
                     </h2>
                   </Link>
+                  <div className="flex justify-center">
+                    <span
+                      className={`badge badge-xs ${isCore ? "badge-info" : "badge-accent"}`}
+                    >
+                      {kind}
+                    </span>
+                  </div>
                   <p className="text-xs opacity-80 line-clamp-2 min-h-8">
                     {metaError ? (
                       <span className="text-error">{metaError}</span>
@@ -114,25 +156,47 @@ export function ScriptsPage() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Dry run"
-                      onClick={() => navigate(`/scripts/${encodeURIComponent(name)}/dry-run`)}
+                      onClick={() =>
+                        navigate(`/scripts/${encodeURIComponent(name)}/dry-run`)
+                      }
                     >
                       <LuPlay className="size-4" />
                     </button>
-                    <Link
-                      to={`/scripts/${encodeURIComponent(name)}/edit`}
-                      className="btn btn-ghost btn-xs"
-                      title="Edit"
-                    >
-                      <LuPencil className="size-4" />
-                    </Link>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-xs text-error"
-                      title="Delete"
-                      onClick={() => setConfirmDelete(name)}
-                    >
-                      <LuTrash2 className="size-4" />
-                    </button>
+                    {isCore ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs"
+                        title="Fork"
+                        onClick={() => {
+                          setForkFor(name);
+                          setForkId(
+                            String(name)
+                              .replace(/\.js$/i, "")
+                              .toLowerCase() + "-copy",
+                          );
+                        }}
+                      >
+                        <LuCopy className="size-4" />
+                      </button>
+                    ) : (
+                      <Link
+                        to={`/scripts/${encodeURIComponent(name)}/edit`}
+                        className="btn btn-ghost btn-xs"
+                        title="Edit"
+                      >
+                        <LuPencil className="size-4" />
+                      </Link>
+                    )}
+                    {!isCore ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-error"
+                        title="Delete"
+                        onClick={() => setConfirmDelete(name)}
+                      >
+                        <LuTrash2 className="size-4" />
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </article>
@@ -141,20 +205,79 @@ export function ScriptsPage() {
         </div>
       )}
 
-      {confirmDelete ? (
+      {forkFor ? (
         <dialog className="modal modal-open">
           <div className="modal-box">
-            <h3 className="font-bold">Delete {confirmDelete}?</h3>
-            {del.isError ? (
-              <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
+            <h3 className="font-semibold">Fork {forkFor}</h3>
+            <p className="text-sm opacity-70 py-2">
+              Creates <code>plugin/&lt;id&gt;</code> from this core script.
+            </p>
+            <input
+              className="input input-bordered input-sm w-full font-mono"
+              value={forkId}
+              onChange={(e) => setForkId(e.target.value)}
+            />
+            {fork.isError ? (
+              <p className="text-error text-sm mt-2">{errorMessage(fork.error)}</p>
             ) : null}
             <div className="modal-action">
-              <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setForkFor(null)}
+              >
                 Cancel
               </button>
               <button
                 type="button"
-                className="btn btn-error"
+                className="btn btn-primary btn-sm"
+                disabled={fork.isPending || !forkId.trim()}
+                onClick={() =>
+                  fork.mutate(
+                    { name: forkFor, id: forkId.trim() },
+                    {
+                      onSuccess: (data) => {
+                        setForkFor(null);
+                        notify.success("Forked — drain-restart recommended");
+                        navigate(
+                          `/scripts/${encodeURIComponent(data.scriptRef)}/edit`,
+                        );
+                      },
+                    },
+                  )
+                }
+              >
+                Fork
+              </button>
+            </div>
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button type="button" onClick={() => setForkFor(null)}>
+              close
+            </button>
+          </form>
+        </dialog>
+      ) : null}
+
+      {confirmDelete ? (
+        <dialog className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-semibold">Delete {confirmDelete}?</h3>
+            <p className="text-sm opacity-70 py-2">This uninstalls the plugin.</p>
+            {del.isError ? (
+              <p className="text-error text-sm">{errorMessage(del.error)}</p>
+            ) : null}
+            <div className="modal-action">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setConfirmDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-error btn-sm"
                 disabled={del.isPending}
                 onClick={() =>
                   del.mutate(confirmDelete, {

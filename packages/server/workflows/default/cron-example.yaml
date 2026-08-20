@@ -2,7 +2,7 @@ name: cron example
 description: |
   this workflow triggered by cron
 scripts:
-  - script: get-current-time.js
+  - script: plugin/get-current-time
   - set:
       expression: '{"message": context.datetime}'
   - script: ntfy.js

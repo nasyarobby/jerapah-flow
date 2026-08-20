@@ -5,7 +5,7 @@ const HTTP_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
 
 export const NEW_WORKFLOW_YAML = `name: new workflow
 scripts:
-  - get-current-time.js
+  - plugin/get-current-time
 triggers:
   - type: HTTP
     method: POST
