@@ -1,6 +1,6 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useOwners, useRuns } from "../api/hooks.js";
-import { formatTime, StatusBadge } from "../lib/format.jsx";
+import { formatTime, StatusBadge } from "../lib/format";
 
 const PAGE_SIZES = [25, 50, 100];
 const DEFAULT_LIMIT = 50;

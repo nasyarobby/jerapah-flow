@@ -8,7 +8,7 @@ import {
   useWorkflowTrash,
 } from "../api/hooks.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
-import { formatTime } from "../lib/format.jsx";
+import { formatTime } from "../lib/format";
 import { useNotifications } from "../notifications.jsx";
 
 function formatAge(ms) {

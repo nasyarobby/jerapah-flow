@@ -7,7 +7,7 @@ import { errorMessage } from "../../api/client.js";
 import { CodeEditor } from "../CodeEditor.jsx";
 import { FormInput, FormSelect, FormTextarea } from "../FormControls.jsx";
 import { LogViewer } from "../LogViewer.jsx";
-import { StatusBadge } from "../../lib/format.jsx";
+import { StatusBadge } from "../../lib/format";
 import { contextFromMeta, prettyJson } from "../../lib/script.js";
 import { ConfigFields } from "./ConfigFields.jsx";
 import { ConfigTooltip, configValueText, FieldLabel, previewConfigValue, SchemaTooltip } from "./FieldHelp.jsx";
@@ -390,7 +390,7 @@ function needsMode(needs) {
   return "map";
 }
 
-export function ScriptTryDialog({ script, config, meta, owner, onClose }) {
+function ScriptTryDialog({ script, config, meta, owner, onClose }) {
   const existing = useScript(script);
   const dryRun = useDryRunScript();
   const defaults = useMemo(() => contextFromMeta(meta), [meta]);

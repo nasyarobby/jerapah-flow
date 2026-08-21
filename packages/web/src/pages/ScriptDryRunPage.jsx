@@ -12,7 +12,7 @@ import { CodeEditor } from "../components/CodeEditor.jsx";
 import { LogViewer } from "../components/LogViewer.jsx";
 import { ScriptIcon } from "../components/ScriptIcon.jsx";
 import { ScriptMetaPanel } from "../components/ScriptMetaPanel.jsx";
-import { StatusBadge } from "../lib/format.jsx";
+import { StatusBadge } from "../lib/format";
 import {
   DEFAULT_INPUT_CONTEXT,
   NEW_SCRIPT_TEMPLATE,

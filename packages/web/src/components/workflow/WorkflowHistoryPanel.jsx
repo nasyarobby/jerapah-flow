@@ -5,7 +5,7 @@ import {
   useRevertWorkflowRevision,
   useWorkflowRevisions,
 } from "../../api/hooks.js";
-import { formatTime } from "../../lib/format.jsx";
+import { formatTime } from "../../lib/format";
 import { useNotifications } from "../../notifications.jsx";
 import {
   SaveWorkflowWarningsDialog,

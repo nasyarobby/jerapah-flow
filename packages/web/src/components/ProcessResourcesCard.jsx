@@ -1,4 +1,4 @@
-import { formatBytes, formatCpu } from "../lib/format.js";
+import { formatBytes, formatCpu } from "../lib/format";
 
 export function ProcessResourcesCard({ children }) {
   const totals = children?.totals ?? { memory: 0, cpu: 0 };

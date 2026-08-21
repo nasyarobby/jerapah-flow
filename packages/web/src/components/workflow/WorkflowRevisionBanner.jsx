@@ -2,7 +2,7 @@ import { useState } from "react";
 import { LuHistory } from "react-icons/lu";
 import { errorMessage } from "../../api/client.js";
 import { useRevertWorkflowRevision } from "../../api/hooks.js";
-import { formatTime } from "../../lib/format.jsx";
+import { formatTime } from "../../lib/format";
 import { useNotifications } from "../../notifications.jsx";
 import { ConfirmDialog } from "../ConfirmDialog.jsx";
 import {

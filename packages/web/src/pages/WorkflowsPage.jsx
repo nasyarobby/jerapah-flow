@@ -12,7 +12,7 @@ import {
 import { DuplicateWorkflowDialog } from "../components/DuplicateWorkflowDialog.jsx";
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
-import { formatTime, WorkflowStatusBadge } from "../lib/format.jsx";
+import { formatTime, WorkflowStatusBadge } from "../lib/format";
 
 export function WorkflowsPage() {
   const navigate = useNavigate();

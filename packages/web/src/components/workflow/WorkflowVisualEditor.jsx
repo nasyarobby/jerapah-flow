@@ -10,7 +10,7 @@ import { TriggersTab } from "./TriggersTab.jsx";
 import { YamlTab } from "./YamlTab.jsx";
 import { WorkflowTestPanel } from "./WorkflowTestPanel.jsx";
 
-export function useYamlPreview(content) {
+function useYamlPreview(content) {
   return useMemo(() => {
     try {
       const parsedYaml = parseYaml(content);

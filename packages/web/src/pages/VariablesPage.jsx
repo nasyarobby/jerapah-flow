@@ -7,7 +7,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { FormSelect } from "../components/FormControls.jsx";
 import { VariableEditorModal } from "../components/VariableEditorModal.jsx";
 import { useRouteDrivenModal } from "../hooks/useRouteDrivenModal.js";
-import { formatTime } from "../lib/format.jsx";
+import { formatTime } from "../lib/format";
 
 function displayValue(value) {
   if (typeof value === "string") return value === "" ? '""' : value;

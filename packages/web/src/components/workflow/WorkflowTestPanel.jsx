@@ -4,7 +4,7 @@ import { LuMaximize2, LuMinimize2, LuPlay } from "react-icons/lu";
 import { api, errorMessage } from "../../api/client.js";
 import { useRunWorkflow } from "../../api/hooks.js";
 import { CodeEditor } from "../CodeEditor.jsx";
-import { StatusBadge } from "../../lib/format.jsx";
+import { StatusBadge } from "../../lib/format";
 import { prettyJson } from "../../lib/script.js";
 import {
   overlayWorkflowTestData,

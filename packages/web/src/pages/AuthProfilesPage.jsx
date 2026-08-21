@@ -10,7 +10,7 @@ import {
 import { AuthEditorModal } from "../components/AuthEditorModal.jsx";
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { useRouteDrivenModal } from "../hooks/useRouteDrivenModal.js";
-import { formatTime } from "../lib/format.jsx";
+import { formatTime } from "../lib/format";
 
 function CredDisplay({ field, fieldKey, authId, cache, onRevealed }) {
   const [open, setOpen] = useState(false);

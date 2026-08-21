@@ -23,15 +23,13 @@ import {
   storedEnvelope,
 } from "./step-result.js";
 import * as fsStore from "./fs-store.js";
-import {
-  checkAnyHttpAuth,
-  resolveAuthMechanisms,
-  resolveUnauthorizedSpec,
-  sendHttpPageOrJson,
-  sendSuccessPage,
-} from "./http-trigger-auth.js";
 import { resolveConfigRefs } from "./config-refs.js";
-import { HTTP_METHODS, hasWorkflowTrigger, mergeProfileConfig } from "@jerapah-flow/shared";
+import { hasWorkflowTrigger, mergeProfileConfig } from "@jerapah-flow/shared";
+import {
+  createHttpTriggerHandler,
+  ensureHttpWildcardRoute,
+  rebuildHttpRoutes,
+} from "./workflow-http-routes.js";
 import { getProfilePlain } from "./profiles-store.js";
 import {
   buildFailureAlertData,
@@ -69,7 +67,14 @@ export function createRegistry(server, opts = {}) {
   let pruneTask = null;
   /** @type {Map<string, HttpRouteEntry>} */
   const httpRoutes = new Map();
-  let httpDispatcherRegistered = false;
+  const httpDispatcherState = { registered: false };
+  const dispatchHttpTrigger = createHttpTriggerHandler({
+    httpRoutes,
+    workflows,
+    namespacedPath,
+    enqueueWorkflow: (...args) => enqueueWorkflow(...args),
+  });
+
 
   /**
    * Resolve a same-owner workflow that opts in with `type: workflow`.
@@ -175,118 +180,10 @@ export function createRegistry(server, opts = {}) {
    * Fastify route once so path/method changes apply on reregister without restart.
    */
   function registerHttpTriggers() {
-    httpRoutes.clear();
-
-    for (const [key, { owner, workflow }] of workflows) {
-      if (workflow.enabled === false) {
-        log.debug(`Skipping disabled workflow HTTP triggers (${key})`);
-        continue;
-      }
-
-      for (const trigger of workflow.triggers ?? []) {
-        if (trigger.type !== "HTTP") continue;
-
-        const method = String(trigger.method ?? "POST").toUpperCase();
-        const url = namespacedPath(owner, trigger.path);
-        const routeKey = `${method} ${url}`;
-
-        if (httpRoutes.has(routeKey)) {
-          log.warn(`Skipping duplicate HTTP trigger ${routeKey} (${key})`);
-          continue;
-        }
-        httpRoutes.set(routeKey, { key, owner, trigger });
-        log.debug(`Mapped HTTP trigger ${routeKey} (${key})`);
-      }
-    }
-
-    if (!httpDispatcherRegistered) {
-      httpDispatcherRegistered = true;
-      server.route({
-        method: HTTP_METHODS,
-        url: "/u/*",
-        handler: dispatchHttpTrigger,
-      });
-      log.debug("Registered HTTP trigger wildcard dispatcher /u/*");
-    }
-  }
-
-  /**
-   * @param {import("fastify").FastifyRequest} req
-   * @param {import("fastify").FastifyReply} reply
-   */
-  async function dispatchHttpTrigger(req, reply) {
-    const wildcard = /** @type {{ "*": string }} */ (req.params)["*"] ?? "";
-    const url = `/u/${String(wildcard).replace(/^\/+/, "")}`;
-    const method = String(req.method ?? "GET").toUpperCase();
-    const routeKey = `${method} ${url}`;
-    const mapped = httpRoutes.get(routeKey);
-
-    if (!mapped) {
-      return reply.code(404).send({ error: "not found" });
-    }
-
-    const entry = workflows.get(mapped.key);
-    if (!entry || entry.workflow?.enabled === false) {
-      return reply.code(404).send({ error: "workflow disabled" });
-    }
-
-    // Prefer live trigger from current workflow YAML (auth/response edits)
-    const liveTrigger =
-      (entry.workflow.triggers ?? []).find((t) => {
-        if (t?.type !== "HTTP") return false;
-        const m = String(t.method ?? "POST").toUpperCase();
-        const p = namespacedPath(entry.owner, t.path);
-        return m === method && p === url;
-      }) ?? mapped.trigger;
-
-    if (
-      liveTrigger.auth != null &&
-      liveTrigger.auth !== false &&
-      !(Array.isArray(liveTrigger.auth) && liveTrigger.auth.length === 0)
-    ) {
-      const mechanisms = await resolveAuthMechanisms(liveTrigger.auth);
-      if (mechanisms.length === 0) {
-        const { status, pageName } = resolveUnauthorizedSpec(liveTrigger, null);
-        return sendHttpPageOrJson(reply, status, pageName, {
-          error: "unauthorized",
-        });
-      }
-      const ok = await checkAnyHttpAuth(req, mechanisms, {
-        owner: entry.owner,
-        workflowKey: mapped.key,
-      });
-      if (!ok) {
-        const { status, pageName } = resolveUnauthorizedSpec(
-          liveTrigger,
-          mechanisms[0],
-        );
-        return sendHttpPageOrJson(reply, status, pageName, {
-          error: "unauthorized",
-        });
-      }
-    }
-
-    const result = await enqueueWorkflow(
-      mapped.key,
-      { data: req.body },
-      { type: "http", detail: `${method} ${url}` },
-    );
-    if (result.status === "failed") {
-      return reply.code(result.runId ? 500 : 404).send({
-        runId: result.runId,
-        status: result.status,
-        error: result.error,
-      });
-    }
-
-    const defaultBody = {
-      runId: result.runId,
-      status: result.status,
-    };
-    if (typeof liveTrigger.response === "string" && liveTrigger.response) {
-      return sendSuccessPage(reply, liveTrigger.response, defaultBody);
-    }
-    return reply.code(202).send(defaultBody);
+    rebuildHttpRoutes(workflows, httpRoutes, { namespacedPath, log });
+    ensureHttpWildcardRoute(server, dispatchHttpTrigger, httpDispatcherState, {
+      log,
+    });
   }
 
   function registerCronTriggers() {

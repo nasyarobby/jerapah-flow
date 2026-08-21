@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useKv, useKvNamespaces } from "../api/hooks.js";
 import { FormSelect } from "../components/FormControls.jsx";
-import { formatTime } from "../lib/format.jsx";
+import { formatTime } from "../lib/format";
 
 const PAGE_SIZE = 50;
 

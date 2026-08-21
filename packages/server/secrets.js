@@ -25,7 +25,7 @@ let cachedKey = null;
 /**
  * @returns {Buffer}
  */
-export function getMasterKey() {
+function getMasterKey() {
   if (cachedKey) return cachedKey;
   const raw = resolveSecretsKeyMaterial();
   cachedKey = /^[0-9a-fA-F]{64}$/.test(raw)

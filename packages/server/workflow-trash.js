@@ -20,7 +20,7 @@ function trashFilePath(owner, file) {
 /**
  * @param {string} deletedAtIso
  */
-export function trashAgeMs(deletedAtIso) {
+function trashAgeMs(deletedAtIso) {
   return Date.now() - Date.parse(deletedAtIso);
 }
 

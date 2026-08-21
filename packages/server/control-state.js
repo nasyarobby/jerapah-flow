@@ -17,7 +17,7 @@ const LOCK_PATH = path.join(DATA_DIR, "ops.lock");
  */
 
 /** @returns {ControlState} */
-export function defaultControlState() {
+function defaultControlState() {
   return {
     http: "running",
     workers: 1,

@@ -7,7 +7,7 @@ import {
   useUpsertHttpPage,
 } from "../api/hooks.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
-import { formatTime } from "../lib/format.jsx";
+import { formatTime } from "../lib/format";
 
 const emptyForm = {
   name: "",

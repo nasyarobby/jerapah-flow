@@ -486,7 +486,7 @@ const inspectLog = pino({ level: "silent" });
  * @param {unknown} fn
  * @returns {{ meta: Record<string, unknown> | null, metaError: string | null }}
  */
-export function extractScriptMeta(fn) {
+function extractScriptMeta(fn) {
   if (typeof fn !== "function") {
     return { meta: null, metaError: "default export must be a function" };
   }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { LuX } from "react-icons/lu";
-import { levelName } from "../lib/format.jsx";
+import { levelName } from "../lib/format";
 
 export function LogViewer({ logs = [], filters = [], onRemoveFilter, className = "" }) {
   const [wordWrap, setWordWrap] = useState(true);
