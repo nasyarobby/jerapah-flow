@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint src"
   },
   "dependencies": {
     "@jerapah-flow/shared": "workspace:*",
@@ -26,9 +27,14 @@
     "yaml": "^2.8.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.33.0",
     "@tailwindcss/vite": "^4.1.11",
     "@vitejs/plugin-react": "^5.0.0",
     "daisyui": "^5.0.50",
+    "eslint": "^9.33.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.3.0",
     "tailwindcss": "^4.1.11",
     "vite": "^7.1.2"
   }

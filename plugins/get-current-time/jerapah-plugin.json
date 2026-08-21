@@ -1,8 +1,0 @@
-{
-  "id": "get-current-time",
-  "name": "Get current time",
-  "version": "0.1.0",
-  "jerapah": ">=0.1.0 <1.0.0",
-  "main": "script.js",
-  "description": "Example user plugin: return the current time as output.datetime"
-}

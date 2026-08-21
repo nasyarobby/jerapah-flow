@@ -39,7 +39,7 @@ function parentIdsFromNeeds(needs) {
 function mermaidLabel(text) {
   return String(text ?? "")
     .replace(/"/g, "#quot;")
-    .replace(/[\[\]]/g, " ")
+    .replace(/[[\]]/g, " ")
     .trim() || "node";
 }
 

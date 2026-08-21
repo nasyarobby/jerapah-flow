@@ -1,7 +1,0 @@
-{
-  "name": "jflow-plugin-get-current-time",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "description": "Example JerapahFlow plugin (no npm dependencies)"
-}

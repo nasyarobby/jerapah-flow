@@ -36,13 +36,14 @@ The first account created becomes **admin**. Later accounts are created from Use
 | Kind | Name in YAML | Editable | Location |
 |---|---|---|---|
 | **Core** | `fetch-http.js`, `s3.js`, … | No (fork only) | `packages/server/scripts/` |
-| **Plugin** | `plugin/<id>` | Yes | `plugins/<id>/` |
+| **User plugin** | `plugin/<id>` | Yes | `plugins/<id>/` |
+| **Example source** | install → `plugin/<id>` | After install | `examples/plugins/<id>/` |
 
 - App version is **`0.1.0`** (root `package.json`). Plugin manifests declare `jerapah: ">=0.1.0 <1.0.0"`.
 - Install plugins via admin API: zip (base64), HTTPS git URL, example, or fork a core script.
 - Install/update/uninstall sets **restart-needed** — drain-restart HTTP + workers under `pnpm dev:pm2`.
-- Example plugin: `examples/plugins/get-current-time` → `plugin/get-current-time`.
-- User plugins in this repo: `plugins/joplin-api` → `plugin/joplin-api`, `plugins/send-sms` → `plugin/send-sms`.
+- Shipped example source (install from UI/API): `examples/plugins/get-current-time` → runtime `plugin/get-current-time`.
+- `plugins/joplin-api` and `plugins/send-sms` are **personal/user plugins** appropriate for a fork — not shipped examples. See **AGENTS.md** for creating user plugins under `plugins/<id>/`.
 
 ```bash
 # Smoke

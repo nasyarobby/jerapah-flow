@@ -1,4 +1,5 @@
 node_modules/
+.pnpm-store/
 data/
 logs/
 *.db
@@ -8,6 +9,9 @@ packages/web/dist
 
 # Personal/local scripts and workflows (not for the repo)
 debug-*.js
+
+# Site-specific workflows (keep examples in workflows/default/)
+packages/server/workflows/local/
 
 # Plugin install staging and per-plugin deps
 plugins/.staging-*
