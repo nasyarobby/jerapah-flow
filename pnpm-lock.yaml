@@ -6,11 +6,7 @@ settings:
 
 importers:
 
-  .:
-    dependencies:
-      rss-parser:
-        specifier: ^3.13.0
-        version: 3.13.0
+  .: {}
 
   packages/server:
     dependencies:
@@ -80,6 +76,9 @@ importers:
       pm2:
         specifier: ^6.0.13
         version: 6.0.14
+      rss-parser:
+        specifier: ^3.13.0
+        version: 3.13.0
       ssh2-sftp-client:
         specifier: ^12.1.1
         version: 12.1.1

@@ -6,9 +6,7 @@ scripts:
   - script: plugin/get-current-time
     config:
       key: ""
-  - script: ntfy.js
-    config:
-      url: https://n.0dev.web.id/system
+  - profile: ntfy_default
 triggers:
   - type: HTTP
     method: POST

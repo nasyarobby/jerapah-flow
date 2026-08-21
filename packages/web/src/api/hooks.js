@@ -625,15 +625,6 @@ export function useOpsProcessRestart() {
   });
 }
 
-export function useOpsBumpGeneration() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (reason) =>
-      (await opsApi.post("/generation/bump", { reason })).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["ops-status"] }),
-  });
-}
-
 export function useWorkflowTrash() {
   return useQuery({
     queryKey: ["workflows", "trash"],

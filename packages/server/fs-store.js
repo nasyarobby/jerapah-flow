@@ -49,12 +49,6 @@ export function readScript(name) {
   return fs.readFileSync(filePath, "utf8");
 }
 
-export function writeScript(name, content) {
-  assertScriptName(name);
-  fs.mkdirSync(SCRIPTS_DIR, { recursive: true });
-  fs.writeFileSync(path.join(SCRIPTS_DIR, name), content, "utf8");
-}
-
 /**
  * Icon next to the script: `fetch-html.js` → `fetch-html.png` or `.jpg`.
  * @returns {{ filePath: string, contentType: string } | null}
@@ -76,22 +70,6 @@ export function resolveScriptIcon(name) {
 
 export function scriptHasIcon(name) {
   return resolveScriptIcon(name) != null;
-}
-
-export function deleteScript(name) {
-  assertScriptName(name);
-  const filePath = path.join(SCRIPTS_DIR, name);
-  if (!fs.existsSync(filePath)) return false;
-  const icon = resolveScriptIcon(name);
-  fs.unlinkSync(filePath);
-  if (icon) {
-    try {
-      fs.unlinkSync(icon.filePath);
-    } catch {
-      // ignore missing icon
-    }
-  }
-  return true;
 }
 
 export function listOwners() {
@@ -138,15 +116,6 @@ export function writeWorkflowYaml(owner, file, content) {
   const ownerDir = path.join(WORKFLOWS_DIR, owner);
   fs.mkdirSync(ownerDir, { recursive: true });
   fs.writeFileSync(path.join(ownerDir, file), content, "utf8");
-}
-
-export function deleteWorkflowYaml(owner, file) {
-  assertOwner(owner);
-  assertWorkflowFile(file);
-  const filePath = path.join(WORKFLOWS_DIR, owner, file);
-  if (!fs.existsSync(filePath)) return false;
-  fs.unlinkSync(filePath);
-  return true;
 }
 
 export function listOwnerYamlFiles(owner) {

@@ -27,12 +27,6 @@ export const DEFAULT_INPUT_CONTEXT = `{
 }
 `;
 
-export function normalizeScriptName(name) {
-  const trimmed = name.trim();
-  if (!trimmed) return "";
-  return trimmed.endsWith(".js") ? trimmed : `${trimmed}.js`;
-}
-
 export function scriptTags(meta) {
   if (!Array.isArray(meta?.tags)) return [];
   return meta.tags.map((t) => String(t).trim()).filter(Boolean);

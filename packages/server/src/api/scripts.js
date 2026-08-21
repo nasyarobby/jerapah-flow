@@ -8,7 +8,6 @@ import {
 import * as fsStore from "../../fs-store.js";
 import {
   forkCoreScript,
-  getInstalledPlugin,
   listCoreScriptNames,
   listInstalledPlugins,
   resolveScriptRef,
@@ -475,7 +474,5 @@ export default function scriptsPluginFactory(registry) {
         }
       },
     );
-
-    void getInstalledPlugin;
   };
 }
