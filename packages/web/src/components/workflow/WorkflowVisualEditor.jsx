@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { parse as parseYaml } from "yaml";
-import { useHttpAuths, useHttpPages, useScripts, useWorkflows } from "../../api/hooks.js";
+import { useHttpAuths, useHttpPages, useProfiles, useScripts, useWorkflows } from "../../api/hooks.js";
 import { dataFromInputMeta, firstInputMeta } from "../../lib/script.js";
 import { workflowToFlowchart } from "../../lib/workflow-mermaid.js";
 import { parseWorkflowYaml, stringifyWorkflowDoc } from "../../lib/workflow-doc.js";
@@ -49,6 +49,7 @@ export function WorkflowVisualEditor({
   const visualDisabled = !displayDoc;
 
   const { data: scripts = [] } = useScripts();
+  const { data: profiles = [] } = useProfiles(owner || undefined, { enabled: Boolean(owner) });
   const { data: workflows = [] } = useWorkflows(owner || undefined);
   const { data: auths = [] } = useHttpAuths();
   const { data: allPages = [] } = useHttpPages();
@@ -90,9 +91,17 @@ export function WorkflowVisualEditor({
     return map;
   }, [scripts]);
 
+  const profilesByName = useMemo(() => {
+    const map = new Map();
+    for (const p of profiles) {
+      if (p?.name) map.set(p.name, p);
+    }
+    return map;
+  }, [profiles]);
+
   const inputMeta = useMemo(
-    () => firstInputMeta(displayDoc?.scripts, scriptsByName),
-    [displayDoc?.scripts, scriptsByName],
+    () => firstInputMeta(displayDoc?.scripts, scriptsByName, profilesByName),
+    [displayDoc?.scripts, scriptsByName, profilesByName],
   );
 
   const defaultData = useMemo(() => {
@@ -175,6 +184,7 @@ export function WorkflowVisualEditor({
           onPatch={patchDoc}
           disabled={visualDisabled}
           scripts={scripts}
+          profiles={profiles}
           workflows={workflows}
           owner={owner}
           excludeFile={file}

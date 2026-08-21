@@ -113,7 +113,21 @@ export function newScriptStep(script, config = {}) {
     uiId: nextUiId("step"),
     kind: "script",
     script,
+    profile: "",
     config: config && typeof config === "object" && !Array.isArray(config) ? { ...config } : {},
+    id: "",
+    when: "",
+    needs: null,
+  };
+}
+
+export function newProfileStep(profileName, script = "") {
+  return {
+    uiId: nextUiId("step"),
+    kind: "script",
+    script,
+    profile: profileName,
+    config: {},
     id: "",
     when: "",
     needs: null,
@@ -202,6 +216,7 @@ function normalizeStep(step) {
       uiId,
       kind: "script",
       script: step,
+      profile: "",
       config: {},
       id: "",
       when: "",
@@ -213,6 +228,7 @@ function normalizeStep(step) {
       uiId,
       kind: "script",
       script: "",
+      profile: "",
       config: {},
       id: "",
       when: "",
@@ -231,7 +247,7 @@ function normalizeStep(step) {
       needs: step.needs ?? null,
     };
   }
-  const known = new Set(["script", "config", "id", "when", "needs", "set"]);
+  const known = new Set(["script", "profile", "config", "id", "when", "needs", "set"]);
   /** @type {Record<string, unknown>} */
   const extra = {};
   for (const [key, value] of Object.entries(step)) {
@@ -245,6 +261,7 @@ function normalizeStep(step) {
     uiId,
     kind: "script",
     script: typeof step.script === "string" ? step.script : "",
+    profile: typeof step.profile === "string" ? step.profile : "",
     config,
     id: typeof step.id === "string" ? step.id : "",
     when: typeof step.when === "string" ? step.when : "",
@@ -313,7 +330,11 @@ function dumpStep(step) {
   /** @type {Record<string, unknown>} */
   const out = {};
   if (step.id) out.id = step.id;
-  out.script = step.script ?? "";
+  if (step.profile) {
+    out.profile = step.profile;
+  } else {
+    out.script = step.script ?? "";
+  }
   const config = step.config;
   if (config && typeof config === "object" && !Array.isArray(config) && Object.keys(config).length) {
     out.config = config;

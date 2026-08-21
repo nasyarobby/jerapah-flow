@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { LuPlus } from "react-icons/lu";
 import { defaultConfigFromMeta } from "../../lib/script.js";
-import { newScriptStep, newSetStep } from "../../lib/workflow-doc.js";
+import { newProfileStep, newScriptStep, newSetStep } from "../../lib/workflow-doc.js";
 import { AddScriptDialog } from "./AddScriptDialog.jsx";
 import { ScriptCard } from "./ScriptCard.jsx";
 
@@ -24,6 +24,7 @@ export function ScriptsTab({
   onPatch,
   disabled,
   scripts = [],
+  profiles = [],
   workflows = [],
   owner,
   excludeFile,
@@ -41,6 +42,10 @@ export function ScriptsTab({
   for (const s of scripts) {
     const name = typeof s === "string" ? s : s.name;
     scriptsByName.set(name, s);
+  }
+  const profilesByName = new Map();
+  for (const p of profiles) {
+    if (p?.name) profilesByName.set(p.name, p);
   }
 
   function patchSteps(next) {
@@ -72,7 +77,7 @@ export function ScriptsTab({
           onClick={() => setAddOpen(true)}
         >
           <LuPlus className="size-4" />
-          Add script
+          Add step
         </button>
       </div>
       {steps.length === 0 ? (
@@ -88,6 +93,7 @@ export function ScriptsTab({
                   index={index}
                   otherSteps={steps}
                   scriptsByName={scriptsByName}
+                  profilesByName={profilesByName}
                   disabled={disabled}
                   workflows={workflows}
                   owner={owner}
@@ -106,10 +112,13 @@ export function ScriptsTab({
       )}
       <AddScriptDialog
         open={addOpen}
+        owner={owner}
         onClose={() => setAddOpen(false)}
         onPick={(picked) => {
           if (picked.kind === "set") {
             patchSteps([...steps, newSetStep()]);
+          } else if (picked.kind === "profile") {
+            patchSteps([...steps, newProfileStep(picked.name, picked.script)]);
           } else {
             patchSteps([
               ...steps,

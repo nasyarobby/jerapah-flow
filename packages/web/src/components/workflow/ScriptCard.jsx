@@ -11,12 +11,14 @@ import { contextFromMeta, prettyJson } from "../../lib/script.js";
 import { ConfigFields } from "./ConfigFields.jsx";
 import { ConfigTooltip, configValueText, FieldLabel, previewConfigValue, SchemaTooltip } from "./FieldHelp.jsx";
 import { ScriptIcon } from "../ScriptIcon.jsx";
+import { configHasOverlay, mergeProfileConfig } from "../../lib/profile.js";
 
 export function ScriptCard({
   step,
   index,
   otherSteps,
   scriptsByName,
+  profilesByName,
   onChange,
   onRemove,
   disabled,
@@ -35,25 +37,33 @@ export function ScriptCard({
   };
   const [tryOpen, setTryOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const listed = scriptsByName?.get(step.script);
+  const profile = step.profile && profilesByName?.get(step.profile);
+  const scriptName = profile?.script || step.script;
+  const listed = scriptsByName?.get(scriptName);
   const meta = listed?.meta ?? null;
+  const inheritedConfig = profile?.config ?? null;
+  const mergedConfig = profile
+    ? mergeProfileConfig(profile.config, step.config)
+    : step.config;
+  const overridden = Boolean(step.profile && configHasOverlay(step.config));
 
   const duplicateId =
     step.id && otherSteps.some((s) => s.id === step.id && s.uiId !== step.uiId);
-  const preview = previewConfigValue(step.config, meta?.previewConfigKey);
-  const previewFull = configValueText(step.config, meta?.previewConfigKey);
-  const baseName = step.kind === "set" ? "set" : step.script || "untitled";
+  const preview = previewConfigValue(mergedConfig, meta?.previewConfigKey);
+  const previewFull = configValueText(mergedConfig, meta?.previewConfigKey);
+  const baseName = step.kind === "set" ? "set" : scriptName || "untitled";
   const titleFull = previewFull ? `${baseName} (${previewFull})` : baseName;
   const setConfig =
     step.kind === "set" ? { expression: step.expression ?? "" } : null;
+  const missingProfile = Boolean(step.profile) && !profile;
 
   return (
     <article
       ref={setNodeRef}
       style={style}
-      className={`card bg-base-100 border border-primary ${
-        isDragging ? "z-40" : "z-0 hover:z-30 focus-within:z-30"
-      }`}
+      className={`card bg-base-100 border ${
+        step.profile ? "border-accent" : "border-primary"
+      } ${isDragging ? "z-40" : "z-0 hover:z-30 focus-within:z-30"}`}
     >
       <div className={`card-body gap-3 ${expanded ? "p-4" : "p-3"}`}>
         <div className="flex items-center gap-2">
@@ -67,8 +77,8 @@ export function ScriptCard({
           >
             <LuGripVertical className="size-4 opacity-60" />
           </button>
-          {step.kind === "script" && step.script ? (
-            <ScriptIcon name={step.script} hasIcon={listed?.hasIcon} className="size-8 shrink-0" />
+          {step.kind === "script" && scriptName ? (
+            <ScriptIcon name={scriptName} hasIcon={listed?.hasIcon} className="size-8 shrink-0" />
           ) : null}
           <button
             type="button"
@@ -87,10 +97,29 @@ export function ScriptCard({
                   </span>
                 ) : null}
               </h3>
+              {step.profile ? (
+                <span
+                  className={`badge badge-sm shrink-0 font-mono font-normal ${
+                    overridden ? "badge-warning" : "badge-accent"
+                  }`}
+                  title={
+                    overridden
+                      ? `profile ${step.profile} + overridden`
+                      : `profile ${step.profile}`
+                  }
+                >
+                  {overridden ? `profile ${step.profile} + overridden` : `profile ${step.profile}`}
+                </span>
+              ) : null}
               {step.id ? (
                 <span className="badge badge-ghost badge-sm font-mono shrink-0">{step.id}</span>
               ) : null}
             </div>
+            {expanded && step.kind === "script" && missingProfile ? (
+              <p className="text-sm text-error mt-1">
+                Profile {step.profile} not found for owner {owner || "?"}
+              </p>
+            ) : null}
             {expanded && step.kind === "script" && meta?.description ? (
               <p className="text-sm opacity-70 mt-1">{meta.description}</p>
             ) : null}
@@ -104,10 +133,10 @@ export function ScriptCard({
             <SchemaTooltip label="Input" fields={meta?.input} />
           ) : null}
           {!expanded ? (
-            <ConfigTooltip config={step.kind === "set" ? setConfig : (step.config ?? {})} />
+            <ConfigTooltip config={step.kind === "set" ? setConfig : (mergedConfig ?? {})} />
           ) : null}
           <div className="card-actions shrink-0">
-            {step.kind === "script" && step.script ? (
+            {step.kind === "script" && scriptName ? (
               <button
                 type="button"
                 className="btn btn-ghost btn-xs"
@@ -158,8 +187,9 @@ export function ScriptCard({
               </div>
             ) : (
               <ConfigFields
-                script={step.script}
+                script={scriptName}
                 config={step.config}
+                inheritedConfig={inheritedConfig}
                 meta={meta}
                 disabled={disabled}
                 workflows={workflows}
@@ -211,8 +241,8 @@ export function ScriptCard({
       </div>
       {tryOpen ? (
         <ScriptTryDialog
-          script={step.script}
-          config={step.config}
+          script={scriptName}
+          config={mergedConfig}
           meta={meta}
           owner={owner}
           onClose={() => setTryOpen(false)}

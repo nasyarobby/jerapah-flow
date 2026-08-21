@@ -9,6 +9,7 @@ import {
   LuGitBranch,
   LuHouse,
   LuKey,
+  LuLayers,
   LuLogOut,
   LuMenu,
   LuMoon,
@@ -31,6 +32,7 @@ const navSections = [
     items: [
       { to: "/workflows", label: "Workflows", icon: LuGitBranch },
       { to: "/scripts", label: "Scripts", icon: LuCode },
+      { to: "/profiles", label: "Profiles", icon: LuLayers },
       { to: "/events", label: "Events", icon: LuActivity },
     ],
   },

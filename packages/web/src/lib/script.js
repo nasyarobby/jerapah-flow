@@ -121,11 +121,14 @@ export function inputHasFields(meta) {
 }
 
 /** First script step with a non-empty `meta.input`; else first script meta. */
-export function firstInputMeta(steps, scriptsByName) {
+export function firstInputMeta(steps, scriptsByName, profilesByName) {
   let fallback = null;
   for (const step of steps ?? []) {
     if (step?.kind === "set") continue;
-    const name = typeof step === "string" ? step : step?.script;
+    let name = typeof step === "string" ? step : step?.script;
+    if (!name && step?.profile && profilesByName) {
+      name = profilesByName.get(step.profile)?.script;
+    }
     if (!name) continue;
     const listed = scriptsByName?.get(name);
     const meta = listed && typeof listed === "object" ? listed.meta ?? null : null;

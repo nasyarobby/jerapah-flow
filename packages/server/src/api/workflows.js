@@ -26,6 +26,8 @@ import {
   collectWorkflowWarnings,
   parseWorkflowDocument,
 } from "../../workflow-validate-warnings.js";
+import { getProfilePlain } from "../../profiles-store.js";
+import { resolveScriptRef } from "../../plugin-store.js";
 import {
   recordRevision,
   listRevisions,
@@ -80,12 +82,67 @@ function scriptNames(workflow) {
   for (const raw of workflow.scripts ?? []) {
     try {
       const parsed = parseScriptStep(raw);
-      names.push(parsed.kind === "set" ? "set" : parsed.script);
+      if (parsed.kind === "set") names.push("set");
+      else if (parsed.profile) names.push(`profile:${parsed.profile}`);
+      else names.push(parsed.script);
     } catch {
       names.push(null);
     }
   }
   return names;
+}
+
+/**
+ * @param {unknown} parsed
+ * @param {string} owner
+ */
+async function collectProfileWarnings(parsed, owner) {
+  /** @type {Array<{ code: string, message: string, path?: string }>} */
+  const warnings = [];
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !owner) {
+    return warnings;
+  }
+  for (const [i, raw] of (parsed.scripts ?? []).entries()) {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const profileName = raw.profile;
+    if (typeof profileName !== "string" || !profileName) continue;
+    const pathKey = `scripts[${i}]`;
+    let profile;
+    try {
+      profile = await getProfilePlain(owner, profileName);
+    } catch {
+      warnings.push({
+        code: "unknown_profile",
+        message: `Profile "${profileName}" is not a valid name`,
+        path: pathKey,
+      });
+      continue;
+    }
+    if (!profile) {
+      warnings.push({
+        code: "unknown_profile",
+        message: `Profile "${profileName}" not found`,
+        path: pathKey,
+      });
+      continue;
+    }
+    if (typeof raw.script === "string" && raw.script && raw.script !== profile.script) {
+      warnings.push({
+        code: "profile_script_mismatch",
+        message: `Step script "${raw.script}" does not match profile "${profileName}" (${profile.script})`,
+        path: pathKey,
+      });
+    }
+    const resolved = resolveScriptRef(profile.script);
+    if (resolved.error) {
+      warnings.push({
+        code: "unknown_script",
+        message: resolved.error,
+        path: `${pathKey}.profile`,
+      });
+    }
+  }
+  return warnings;
 }
 
 /**
@@ -109,8 +166,11 @@ async function validateStrictWorkflow(parsed) {
  * }} opts
  */
 async function saveWorkflowContent(opts) {
-  const { warnings, parsed, parseError } = collectWorkflowWarnings(opts.content);
-  const saveAnyway = Boolean(opts.saveAnyway);
+    const { warnings, parsed, parseError } = collectWorkflowWarnings(opts.content);
+    if (parsed) {
+      warnings.push(...(await collectProfileWarnings(parsed, opts.owner)));
+    }
+    const saveAnyway = Boolean(opts.saveAnyway);
 
   if (!saveAnyway) {
     if (parseError) {

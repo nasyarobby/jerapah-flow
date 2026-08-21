@@ -487,20 +487,34 @@ export function ConfigFields({
   owner,
   excludeFile,
   disabled,
+  inheritedConfig = null,
 }) {
   const cfg = config && typeof config === "object" && !Array.isArray(config) ? config : {};
+  const inherited =
+    inheritedConfig && typeof inheritedConfig === "object" && !Array.isArray(inheritedConfig)
+      ? inheritedConfig
+      : null;
   const metaKeys = Object.keys(meta?.config ?? {});
   const extraKeys = Object.keys(cfg).filter((k) => !metaKeys.includes(k));
+  const inheritedExtraKeys = inherited
+    ? Object.keys(inherited).filter((k) => !metaKeys.includes(k) && !(k in cfg))
+    : [];
 
   function setField(key, value) {
     const spec = fieldSpec(meta, key);
     const next = { ...cfg };
-    const required = Boolean(spec.required);
+    const required = Boolean(spec.required) && !inherited;
     if (value === undefined || (value === "" && !required)) {
       delete next[key];
     } else {
       next[key] = value;
     }
+    onChange(next);
+  }
+
+  function resetField(key) {
+    const next = { ...cfg };
+    delete next[key];
     onChange(next);
   }
 
@@ -516,35 +530,70 @@ export function ConfigFields({
   function addExtra() {
     let key = "key";
     let i = 1;
-    while (key in cfg) {
+    while (key in cfg || (inherited && key in inherited)) {
       key = `key${i}`;
       i += 1;
     }
     onChange({ ...cfg, [key]: "" });
   }
 
+  function renderField(key, { extra = false, inheritedOnly = false } = {}) {
+    const spec = extra ? { type: "string" } : fieldSpec(meta, key);
+    const overridden = Boolean(inherited && Object.prototype.hasOwnProperty.call(cfg, key));
+    const displayValue = inheritedOnly
+      ? inherited?.[key]
+      : overridden || !inherited
+        ? cfg[key]
+        : inherited[key];
+    const unknown =
+      extra && metaKeys.length > 0 && !Object.prototype.hasOwnProperty.call(meta?.config ?? {}, key);
+
+    return (
+      <div
+        key={key}
+        className={`space-y-1 ${
+          overridden ? "rounded-box border border-warning/50 bg-warning/5 p-2" : ""
+        }`}
+      >
+        <FieldLabel name={key} required={Boolean(spec.required) && !inherited} description={spec.description}>
+          {overridden ? (
+            <span className="badge badge-warning badge-xs">overridden</span>
+          ) : inherited && !inheritedOnly ? (
+            <span className="badge badge-ghost badge-xs">from profile</span>
+          ) : null}
+          {unknown ? (
+            <span className="badge badge-error badge-xs">not in schema</span>
+          ) : null}
+          {overridden ? (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              disabled={disabled}
+              onClick={() => resetField(key)}
+            >
+              Reset
+            </button>
+          ) : null}
+        </FieldLabel>
+        <ValueEditor
+          value={displayValue}
+          onChange={(v) => setField(key, v)}
+          spec={extra ? { type: displayValue != null && typeof displayValue === "object" ? "object" : "string" } : spec}
+          script={script}
+          fieldKey={key}
+          workflows={workflows}
+          owner={owner}
+          excludeFile={excludeFile}
+          disabled={disabled}
+        />
+        <ConfigRefHint value={displayValue} owner={owner} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
-      {metaKeys.map((key) => {
-        const spec = fieldSpec(meta, key);
-        return (
-          <div key={key} className="space-y-1">
-            <FieldLabel name={key} required={Boolean(spec.required)} description={spec.description} />
-            <ValueEditor
-              value={cfg[key]}
-              onChange={(v) => setField(key, v)}
-              spec={spec}
-              script={script}
-              fieldKey={key}
-              workflows={workflows}
-              owner={owner}
-              excludeFile={excludeFile}
-              disabled={disabled}
-            />
-            <ConfigRefHint value={cfg[key]} owner={owner} />
-          </div>
-        );
-      })}
+      {metaKeys.map((key) => renderField(key))}
       {extraKeys.map((key) => (
         <div key={key} className="space-y-1">
           <div className="flex items-center gap-1">
@@ -552,16 +601,18 @@ export function ConfigFields({
               value={key}
               onCommit={(nk) => renameExtra(key, nk)}
               className="font-mono text-sm"
+              disabled={disabled}
             />
+            {inherited ? <span className="badge badge-warning badge-xs">overridden</span> : null}
+            {metaKeys.length > 0 ? (
+              <span className="badge badge-error badge-xs">not in schema</span>
+            ) : null}
             <button
               type="button"
               className="btn btn-ghost btn-xs btn-square text-error"
               aria-label={`Remove ${key}`}
-              onClick={() => {
-                const next = { ...cfg };
-                delete next[key];
-                onChange(next);
-              }}
+              disabled={disabled}
+              onClick={() => resetField(key)}
             >
               <LuTrash2 className="size-3.5" />
             </button>
@@ -580,6 +631,7 @@ export function ConfigFields({
           <ConfigRefHint value={cfg[key]} owner={owner} />
         </div>
       ))}
+      {inheritedExtraKeys.map((key) => renderField(key, { extra: true, inheritedOnly: true }))}
       <button type="button" className="btn btn-ghost btn-xs" disabled={disabled} onClick={addExtra}>
         <LuPlus className="size-3.5" />
         Add field

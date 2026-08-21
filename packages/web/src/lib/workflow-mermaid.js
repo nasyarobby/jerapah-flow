@@ -1,20 +1,22 @@
 function parseStep(step) {
   if (typeof step === "string") {
-    return { kind: "script", script: step, id: null, needs: null, when: null };
+    return { kind: "script", script: step, profile: null, id: null, needs: null, when: null };
   }
   if (step?.set) {
     return {
       kind: "set",
       script: null,
+      profile: null,
       id: typeof step.id === "string" && step.id ? step.id : null,
       needs: step.needs ?? null,
       when: typeof step.when === "string" && step.when ? step.when : null,
     };
   }
-  if (step?.script) {
+  if (step?.script || step?.profile) {
     return {
       kind: "script",
-      script: step.script,
+      script: typeof step.script === "string" && step.script ? step.script : null,
+      profile: typeof step.profile === "string" && step.profile ? step.profile : null,
       id: typeof step.id === "string" && step.id ? step.id : null,
       needs: step.needs ?? null,
       when: typeof step.when === "string" && step.when ? step.when : null,
@@ -55,7 +57,8 @@ function stepLabel(s) {
     const base = s.id ? `${s.id}: set` : "set";
     return s.when ? `${base} when: ${s.when}` : base;
   }
-  const base = s.id ? `${s.id}: ${s.script}` : s.script;
+  const target = s.profile ? `profile ${s.profile}` : s.script;
+  const base = s.id ? `${s.id}: ${target}` : target;
   return s.when ? `${base} when: ${s.when}` : base;
 }
 
@@ -112,7 +115,7 @@ export function workflowToFlowchart(parsed) {
     if (s.kind === "set") {
       lines.push(`  ${s.mermaidId}(["${label}"])`);
     } else {
-      scriptIds[s.mermaidId] = s.script;
+      scriptIds[s.mermaidId] = s.script || (s.profile ? `profile:${s.profile}` : "");
       lines.push(`  ${s.mermaidId}["${label}"]`);
     }
   }

@@ -31,6 +31,8 @@ import {
   sendSuccessPage,
 } from "./http-trigger-auth.js";
 import { resolveConfigRefs } from "./config-refs.js";
+import { mergeProfileConfig } from "./profile-config.js";
+import { getProfilePlain } from "./profiles-store.js";
 import {
   buildFailureAlertData,
   resolveFailureTriggerConfig,
@@ -593,8 +595,21 @@ export function createRegistry(server, opts = {}) {
     owner,
     depth,
   ) {
-    const script = parsed.kind === "set" ? SET_STEP_SCRIPT : parsed.script;
-    const unresolvedConfig = parsed.config;
+    let script = parsed.kind === "set" ? SET_STEP_SCRIPT : parsed.script;
+    let unresolvedConfig = parsed.config;
+    if (parsed.kind === "script" && parsed.profile) {
+      const profile = await getProfilePlain(owner, parsed.profile);
+      if (!profile) {
+        throw new Error(`profile "${parsed.profile}" not found`);
+      }
+      if (parsed.script && parsed.script !== profile.script) {
+        throw new Error(
+          `step script "${parsed.script}" does not match profile "${parsed.profile}" script "${profile.script}"`,
+        );
+      }
+      script = profile.script;
+      unresolvedConfig = mergeProfileConfig(profile.config, parsed.config);
+    }
     const incomingContext = normalizeContext(ctx.context);
     const step = await store.startStep({
       runId,
@@ -904,7 +919,10 @@ export function createRegistry(server, opts = {}) {
       for (const raw of workflow.scripts ?? []) {
         try {
           const parsed = parseScriptStep(raw);
-          if (parsed.kind === "script") refs.add(parsed.script);
+          if (parsed.kind === "script") {
+            if (parsed.script) refs.add(parsed.script);
+            if (parsed.profile) refs.add(`profile:${parsed.profile}`);
+          }
         } catch {
           // skip invalid steps
         }

@@ -85,6 +85,7 @@ export function collectWorkflowWarnings(content) {
       try {
         const step = parseScriptStep(raw);
         if (step.kind === "set") continue;
+        if (step.profile && !step.script) continue;
         const resolved = resolveScriptRef(step.script);
         if (resolved.error) {
           warnings.push({
