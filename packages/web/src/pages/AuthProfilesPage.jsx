@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { LuEye, LuEyeOff, LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
@@ -9,6 +9,7 @@ import {
 } from "../api/hooks.js";
 import { AuthEditorModal } from "../components/AuthEditorModal.jsx";
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
+import { useRouteDrivenModal } from "../hooks/useRouteDrivenModal.js";
 import { formatTime } from "../lib/format.jsx";
 
 function CredDisplay({ field, fieldKey, authId, cache, onRevealed }) {
@@ -149,43 +150,24 @@ export function AuthProfilesPage() {
 
   const { data: auths = [], isLoading } = useHttpAuths();
   const del = useDeleteHttpAuth();
-  const [editor, setEditor] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   /** @type {[Record<string, Record<string, string>>, Function]} */
   const [revealCache, setRevealCache] = useState({});
-  const openedRouteKey = useRef(null);
 
-  function closeEditor() {
-    setEditor(null);
-    openedRouteKey.current = null;
-    if (isNewRoute || isEditRoute) {
-      navigate("/auth", { replace: true });
-    }
-  }
-
-  useEffect(() => {
-    if (!isNewRoute) return;
-    if (openedRouteKey.current === "new") return;
-    openedRouteKey.current = "new";
-    setEditor({ mode: "add" });
-  }, [isNewRoute]);
-
-  useEffect(() => {
-    if (!isEditRoute) {
-      if (!isNewRoute) openedRouteKey.current = null;
-      return;
-    }
-    if (isLoading) return;
-    const key = `edit:${routeName}`;
-    if (openedRouteKey.current === key) return;
-    openedRouteKey.current = key;
-    const auth = auths.find((a) => a.name === routeName);
-    if (!auth) {
-      setEditor({ mode: "add" });
-      return;
-    }
-    setEditor({ mode: "edit", auth });
-  }, [isEditRoute, isNewRoute, routeName, isLoading, auths]);
+  const { editor, closeEditor } = useRouteDrivenModal({
+    isNewRoute,
+    isEditRoute,
+    listPath: "/auth",
+    buildNewEditor: () => ({ mode: "add" }),
+    editRouteKey: () => `edit:${routeName}`,
+    canOpenEdit: () => !isLoading,
+    buildEditEditor: () => {
+      const auth = auths.find((a) => a.name === routeName);
+      if (!auth) return { mode: "add" };
+      return { mode: "edit", auth };
+    },
+    editDeps: [routeName, isLoading, auths],
+  });
 
   return (
     <div className="space-y-4">

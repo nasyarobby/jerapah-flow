@@ -6,6 +6,7 @@ import { useDeleteSecret, useOwners, useSecrets } from "../api/hooks.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { FormSelect } from "../components/FormControls.jsx";
 import { SecretEditorModal } from "../components/SecretEditorModal.jsx";
+import { useRouteDrivenModal } from "../hooks/useRouteDrivenModal.js";
 import { formatTime } from "../lib/format.jsx";
 
 export function SecretsPage() {
@@ -22,56 +23,46 @@ export function SecretsPage() {
   );
   const { data: secrets = [], isLoading } = useSecrets(ownerFilter || undefined);
   const del = useDeleteSecret();
-  const [editor, setEditor] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [highlightName, setHighlightName] = useState(() => routeName || "");
   const highlightRef = useRef(null);
-  const openedRouteKey = useRef(null);
 
   const listPath = ownerFilter
     ? `/secrets?owner=${encodeURIComponent(ownerFilter)}`
     : "/secrets";
 
-  function closeEditor() {
-    setEditor(null);
-    openedRouteKey.current = null;
-    if (isNewRoute || isEditRoute) {
-      navigate(listPath, { replace: true });
-    }
-  }
-
-  useEffect(() => {
-    if (!isNewRoute) return;
-    const key = `new:${params.get("owner") || ""}:${params.get("name") || ""}`;
-    if (openedRouteKey.current === key) return;
-    if (!params.get("owner") && !ownerFilter && owners.length === 0) return;
-    const owner = params.get("owner") || ownerFilter || owners[0] || "default";
-    if (params.get("owner")) setOwnerFilter(params.get("owner"));
-    openedRouteKey.current = key;
-    setEditor({
-      mode: "add",
-      initial: { owner, name: params.get("name") || "" },
-    });
-  }, [isNewRoute, params, owners, ownerFilter]);
-
-  useEffect(() => {
-    if (!isEditRoute) {
-      if (!isNewRoute) openedRouteKey.current = null;
-      return;
-    }
-    if (ownerFilter !== routeOwner) {
-      setOwnerFilter(routeOwner);
-      return;
-    }
-    const key = `edit:${routeOwner}/${routeName}`;
-    if (openedRouteKey.current === key) return;
-    openedRouteKey.current = key;
-    setHighlightName(routeName);
-    setEditor({
+  const { editor, closeEditor } = useRouteDrivenModal({
+    isNewRoute,
+    isEditRoute,
+    listPath,
+    newRouteKey: () => `new:${params.get("owner") || ""}:${params.get("name") || ""}`,
+    canOpenNew: () => Boolean(params.get("owner") || ownerFilter || owners.length > 0),
+    onBeforeOpenNew: () => {
+      if (params.get("owner")) setOwnerFilter(params.get("owner"));
+    },
+    buildNewEditor: () => {
+      const owner = params.get("owner") || ownerFilter || owners[0] || "default";
+      return {
+        mode: "add",
+        initial: { owner, name: params.get("name") || "" },
+      };
+    },
+    editRouteKey: () => `edit:${routeOwner}/${routeName}`,
+    canOpenEdit: () => {
+      if (ownerFilter !== routeOwner) {
+        setOwnerFilter(routeOwner);
+        return false;
+      }
+      return true;
+    },
+    onOpenEdit: () => setHighlightName(routeName),
+    buildEditEditor: () => ({
       mode: "replace",
       initial: { owner: routeOwner, name: routeName },
-    });
-  }, [isEditRoute, isNewRoute, routeOwner, routeName, ownerFilter]);
+    }),
+    newDeps: [params, owners, ownerFilter],
+    editDeps: [routeOwner, routeName, ownerFilter],
+  });
 
   useEffect(() => {
     if (!highlightName || isLoading) return;

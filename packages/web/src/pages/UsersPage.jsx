@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import { useDeleteUser, useUsers } from "../api/hooks.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { UserEditorModal } from "../components/UserEditorModal.jsx";
+import { useRouteDrivenModal } from "../hooks/useRouteDrivenModal.js";
 
 export function UsersPage() {
   const navigate = useNavigate();
@@ -15,41 +16,22 @@ export function UsersPage() {
 
   const { data: users = [], isLoading } = useUsers();
   const del = useDeleteUser();
-  const [editor, setEditor] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
-  const openedRouteKey = useRef(null);
 
-  function closeEditor() {
-    setEditor(null);
-    openedRouteKey.current = null;
-    if (isNewRoute || isEditRoute) {
-      navigate("/users", { replace: true });
-    }
-  }
-
-  useEffect(() => {
-    if (!isNewRoute) return;
-    if (openedRouteKey.current === "new") return;
-    openedRouteKey.current = "new";
-    setEditor({ mode: "add" });
-  }, [isNewRoute]);
-
-  useEffect(() => {
-    if (!isEditRoute) {
-      if (!isNewRoute) openedRouteKey.current = null;
-      return;
-    }
-    if (isLoading) return;
-    const key = `edit:${routeUsername}`;
-    if (openedRouteKey.current === key) return;
-    openedRouteKey.current = key;
-    const user = users.find((u) => u.username === routeUsername);
-    if (!user) {
-      setEditor({ mode: "add" });
-      return;
-    }
-    setEditor({ mode: "edit", user });
-  }, [isEditRoute, isNewRoute, routeUsername, isLoading, users]);
+  const { editor, closeEditor } = useRouteDrivenModal({
+    isNewRoute,
+    isEditRoute,
+    listPath: "/users",
+    buildNewEditor: () => ({ mode: "add" }),
+    editRouteKey: () => `edit:${routeUsername}`,
+    canOpenEdit: () => !isLoading,
+    buildEditEditor: () => {
+      const user = users.find((u) => u.username === routeUsername);
+      if (!user) return { mode: "add" };
+      return { mode: "edit", user };
+    },
+    editDeps: [routeUsername, isLoading, users],
+  });
 
   return (
     <div className="space-y-4">

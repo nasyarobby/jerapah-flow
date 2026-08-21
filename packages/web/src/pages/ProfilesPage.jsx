@@ -7,6 +7,7 @@ import { FormSelect } from "../components/FormControls.jsx";
 import { Modal } from "../components/Modal.jsx";
 import { ProfileEditorModal } from "../components/ProfileEditorModal.jsx";
 import { ScriptIcon } from "../components/ScriptIcon.jsx";
+import { useRouteDrivenModal } from "../hooks/useRouteDrivenModal.js";
 import { formatTime } from "../lib/format.jsx";
 
 function previewConfig(config) {
@@ -42,84 +43,74 @@ export function ProfilesPage() {
   );
   const { data: profiles = [], isLoading } = useProfiles(ownerFilter || undefined);
   const del = useDeleteProfile();
-  const [editor, setEditor] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [highlightName, setHighlightName] = useState(() => routeName || "");
   const highlightRef = useRef(null);
-  const openedRouteKey = useRef(null);
 
   const listPath = ownerFilter
     ? `/profiles?owner=${encodeURIComponent(ownerFilter)}`
     : "/profiles";
 
-  function closeEditor() {
-    setEditor(null);
-    openedRouteKey.current = null;
-    if (isNewRoute || isEditRoute) {
-      navigate(listPath, { replace: true });
-    }
-  }
-
-  useEffect(() => {
-    if (!isNewRoute) return;
-    const key = `new:${params.get("owner") || ""}:${params.get("name") || ""}`;
-    if (openedRouteKey.current === key) return;
-    if (!params.get("owner") && !ownerFilter && owners.length === 0) return;
-    const owner = params.get("owner") || ownerFilter || owners[0] || "default";
-    if (params.get("owner")) setOwnerFilter(params.get("owner"));
-    openedRouteKey.current = key;
-    setEditor({
-      mode: "add",
-      initial: {
-        owner,
-        name: params.get("name") || "",
-        script: params.get("script") || "",
-        config: {},
-        description: "",
-      },
-    });
-  }, [isNewRoute, params, owners, ownerFilter]);
-
-  useEffect(() => {
-    if (!isEditRoute) {
-      if (!isNewRoute) openedRouteKey.current = null;
-      return;
-    }
-    if (ownerFilter !== routeOwner) {
-      setOwnerFilter(routeOwner);
-      return;
-    }
-    if (isLoading) return;
-    const key = `edit:${routeOwner}/${routeName}`;
-    if (openedRouteKey.current === key) return;
-    openedRouteKey.current = key;
-    setHighlightName(routeName);
-    const row = profiles.find((p) => p.owner === routeOwner && p.name === routeName);
-    if (row) {
-      setEditor({
-        mode: "edit",
+  const { editor, closeEditor } = useRouteDrivenModal({
+    isNewRoute,
+    isEditRoute,
+    listPath,
+    newRouteKey: () => `new:${params.get("owner") || ""}:${params.get("name") || ""}`,
+    canOpenNew: () => Boolean(params.get("owner") || ownerFilter || owners.length > 0),
+    onBeforeOpenNew: () => {
+      if (params.get("owner")) setOwnerFilter(params.get("owner"));
+    },
+    buildNewEditor: () => {
+      const owner = params.get("owner") || ownerFilter || owners[0] || "default";
+      return {
+        mode: "add",
         initial: {
-          owner: row.owner,
-          name: row.name,
-          script: row.script,
-          config: row.config,
-          description: row.description,
+          owner,
+          name: params.get("name") || "",
+          script: params.get("script") || "",
+          config: {},
+          description: "",
         },
-        usageCount: row.usageCount ?? 0,
-      });
-      return;
-    }
-    setEditor({
-      mode: "add",
-      initial: {
-        owner: routeOwner,
-        name: routeName,
-        script: "",
-        config: {},
-        description: "",
-      },
-    });
-  }, [isEditRoute, isNewRoute, routeOwner, routeName, ownerFilter, isLoading, profiles]);
+      };
+    },
+    editRouteKey: () => `edit:${routeOwner}/${routeName}`,
+    canOpenEdit: () => {
+      if (ownerFilter !== routeOwner) {
+        setOwnerFilter(routeOwner);
+        return false;
+      }
+      return !isLoading;
+    },
+    onOpenEdit: () => setHighlightName(routeName),
+    buildEditEditor: () => {
+      const row = profiles.find((p) => p.owner === routeOwner && p.name === routeName);
+      if (row) {
+        return {
+          mode: "edit",
+          initial: {
+            owner: row.owner,
+            name: row.name,
+            script: row.script,
+            config: row.config,
+            description: row.description,
+          },
+          usageCount: row.usageCount ?? 0,
+        };
+      }
+      return {
+        mode: "add",
+        initial: {
+          owner: routeOwner,
+          name: routeName,
+          script: "",
+          config: {},
+          description: "",
+        },
+      };
+    },
+    newDeps: [params, owners, ownerFilter],
+    editDeps: [routeOwner, routeName, ownerFilter, isLoading, profiles],
+  });
 
   useEffect(() => {
     if (!highlightName || isLoading) return;
