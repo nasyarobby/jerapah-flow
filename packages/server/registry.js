@@ -31,7 +31,7 @@ import {
   sendSuccessPage,
 } from "./http-trigger-auth.js";
 import { resolveConfigRefs } from "./config-refs.js";
-import { mergeProfileConfig } from "./profile-config.js";
+import { HTTP_METHODS, hasWorkflowTrigger, mergeProfileConfig } from "@jerapah-flow/shared";
 import { getProfilePlain } from "./profiles-store.js";
 import {
   buildFailureAlertData,
@@ -46,17 +46,6 @@ import { ensureInitialRevision } from "./workflow-history.js";
  */
 
 const MAX_WORKFLOW_TRIGGER_DEPTH = 8;
-const HTTP_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"];
-
-/**
- * @param {unknown} workflow
- */
-function hasWorkflowTrigger(workflow) {
-  if (!workflow || typeof workflow !== "object") return false;
-  const triggers = /** @type {{ triggers?: Array<{ type?: string }> }} */ (workflow)
-    .triggers;
-  return (triggers ?? []).some((t) => t?.type === "workflow");
-}
 
 /**
  * @param {import("fastify").FastifyInstance} server

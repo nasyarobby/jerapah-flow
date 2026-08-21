@@ -2,12 +2,9 @@
  * Step return contract: `{ output, context?, skipRemaining? }`.
  */
 
-/**
- * @param {unknown} value
- */
-export function isPlainObject(value) {
-  return value != null && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject } from "@jerapah-flow/shared";
+
+export { isPlainObject };
 
 /**
  * @param {unknown} value

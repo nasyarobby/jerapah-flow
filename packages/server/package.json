@@ -17,6 +17,7 @@
     "test:profiles": "node test/profiles-smoke.js"
   },
   "dependencies": {
+    "@jerapah-flow/shared": "workspace:*",
     "@aws-sdk/client-s3": "^3.1111.0",
     "@aws-sdk/s3-request-presigner": "^3.1111.0",
     "@fastify/cookie": "^11.0.2",

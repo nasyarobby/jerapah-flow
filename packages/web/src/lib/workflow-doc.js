@@ -1,7 +1,13 @@
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import {
+  HTTP_METHODS,
+  namespacedPath,
+  hasWorkflowTrigger,
+} from "@jerapah-flow/shared";
 
 const KNOWN_TOP = new Set(["name", "description", "enabled", "scripts", "triggers"]);
-const HTTP_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+
+export { HTTP_METHODS, namespacedPath, hasWorkflowTrigger };
 
 export const NEW_WORKFLOW_YAML = `name: new workflow
 scripts:
@@ -17,13 +23,6 @@ let uidSeq = 0;
 export function nextUiId(prefix = "ui") {
   uidSeq += 1;
   return `${prefix}-${uidSeq}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-export function namespacedPath(owner, triggerPath) {
-  const cleaned = String(triggerPath ?? "")
-    .replace(/^\/+/, "")
-    .trim();
-  return `/u/${owner}/${cleaned}`;
 }
 
 /**
@@ -162,10 +161,6 @@ export function newWorkflowTrigger() {
   };
 }
 
-export function hasWorkflowTrigger(workflow) {
-  return (workflow?.triggers ?? []).some((t) => String(t?.type ?? "").toLowerCase() === "workflow");
-}
-
 export function triggerDestinations(workflows, { owner, excludeFile } = {}) {
   return (workflows ?? []).filter((w) => {
     if (owner && w.owner !== owner) return false;
@@ -173,8 +168,6 @@ export function triggerDestinations(workflows, { owner, excludeFile } = {}) {
     return hasWorkflowTrigger(w);
   });
 }
-
-export { HTTP_METHODS };
 
 function readOnFailureWorkflow(raw) {
   return typeof raw?.onFailureWorkflow === "string" ? raw.onFailureWorkflow : "";

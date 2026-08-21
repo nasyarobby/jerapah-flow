@@ -1,3 +1,5 @@
+import { isPlainObject } from "@jerapah-flow/shared";
+
 export const NEW_SCRIPT_TEMPLATE = `async function main(ctx) {
   return { output: ctx.data ?? null, context: ctx.context ?? {} };
 }
@@ -70,10 +72,6 @@ export function prettyJson(value) {
   } catch {
     return String(value);
   }
-}
-
-function isPlainObject(value) {
-  return value != null && typeof value === "object" && !Array.isArray(value);
 }
 
 function defaultsFromFields(fields) {

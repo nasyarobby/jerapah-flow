@@ -1,4 +1,5 @@
 import jsonata from "jsonata";
+export { namespacedPath } from "@jerapah-flow/shared";
 
 export const SET_STEP_SCRIPT = "set";
 
@@ -66,16 +67,6 @@ export function isJsonataTruthy(value) {
 export async function evaluateJsonata(source, ctx) {
   const result = compileJsonata(source, "expression").evaluate(ctx);
   return await result;
-}
-
-/**
- * Resolve an HTTP path under the owner namespace: /notify -> /u/alice/notify
- * @param {string} owner
- * @param {string} triggerPath
- */
-export function namespacedPath(owner, triggerPath) {
-  const cleaned = String(triggerPath).replace(/^\/+/, "");
-  return `/u/${owner}/${cleaned}`;
 }
 
 /**
