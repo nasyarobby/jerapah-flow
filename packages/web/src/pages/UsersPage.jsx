@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import { useDeleteUser, useUsers } from "../api/hooks.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { UserEditorModal } from "../components/UserEditorModal.jsx";
 
 export function UsersPage() {
@@ -88,6 +89,7 @@ export function UsersPage() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Edit"
+                      aria-label="Edit"
                       onClick={() =>
                         navigate(`/users/${encodeURIComponent(u.username)}/edit`)
                       }
@@ -98,6 +100,7 @@ export function UsersPage() {
                       type="button"
                       className="btn btn-ghost btn-xs text-error"
                       title="Delete"
+                      aria-label="Delete"
                       onClick={() => setConfirmDelete(u)}
                     >
                       <LuTrash2 className="size-4" />
@@ -118,36 +121,16 @@ export function UsersPage() {
         />
       ) : null}
 
-      {confirmDelete ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold">Delete {confirmDelete.username}?</h3>
-            {del.isError ? (
-              <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
-            ) : null}
-            <div className="modal-action">
-              <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-error"
-                disabled={del.isPending}
-                onClick={() =>
-                  del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
-                }
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button type="button" onClick={() => setConfirmDelete(null)}>
-              close
-            </button>
-          </form>
-        </dialog>
-      ) : null}
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={confirmDelete ? `Delete ${confirmDelete.username}?` : ""}
+        error={del.isError ? errorMessage(del.error) : null}
+        loading={del.isPending}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() =>
+          del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
+        }
+      />
     </div>
   );
 }

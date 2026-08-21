@@ -4,6 +4,7 @@ import { LuEye, LuEyeOff, LuExternalLink, LuPlus, LuTrash2 } from "react-icons/l
 import { useVariables } from "../../api/hooks.js";
 import { triggerDestinations } from "../../lib/workflow-doc.js";
 import { prettyJson } from "../../lib/script.js";
+import { FormInput, FormSelect, FormTextarea } from "../FormControls.jsx";
 import { FieldLabel } from "./FieldHelp.jsx";
 
 const MULTILINE_KEYS = new Set(["expression", "jsonata"]);
@@ -197,8 +198,8 @@ function EditableText({ value, onCommit, className = "", placeholder = "…", di
   }
 
   return (
-    <input
-      className={`input input-sm w-full ${className}`}
+    <FormInput
+      className={`w-full ${className}`.trim()}
       value={draft}
       autoFocus
       onChange={(e) => setDraft(e.target.value)}
@@ -239,8 +240,8 @@ function ValueEditor({ value, onChange, spec, script, fieldKey, workflows, owner
     const current = value === undefined || value === null ? fallback : value;
     const known = options.some((o) => o.value === current);
     return (
-      <select
-        className="select select-sm w-full"
+      <FormSelect
+        className="w-full"
         value={current === undefined || current === null ? "" : String(current)}
         onChange={(e) => {
           const next = e.target.value;
@@ -262,7 +263,7 @@ function ValueEditor({ value, onChange, spec, script, fieldKey, workflows, owner
         {known || current === "" || current == null ? null : (
           <option value={String(current)}>{String(current)}</option>
         )}
-      </select>
+      </FormSelect>
     );
   }
 
@@ -280,9 +281,9 @@ function ValueEditor({ value, onChange, spec, script, fieldKey, workflows, owner
 
   if (type === "number") {
     return (
-      <input
+      <FormInput
         type="number"
-        className="input input-sm w-full"
+        className="w-full"
         value={value ?? ""}
         disabled={disabled}
         onChange={(e) => {
@@ -329,8 +330,8 @@ function ValueEditor({ value, onChange, spec, script, fieldKey, workflows, owner
   const multiline = MULTILINE_KEYS.has(fieldKey) || str.includes("\n");
   if (multiline) {
     return (
-      <textarea
-        className="textarea textarea-sm w-full min-h-24 font-mono text-xs"
+      <FormTextarea
+        className="w-full min-h-24 font-mono text-xs"
         value={str}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
@@ -347,8 +348,8 @@ function JsonOrTextArea({ text, onCommit, disabled }) {
     setDraft(text);
   }, [text]);
   return (
-    <textarea
-      className="textarea textarea-sm w-full min-h-24 font-mono text-xs"
+    <FormTextarea
+      className="w-full min-h-24 font-mono text-xs"
       value={draft}
       disabled={disabled}
       onChange={(e) => setDraft(e.target.value)}
@@ -441,8 +442,8 @@ function WorkflowNamePicker({ value, onChange, workflows, owner, excludeFile, di
 
   return (
     <div className="space-y-1">
-      <select
-        className="select select-sm w-full"
+      <FormSelect
+        className="w-full"
         value={selectValue}
         disabled={disabled}
         onChange={(e) => {
@@ -464,10 +465,10 @@ function WorkflowNamePicker({ value, onChange, workflows, owner, excludeFile, di
           </option>
         ))}
         <option value="__custom__">Custom…</option>
-      </select>
+      </FormSelect>
       {selectValue === "__custom__" ? (
-        <input
-          className="input input-sm w-full font-mono"
+        <FormInput
+          className="w-full font-mono"
           value={value}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}

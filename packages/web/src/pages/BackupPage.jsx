@@ -5,6 +5,7 @@ import {
   useDownloadWorkflowBackup,
   useRestoreWorkflowBackup,
 } from "../api/hooks.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { useNotifications } from "../notifications.jsx";
 
 export function BackupPage() {
@@ -120,40 +121,23 @@ export function BackupPage() {
         </div>
       </section>
 
-      {pendingFile ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold">Replace with this backup?</h3>
-            <p className="mt-2 text-sm opacity-70">
+      <ConfirmDialog
+        open={Boolean(pendingFile)}
+        title="Replace with this backup?"
+        message={
+          pendingFile ? (
+            <>
               Current workflows and plugins will be deleted, then{" "}
-              <span className="font-mono">{pendingFile.name}</span> will be
-              restored. This cannot be undone from this page.
-            </p>
-            <div className="modal-action">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => setPendingFile(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-error"
-                disabled={restoreBackup.isPending}
-                onClick={() => restore(pendingFile, "replace")}
-              >
-                Replace
-              </button>
-            </div>
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button type="button" onClick={() => setPendingFile(null)}>
-              close
-            </button>
-          </form>
-        </dialog>
-      ) : null}
+              <span className="font-mono">{pendingFile.name}</span> will be restored. This cannot
+              be undone from this page.
+            </>
+          ) : null
+        }
+        confirmLabel="Replace"
+        loading={restoreBackup.isPending}
+        onCancel={() => setPendingFile(null)}
+        onConfirm={() => restore(pendingFile, "replace")}
+      />
     </div>
   );
 }

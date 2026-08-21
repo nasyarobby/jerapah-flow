@@ -8,6 +8,7 @@ import {
   useInstallPlugin,
   useScripts,
 } from "../api/hooks.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { ScriptIcon } from "../components/ScriptIcon.jsx";
 import { TagBadge } from "../components/TagBadge.jsx";
 import { scriptTags } from "../lib/script.js";
@@ -156,6 +157,7 @@ export function ScriptsPage() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Dry run"
+                      aria-label="Dry run"
                       onClick={() =>
                         navigate(`/scripts/${encodeURIComponent(name)}/dry-run`)
                       }
@@ -167,6 +169,7 @@ export function ScriptsPage() {
                         type="button"
                         className="btn btn-ghost btn-xs"
                         title="Fork"
+                        aria-label="Fork"
                         onClick={() => {
                           setForkFor(name);
                           setForkId(
@@ -183,6 +186,7 @@ export function ScriptsPage() {
                         to={`/scripts/${encodeURIComponent(name)}/edit`}
                         className="btn btn-ghost btn-xs"
                         title="Edit"
+                        aria-label="Edit"
                       >
                         <LuPencil className="size-4" />
                       </Link>
@@ -192,6 +196,7 @@ export function ScriptsPage() {
                         type="button"
                         className="btn btn-ghost btn-xs text-error"
                         title="Delete"
+                        aria-label="Delete"
                         onClick={() => setConfirmDelete(name)}
                       >
                         <LuTrash2 className="size-4" />
@@ -259,43 +264,19 @@ export function ScriptsPage() {
         </dialog>
       ) : null}
 
-      {confirmDelete ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-semibold">Delete {confirmDelete}?</h3>
-            <p className="text-sm opacity-70 py-2">This uninstalls the plugin.</p>
-            {del.isError ? (
-              <p className="text-error text-sm">{errorMessage(del.error)}</p>
-            ) : null}
-            <div className="modal-action">
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => setConfirmDelete(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-error btn-sm"
-                disabled={del.isPending}
-                onClick={() =>
-                  del.mutate(confirmDelete, {
-                    onSuccess: () => setConfirmDelete(null),
-                  })
-                }
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button type="button" onClick={() => setConfirmDelete(null)}>
-              close
-            </button>
-          </form>
-        </dialog>
-      ) : null}
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={confirmDelete ? `Delete ${confirmDelete}?` : ""}
+        message="This uninstalls the plugin."
+        error={del.isError ? errorMessage(del.error) : null}
+        loading={del.isPending}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() =>
+          del.mutate(confirmDelete, {
+            onSuccess: () => setConfirmDelete(null),
+          })
+        }
+      />
     </div>
   );
 }

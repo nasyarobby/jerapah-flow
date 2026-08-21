@@ -20,10 +20,8 @@ import {
   saveErrorMessage,
   saveWarningsFromError,
 } from "../components/workflow/SaveWorkflowWarningsDialog.jsx";
-import {
-  ConfirmDialog,
-  WorkflowRevisionBanner,
-} from "../components/workflow/WorkflowRevisionBanner.jsx";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
+import { WorkflowRevisionBanner } from "../components/workflow/WorkflowRevisionBanner.jsx";
 import { NEW_WORKFLOW_YAML, parseWorkflowYaml } from "../lib/workflow-doc.js";
 import { useNotifications } from "../notifications.jsx";
 
@@ -465,6 +463,7 @@ export function WorkflowEditPage() {
           title="Discard unsaved changes?"
           message="You have unsaved edits. Switching versions will discard them."
           confirmLabel="Discard"
+          confirmClass="btn-warning"
           pending={false}
           onCancel={() => setDiscardConfirm(null)}
           onConfirm={() => {

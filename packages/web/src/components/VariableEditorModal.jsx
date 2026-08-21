@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { errorMessage } from "../api/client.js";
 import { useOwners, useUpsertVariable } from "../api/hooks.js";
+import { FormInput, FormSelect, FormTextarea } from "./FormControls.jsx";
 
 const TYPES = ["string", "number", "boolean"];
 
@@ -83,8 +84,8 @@ export function VariableEditorModal({
               <label className="form-control w-full">
                 <span className="label py-0 text-sm">Owner</span>
                 {owners.length > 0 ? (
-                  <select
-                    className="select w-full"
+                  <FormSelect
+                    className="w-full"
                     value={form.owner}
                     onChange={(e) => setForm({ ...form, owner: e.target.value })}
                     required
@@ -95,10 +96,10 @@ export function VariableEditorModal({
                         {o}
                       </option>
                     ))}
-                  </select>
+                  </FormSelect>
                 ) : (
-                  <input
-                    className="input w-full"
+                  <FormInput
+                    className="w-full"
                     value={form.owner}
                     onChange={(e) => setForm({ ...form, owner: e.target.value })}
                     required
@@ -108,8 +109,8 @@ export function VariableEditorModal({
               </label>
               <label className="form-control w-full">
                 <span className="label py-0 text-sm">Name</span>
-                <input
-                  className="input w-full font-mono"
+                <FormInput
+                  className="w-full font-mono"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   required
@@ -121,8 +122,8 @@ export function VariableEditorModal({
           ) : null}
           <label className="form-control w-full">
             <span className="label py-0 text-sm">Type</span>
-            <select
-              className="select w-full"
+            <FormSelect
+              className="w-full"
               value={form.type}
               onChange={(e) => onTypeChange(e.target.value)}
             >
@@ -131,31 +132,31 @@ export function VariableEditorModal({
                   {t}
                 </option>
               ))}
-            </select>
+            </FormSelect>
           </label>
           <label className="form-control w-full">
             <span className="label py-0 text-sm">Value</span>
             {form.type === "boolean" ? (
-              <select
-                className="select w-full"
+              <FormSelect
+                className="w-full"
                 value={form.value === true ? "true" : "false"}
                 onChange={(e) => setForm({ ...form, value: e.target.value === "true" })}
               >
                 <option value="true">true</option>
                 <option value="false">false</option>
-              </select>
+              </FormSelect>
             ) : form.type === "number" ? (
-              <input
+              <FormInput
                 type="number"
-                className="input w-full font-mono"
+                className="w-full font-mono"
                 value={form.value}
                 onChange={(e) => setForm({ ...form, value: e.target.value })}
                 required
                 step="any"
               />
             ) : (
-              <textarea
-                className="textarea w-full font-mono min-h-24"
+              <FormTextarea
+                className="w-full font-mono min-h-24"
                 value={form.value}
                 onChange={(e) => setForm({ ...form, value: e.target.value })}
                 spellCheck={false}

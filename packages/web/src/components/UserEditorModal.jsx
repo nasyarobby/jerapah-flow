@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { errorMessage } from "../api/client.js";
 import { useCreateUser, useUpdateUser } from "../api/hooks.js";
+import { FormInput, FormSelect } from "./FormControls.jsx";
 
 /**
  * Add / edit a local user.
@@ -61,8 +62,8 @@ export function UserEditorModal({ mode, user, onClose, onSaved }) {
           {mode === "add" ? (
             <label className="form-control w-full">
               <span className="label py-0 text-sm">Username</span>
-              <input
-                className="input w-full"
+              <FormInput
+                className="w-full"
                 value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
                 required
@@ -73,9 +74,9 @@ export function UserEditorModal({ mode, user, onClose, onSaved }) {
             <span className="label py-0 text-sm">
               {mode === "add" ? "Password" : "New password"}
             </span>
-            <input
+            <FormInput
               type="password"
-              className="input w-full"
+              className="w-full"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required={mode === "add"}
@@ -85,14 +86,14 @@ export function UserEditorModal({ mode, user, onClose, onSaved }) {
           </label>
           <label className="form-control w-full">
             <span className="label py-0 text-sm">Role</span>
-            <select
-              className="select w-full"
+            <FormSelect
+              className="w-full"
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value })}
             >
               <option value="operator">operator</option>
               <option value="admin">admin</option>
-            </select>
+            </FormSelect>
           </label>
           {mutation.isError ? (
             <p className="text-error text-sm">{errorMessage(mutation.error)}</p>

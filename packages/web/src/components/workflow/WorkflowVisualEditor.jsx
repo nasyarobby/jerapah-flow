@@ -4,6 +4,7 @@ import { useHttpAuths, useHttpPages, useProfiles, useScripts, useWorkflows } fro
 import { dataFromInputMeta, firstInputMeta } from "../../lib/script.js";
 import { workflowToFlowchart } from "../../lib/workflow-mermaid.js";
 import { parseWorkflowYaml, stringifyWorkflowDoc } from "../../lib/workflow-doc.js";
+import { FormInput, FormTextarea } from "../FormControls.jsx";
 import { ScriptsTab } from "./ScriptsTab.jsx";
 import { TriggersTab } from "./TriggersTab.jsx";
 import { YamlTab } from "./YamlTab.jsx";
@@ -119,8 +120,8 @@ export function WorkflowVisualEditor({
     <>
       <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         {extraChrome}
-        <input
-          className="input input-sm sm:max-w-xs"
+        <FormInput
+          className="sm:max-w-xs"
           placeholder="name"
           value={displayDoc?.name ?? ""}
           disabled={visualDisabled}
@@ -130,8 +131,8 @@ export function WorkflowVisualEditor({
             })
           }
         />
-        <textarea
-          className="textarea textarea-sm min-h-10 w-full sm:max-w-md"
+        <FormTextarea
+          className="min-h-10 w-full sm:max-w-md"
           placeholder="description"
           rows={1}
           value={displayDoc?.description ?? ""}

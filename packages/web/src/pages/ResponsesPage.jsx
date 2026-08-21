@@ -6,6 +6,7 @@ import {
   useHttpPages,
   useUpsertHttpPage,
 } from "../api/hooks.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { formatTime } from "../lib/format.jsx";
 
 const emptyForm = {
@@ -116,6 +117,7 @@ export function ResponsesPage() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Edit"
+                      aria-label="Edit"
                       onClick={() => openEdit(p)}
                     >
                       <LuPencil className="size-4" />
@@ -124,6 +126,7 @@ export function ResponsesPage() {
                       type="button"
                       className="btn btn-ghost btn-xs text-error"
                       title={p.system ? "System pages cannot be deleted" : "Delete"}
+                      aria-label={p.system ? "System pages cannot be deleted" : "Delete"}
                       disabled={p.system}
                       onClick={() => setConfirmDelete(p)}
                     >
@@ -227,39 +230,18 @@ export function ResponsesPage() {
         </form>
       ) : null}
 
-      {confirmDelete ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold">Delete {confirmDelete.name}?</h3>
-            <p className="text-sm mt-2">
-              Workflows that reference this page will fail validation on next save.
-            </p>
-            {del.isError ? (
-              <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
-            ) : null}
-            <div className="modal-action">
-              <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-error"
-                disabled={del.isPending || confirmDelete.system}
-                onClick={() =>
-                  del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
-                }
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button type="button" onClick={() => setConfirmDelete(null)}>
-              close
-            </button>
-          </form>
-        </dialog>
-      ) : null}
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={confirmDelete ? `Delete ${confirmDelete.name}?` : ""}
+        message="Workflows that reference this page will fail validation on next save."
+        error={del.isError ? errorMessage(del.error) : null}
+        loading={del.isPending}
+        confirmDisabled={Boolean(confirmDelete?.system)}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() =>
+          del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
+        }
+      />
     </div>
   );
 }

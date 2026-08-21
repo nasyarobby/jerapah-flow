@@ -3,6 +3,8 @@ import { useLocation, useNavigate, useParams, useSearchParams } from "react-rout
 import { LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import { useDeleteProfile, useOwners, useProfileUsage, useProfiles } from "../api/hooks.js";
+import { FormSelect } from "../components/FormControls.jsx";
+import { Modal } from "../components/Modal.jsx";
 import { ProfileEditorModal } from "../components/ProfileEditorModal.jsx";
 import { ScriptIcon } from "../components/ScriptIcon.jsx";
 import { formatTime } from "../lib/format.jsx";
@@ -129,8 +131,7 @@ export function ProfilesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Profiles</h1>
         <div className="flex gap-2">
-          <select
-            className="select select-sm"
+          <FormSelect
             value={ownerFilter}
             onChange={(e) => {
               setOwnerFilter(e.target.value);
@@ -149,7 +150,7 @@ export function ProfilesPage() {
                 {o}
               </option>
             ))}
-          </select>
+          </FormSelect>
           <button
             type="button"
             className="btn btn-primary btn-sm"
@@ -224,6 +225,7 @@ export function ProfilesPage() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Edit"
+                      aria-label="Edit"
                       onClick={() =>
                         navigate(
                           `/profiles/${encodeURIComponent(row.owner)}/${encodeURIComponent(row.name)}/edit`,
@@ -237,6 +239,7 @@ export function ProfilesPage() {
                       type="button"
                       className="btn btn-ghost btn-xs text-error"
                       title="Delete"
+                      aria-label="Delete"
                       onClick={() => setConfirmDelete({ ...row, force: false })}
                     >
                       <LuTrash2 className="size-4" />
@@ -281,66 +284,58 @@ function DeleteProfileDialog({ profile, del, onClose }) {
   const usage = useProfileUsage(profile.id, true);
   const usages = usage.data ?? [];
   const used = usages.length > 0;
+  const title = `Delete ${profile.owner}/${profile.name}?`;
 
   return (
-    <dialog className="modal modal-open">
-      <div className="modal-box">
-        <h3 className="font-bold">
-          Delete {profile.owner}/{profile.name}?
-        </h3>
-        {usage.isLoading ? (
-          <p className="text-sm mt-2 opacity-70">Checking workflow usage…</p>
-        ) : used ? (
-          <>
-            <p className="text-sm mt-2">{formatUsage(usages)}</p>
-            <ul className="mt-2 max-h-40 overflow-auto text-sm font-mono">
-              {usages.map((u) => (
-                <li key={u.file}>
-                  {u.name}
-                  {u.file !== u.name ? ` (${u.file})` : ""}
-                </li>
-              ))}
-            </ul>
-            {force ? (
-              <p className="text-warning text-sm mt-2">
-                Workflows that still reference this profile will fail until you fix them.
-              </p>
-            ) : null}
-          </>
-        ) : (
-          <p className="text-sm mt-2">This cannot be undone.</p>
-        )}
-        {del.isError ? (
-          <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
-        ) : null}
-        <div className="modal-action">
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Cancel
-          </button>
-          {used && !force ? (
-            <button type="button" className="btn btn-warning" onClick={() => setForce(true)}>
-              Force delete
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-error"
-              disabled={del.isPending || usage.isLoading}
-              onClick={() =>
-                del.mutate({ id: profile.id, force: used }, { onSuccess: () => onClose() })
-              }
-            >
-              {del.isPending ? <span className="loading loading-spinner loading-xs" /> : null}
-              Delete
-            </button>
-          )}
-        </div>
-      </div>
-      <form method="dialog" className="modal-backdrop">
-        <button type="button" onClick={onClose}>
-          close
+    <Modal open onClose={onClose} boxClassName="max-w-md" aria-label={title}>
+      <h3 className="font-bold">{title}</h3>
+      {usage.isLoading ? (
+        <p className="text-sm mt-2 opacity-70">Checking workflow usage…</p>
+      ) : used ? (
+        <>
+          <p className="text-sm mt-2">{formatUsage(usages)}</p>
+          <ul className="mt-2 max-h-40 overflow-auto text-sm font-mono">
+            {usages.map((u) => (
+              <li key={u.file}>
+                {u.name}
+                {u.file !== u.name ? ` (${u.file})` : ""}
+              </li>
+            ))}
+          </ul>
+          {force ? (
+            <p className="text-warning text-sm mt-2">
+              Workflows that still reference this profile will fail until you fix them.
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-sm mt-2">This cannot be undone.</p>
+      )}
+      {del.isError ? (
+        <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
+      ) : null}
+      <div className="modal-action">
+        <button type="button" className="btn btn-ghost" onClick={onClose}>
+          Cancel
         </button>
-      </form>
-    </dialog>
+        {used && !force ? (
+          <button type="button" className="btn btn-warning" onClick={() => setForce(true)}>
+            Force delete
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-error"
+            disabled={del.isPending || usage.isLoading}
+            onClick={() =>
+              del.mutate({ id: profile.id, force: used }, { onSuccess: () => onClose() })
+            }
+          >
+            {del.isPending ? <span className="loading loading-spinner loading-xs" /> : null}
+            Delete
+          </button>
+        )}
+      </div>
+    </Modal>
   );
 }

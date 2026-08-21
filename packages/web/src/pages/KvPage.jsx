@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useKv, useKvNamespaces } from "../api/hooks.js";
+import { FormSelect } from "../components/FormControls.jsx";
 import { formatTime } from "../lib/format.jsx";
 
 const PAGE_SIZE = 50;
@@ -48,8 +49,8 @@ export function KvPage() {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">KV</h1>
       <div className="flex flex-col sm:flex-row gap-2">
-        <select
-          className="select select-sm w-full sm:max-w-xs"
+        <FormSelect
+          className="w-full sm:max-w-xs"
           value={namespace}
           onChange={(e) => update("namespace", e.target.value)}
         >
@@ -59,7 +60,7 @@ export function KvPage() {
               {ns}
             </option>
           ))}
-        </select>
+        </FormSelect>
         <input
           className="input input-sm w-full sm:max-w-sm"
           placeholder="search key or value"
@@ -93,6 +94,15 @@ export function KvPage() {
                       key={id}
                       className="hover cursor-pointer"
                       onClick={() => setExpanded(open ? null : id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setExpanded(open ? null : id);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={open}
                     >
                       <td className="font-mono text-xs align-top">{item.namespace}</td>
                       <td className="font-mono text-xs align-top">{item.key}</td>

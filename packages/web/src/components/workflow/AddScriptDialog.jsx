@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useProfiles, useScripts } from "../../api/hooks.js";
+import { FormInput } from "../FormControls.jsx";
 import { ScriptIcon } from "../ScriptIcon.jsx";
 import { scriptTags } from "../../lib/script.js";
 
@@ -66,8 +67,8 @@ export function AddScriptDialog({ open, onClose, onPick, owner }) {
             Profiles
           </button>
         </div>
-        <input
-          className="input input-sm w-full mt-3"
+        <FormInput
+          className="w-full mt-3"
           placeholder={tab === "profiles" ? "Search profiles" : "Search scripts"}
           value={q}
           onChange={(e) => setQ(e.target.value)}

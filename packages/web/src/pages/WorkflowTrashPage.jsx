@@ -7,6 +7,7 @@ import {
   useRestoreWorkflowTrash,
   useWorkflowTrash,
 } from "../api/hooks.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { formatTime } from "../lib/format.jsx";
 import { useNotifications } from "../notifications.jsx";
 
@@ -87,6 +88,7 @@ export function WorkflowTrashPage() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Restore"
+                      aria-label="Restore"
                       disabled={restore.isPending}
                       onClick={() =>
                         restore.mutate(item.id, {
@@ -105,6 +107,7 @@ export function WorkflowTrashPage() {
                       type="button"
                       className="btn btn-ghost btn-xs text-error"
                       title="Delete permanently"
+                      aria-label="Delete permanently"
                       onClick={() => setConfirmPurge(item)}
                     >
                       <LuTrash2 className="size-4" />
@@ -117,46 +120,26 @@ export function WorkflowTrashPage() {
         </div>
       )}
 
-      {confirmPurge ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold">Delete permanently?</h3>
-            <p className="mt-2 text-sm">
-              {confirmPurge.name ?? confirmPurge.file} ({confirmPurge.owner}/{confirmPurge.file})
-              will be removed forever, including revision history.
-            </p>
-            <div className="modal-action">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => setConfirmPurge(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-error"
-                disabled={purge.isPending}
-                onClick={() =>
-                  purge.mutate(confirmPurge.id, {
-                    onSuccess: () => {
-                      notify.success("Permanently deleted");
-                      setConfirmPurge(null);
-                    },
-                  })
-                }
-              >
-                Delete forever
-              </button>
-            </div>
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button type="button" onClick={() => setConfirmPurge(null)}>
-              close
-            </button>
-          </form>
-        </dialog>
-      ) : null}
+      <ConfirmDialog
+        open={Boolean(confirmPurge)}
+        title="Delete permanently?"
+        message={
+          confirmPurge
+            ? `${confirmPurge.name ?? confirmPurge.file} (${confirmPurge.owner}/${confirmPurge.file}) will be removed forever, including revision history.`
+            : ""
+        }
+        confirmLabel="Delete forever"
+        loading={purge.isPending}
+        onCancel={() => setConfirmPurge(null)}
+        onConfirm={() =>
+          purge.mutate(confirmPurge.id, {
+            onSuccess: () => {
+              notify.success("Permanently deleted");
+              setConfirmPurge(null);
+            },
+          })
+        }
+      />
     </div>
   );
 }

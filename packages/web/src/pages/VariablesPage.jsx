@@ -3,6 +3,8 @@ import { useLocation, useNavigate, useParams, useSearchParams } from "react-rout
 import { LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import { useDeleteVariable, useOwners, useVariables } from "../api/hooks.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
+import { FormSelect } from "../components/FormControls.jsx";
 import { VariableEditorModal } from "../components/VariableEditorModal.jsx";
 import { formatTime } from "../lib/format.jsx";
 
@@ -110,8 +112,7 @@ export function VariablesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Variables</h1>
         <div className="flex gap-2">
-          <select
-            className="select select-sm"
+          <FormSelect
             value={ownerFilter}
             onChange={(e) => {
               setOwnerFilter(e.target.value);
@@ -130,7 +131,7 @@ export function VariablesPage() {
                 {o}
               </option>
             ))}
-          </select>
+          </FormSelect>
           <button
             type="button"
             className="btn btn-primary btn-sm"
@@ -192,6 +193,7 @@ export function VariablesPage() {
                         type="button"
                         className="btn btn-ghost btn-xs"
                         title="Edit"
+                        aria-label="Edit"
                         onClick={() =>
                           navigate(
                             `/variables/${encodeURIComponent(row.owner)}/${encodeURIComponent(row.name)}/edit`,
@@ -204,6 +206,7 @@ export function VariablesPage() {
                         type="button"
                         className="btn btn-ghost btn-xs text-error"
                         title="Delete"
+                        aria-label="Delete"
                         onClick={() => setConfirmDelete(row)}
                       >
                         <LuTrash2 className="size-4" />
@@ -228,41 +231,21 @@ export function VariablesPage() {
         />
       ) : null}
 
-      {confirmDelete ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold">
-              Delete {confirmDelete.owner}/{confirmDelete.name}?
-            </h3>
-            <p className="text-sm mt-2">
-              This cannot be undone. Workflows that reference $VAR_{confirmDelete.name} will fail.
-            </p>
-            {del.isError ? (
-              <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
-            ) : null}
-            <div className="modal-action">
-              <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-error"
-                disabled={del.isPending}
-                onClick={() =>
-                  del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
-                }
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button type="button" onClick={() => setConfirmDelete(null)}>
-              close
-            </button>
-          </form>
-        </dialog>
-      ) : null}
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={confirmDelete ? `Delete ${confirmDelete.owner}/${confirmDelete.name}?` : ""}
+        message={
+          confirmDelete
+            ? `This cannot be undone. Workflows that reference $VAR_${confirmDelete.name} will fail.`
+            : ""
+        }
+        error={del.isError ? errorMessage(del.error) : null}
+        loading={del.isPending}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() =>
+          del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
+        }
+      />
     </div>
   );
 }

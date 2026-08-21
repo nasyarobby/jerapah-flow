@@ -10,6 +10,7 @@ import {
   useWorkflows,
 } from "../api/hooks.js";
 import { DuplicateWorkflowDialog } from "../components/DuplicateWorkflowDialog.jsx";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
 import { formatTime, WorkflowStatusBadge } from "../lib/format.jsx";
 
@@ -80,6 +81,7 @@ export function WorkflowsPage() {
             type="button"
             className="btn btn-ghost btn-sm"
             title="Reregister workflows"
+            aria-label="Reregister workflows"
             disabled={reregister.isPending}
             onClick={() => reregister.mutate()}
           >
@@ -153,7 +155,11 @@ export function WorkflowsPage() {
                   <td className="whitespace-nowrap">{formatTime(w.lastInvokedAt)}</td>
                   <td>{w.invocationCount}</td>
                   <td className="text-right whitespace-nowrap">
-                    <label className="inline-flex items-center mr-1" title={w.enabled ? "Disable" : "Enable"}>
+                    <label
+                      className="inline-flex items-center mr-1"
+                      title={w.enabled ? "Disable" : "Enable"}
+                      aria-label={w.enabled ? "Disable" : "Enable"}
+                    >
                       <input
                         type="checkbox"
                         className="toggle toggle-success toggle-xs"
@@ -172,6 +178,7 @@ export function WorkflowsPage() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Run"
+                      aria-label="Run"
                       disabled={Boolean(w.loadError) || runningKey === w.key}
                       onClick={() => onRun(w)}
                     >
@@ -184,6 +191,7 @@ export function WorkflowsPage() {
                     <Link
                       className="btn btn-ghost btn-xs"
                       title="Events"
+                      aria-label="Events"
                       to={`/events?workflow=${encodeURIComponent(w.key)}`}
                     >
                       <LuActivity className="size-4" />
@@ -191,6 +199,7 @@ export function WorkflowsPage() {
                     <Link
                       className="btn btn-ghost btn-xs"
                       title="Edit"
+                      aria-label="Edit"
                       to={`/workflows/${encodeURIComponent(w.owner)}/${encodeURIComponent(w.file)}/edit`}
                     >
                       <LuPencil className="size-4" />
@@ -199,6 +208,7 @@ export function WorkflowsPage() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Duplicate"
+                      aria-label="Duplicate"
                       disabled={Boolean(w.loadError)}
                       onClick={() => setDuplicateSource(w)}
                     >
@@ -208,6 +218,7 @@ export function WorkflowsPage() {
                       type="button"
                       className="btn btn-ghost btn-xs text-error"
                       title="Move to trash"
+                      aria-label="Move to trash"
                       onClick={() => setConfirmDelete(w)}
                     >
                       <LuTrash2 className="size-4" />
@@ -233,43 +244,21 @@ export function WorkflowsPage() {
         />
       ) : null}
 
-      {confirmDelete ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold">Move {confirmDelete.key} to trash?</h3>
-            <p className="mt-2 text-sm opacity-70">
-              The workflow is removed from the list but kept in trash for 7 days. Revision history
-              is preserved.
-            </p>
-            {del.isError ? (
-              <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
-            ) : null}
-            <div className="modal-action">
-              <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-error"
-                disabled={del.isPending}
-                onClick={() =>
-                  del.mutate(
-                    { owner: confirmDelete.owner, file: confirmDelete.file },
-                    { onSuccess: () => setConfirmDelete(null) },
-                  )
-                }
-              >
-                Move to trash
-              </button>
-            </div>
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button type="button" onClick={() => setConfirmDelete(null)}>
-              close
-            </button>
-          </form>
-        </dialog>
-      ) : null}
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={confirmDelete ? `Move ${confirmDelete.key} to trash?` : ""}
+        message="The workflow is removed from the list but kept in trash for 7 days. Revision history is preserved."
+        confirmLabel="Move to trash"
+        error={del.isError ? errorMessage(del.error) : null}
+        loading={del.isPending}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() =>
+          del.mutate(
+            { owner: confirmDelete.owner, file: confirmDelete.file },
+            { onSuccess: () => setConfirmDelete(null) },
+          )
+        }
+      />
     </div>
   );
 }

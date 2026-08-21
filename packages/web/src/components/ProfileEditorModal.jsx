@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { errorMessage } from "../api/client.js";
 import { useOwners, useScripts, useUpsertProfile } from "../api/hooks.js";
+import { FormInput, FormSelect } from "./FormControls.jsx";
 import { ConfigFields } from "./workflow/ConfigFields.jsx";
 
 /**
@@ -83,8 +84,8 @@ export function ProfileEditorModal({ mode, initial, onClose, onSaved, usageCount
               <label className="form-control w-full">
                 <span className="label py-0 text-sm">Owner</span>
                 {owners.length > 0 ? (
-                  <select
-                    className="select w-full"
+                  <FormSelect
+                    className="w-full"
                     value={form.owner}
                     onChange={(e) => setForm({ ...form, owner: e.target.value })}
                     required
@@ -94,10 +95,10 @@ export function ProfileEditorModal({ mode, initial, onClose, onSaved, usageCount
                         {o}
                       </option>
                     ))}
-                  </select>
+                  </FormSelect>
                 ) : (
-                  <input
-                    className="input w-full"
+                  <FormInput
+                    className="w-full"
                     value={form.owner}
                     onChange={(e) => setForm({ ...form, owner: e.target.value })}
                     required
@@ -106,8 +107,8 @@ export function ProfileEditorModal({ mode, initial, onClose, onSaved, usageCount
               </label>
               <label className="form-control w-full">
                 <span className="label py-0 text-sm">Name</span>
-                <input
-                  className="input w-full font-mono"
+                <FormInput
+                  className="w-full font-mono"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   required
@@ -127,8 +128,8 @@ export function ProfileEditorModal({ mode, initial, onClose, onSaved, usageCount
           )}
           <label className="form-control w-full">
             <span className="label py-0 text-sm">Script</span>
-            <select
-              className="select w-full font-mono"
+            <FormSelect
+              className="w-full font-mono"
               value={form.script}
               onChange={(e) => {
                 setForm({ ...form, script: e.target.value });
@@ -148,7 +149,7 @@ export function ProfileEditorModal({ mode, initial, onClose, onSaved, usageCount
               {form.script && !scripts.some((s) => (typeof s === "string" ? s : s.name) === form.script) ? (
                 <option value={form.script}>{form.script}</option>
               ) : null}
-            </select>
+            </FormSelect>
           </label>
           {scriptChanged && usageCount > 0 ? (
             <p className="text-warning text-sm">
@@ -159,8 +160,8 @@ export function ProfileEditorModal({ mode, initial, onClose, onSaved, usageCount
           ) : null}
           <label className="form-control w-full">
             <span className="label py-0 text-sm">Description</span>
-            <input
-              className="input w-full"
+            <FormInput
+              className="w-full"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               maxLength={500}

@@ -3,6 +3,8 @@ import { useLocation, useNavigate, useParams, useSearchParams } from "react-rout
 import { LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import { useDeleteSecret, useOwners, useSecrets } from "../api/hooks.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
+import { FormSelect } from "../components/FormControls.jsx";
 import { SecretEditorModal } from "../components/SecretEditorModal.jsx";
 import { formatTime } from "../lib/format.jsx";
 
@@ -81,8 +83,7 @@ export function SecretsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Secrets</h1>
         <div className="flex gap-2">
-          <select
-            className="select select-sm"
+          <FormSelect
             value={ownerFilter}
             onChange={(e) => {
               setOwnerFilter(e.target.value);
@@ -101,7 +102,7 @@ export function SecretsPage() {
                 {o}
               </option>
             ))}
-          </select>
+          </FormSelect>
           <button
             type="button"
             className="btn btn-primary btn-sm"
@@ -154,6 +155,7 @@ export function SecretsPage() {
                         type="button"
                         className="btn btn-ghost btn-xs"
                         title="Replace value"
+                        aria-label="Replace value"
                         onClick={() =>
                           navigate(
                             `/secrets/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.name)}/edit`,
@@ -166,6 +168,7 @@ export function SecretsPage() {
                         type="button"
                         className="btn btn-ghost btn-xs text-error"
                         title="Delete"
+                        aria-label="Delete"
                         onClick={() => setConfirmDelete(s)}
                       >
                         <LuTrash2 className="size-4" />
@@ -190,41 +193,17 @@ export function SecretsPage() {
         />
       ) : null}
 
-      {confirmDelete ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold">
-              Delete {confirmDelete.owner}/{confirmDelete.name}?
-            </h3>
-            <p className="text-sm mt-2">
-              This cannot be undone. Workflows that retrieve this name will fail.
-            </p>
-            {del.isError ? (
-              <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
-            ) : null}
-            <div className="modal-action">
-              <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-error"
-                disabled={del.isPending}
-                onClick={() =>
-                  del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
-                }
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button type="button" onClick={() => setConfirmDelete(null)}>
-              close
-            </button>
-          </form>
-        </dialog>
-      ) : null}
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={confirmDelete ? `Delete ${confirmDelete.owner}/${confirmDelete.name}?` : ""}
+        message="This cannot be undone. Workflows that retrieve this name will fail."
+        error={del.isError ? errorMessage(del.error) : null}
+        loading={del.isPending}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() =>
+          del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
+        }
+      />
     </div>
   );
 }

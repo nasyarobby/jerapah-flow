@@ -5,6 +5,7 @@ import { LuChevronDown, LuGripVertical, LuMaximize2, LuMinimize2, LuPlay, LuTras
 import { useDryRunScript, useScript } from "../../api/hooks.js";
 import { errorMessage } from "../../api/client.js";
 import { CodeEditor } from "../CodeEditor.jsx";
+import { FormInput, FormSelect, FormTextarea } from "../FormControls.jsx";
 import { LogViewer } from "../LogViewer.jsx";
 import { StatusBadge } from "../../lib/format.jsx";
 import { contextFromMeta, prettyJson } from "../../lib/script.js";
@@ -178,8 +179,8 @@ export function ScriptCard({
                   required
                   description="JSONata evaluated against ctx (data, context, config). Result becomes the next step's data."
                 />
-                <textarea
-                  className="textarea textarea-sm w-full min-h-24 font-mono text-xs"
+                <FormTextarea
+                  className="w-full min-h-24 font-mono text-xs"
                   value={step.expression ?? ""}
                   disabled={disabled}
                   onChange={(e) => onChange({ ...step, expression: e.target.value })}
@@ -204,8 +205,8 @@ export function ScriptCard({
               <div className="collapse-content space-y-2">
                 <label className="form-control">
                   <span className="label py-0 text-sm">id</span>
-                  <input
-                    className={`input input-sm font-mono ${duplicateId ? "input-error" : ""}`}
+                  <FormInput
+                    className={`font-mono ${duplicateId ? "input-error" : ""}`}
                     value={step.id ?? ""}
                     disabled={disabled}
                     onChange={(e) => onChange({ ...step, id: e.target.value })}
@@ -223,8 +224,8 @@ export function ScriptCard({
                 />
                 <label className="form-control">
                   <span className="label py-0 text-sm">when</span>
-                  <input
-                    className="input input-sm w-full font-mono"
+                  <FormInput
+                    className="w-full font-mono"
                     value={step.when ?? ""}
                     disabled={disabled || Boolean(step.needs)}
                     onChange={(e) => onChange({ ...step, when: e.target.value })}
@@ -265,8 +266,7 @@ function NeedsEditor({ step, otherSteps, disabled, onChange }) {
   return (
     <div className="space-y-1">
       <span className="label py-0 text-sm">needs</span>
-      <select
-        className="select select-sm"
+      <FormSelect
         value={mode}
         disabled={disabled}
         onChange={(e) => setMode(e.target.value)}
@@ -274,7 +274,7 @@ function NeedsEditor({ step, otherSteps, disabled, onChange }) {
         <option value="none">None (trigger data / previous output)</option>
         <option value="list">List of step ids</option>
         <option value="map">Map alias → step id</option>
-      </select>
+      </FormSelect>
       {mode === "list" ? (
         <div className="flex flex-wrap gap-2 pt-1">
           {ids.length === 0 ? (
@@ -324,8 +324,8 @@ function NeedsMap({ needs, ids, disabled, onChange }) {
     <div className="space-y-1">
       {entries.map(([alias, from]) => (
         <div key={alias} className="flex gap-1">
-          <input
-            className="input input-sm font-mono w-28"
+          <FormInput
+            className="font-mono w-28"
             value={alias}
             disabled={disabled}
             onChange={(e) => {
@@ -336,8 +336,8 @@ function NeedsMap({ needs, ids, disabled, onChange }) {
               onChange(next);
             }}
           />
-          <select
-            className="select select-sm flex-1"
+          <FormSelect
+            className="flex-1"
             value={from}
             disabled={disabled}
             onChange={(e) => onChange({ ...needs, [alias]: e.target.value })}
@@ -348,7 +348,7 @@ function NeedsMap({ needs, ids, disabled, onChange }) {
                 {id}
               </option>
             ))}
-          </select>
+          </FormSelect>
           <button
             type="button"
             className="btn btn-ghost btn-xs"

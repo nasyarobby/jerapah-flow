@@ -12,7 +12,7 @@ import {
   isSaveWarningsError,
   saveWarningsFromError,
 } from "./SaveWorkflowWarningsDialog.jsx";
-import { ConfirmDialog } from "./WorkflowRevisionBanner.jsx";
+import { ConfirmDialog } from "../ConfirmDialog.jsx";
 
 function reasonLabel(reason, meta) {
   if (reason === "duplicated" && meta?.from) return `duplicated from ${meta.from}`;
@@ -127,6 +127,7 @@ export function WorkflowHistoryPanel({
                       type="button"
                       className="btn btn-ghost btn-xs shrink-0"
                       title="Revert to this revision"
+                      aria-label="Revert to this revision"
                       disabled={revert.isPending}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -152,6 +153,7 @@ export function WorkflowHistoryPanel({
           title={`Revert to revision #${confirmRev.revision}?`}
           message={`This replaces the live workflow with revision #${confirmRev.revision} from ${formatTime(confirmRev.created_at)} and creates a new revision.`}
           confirmLabel="Revert"
+          confirmClass="btn-warning"
           pending={revert.isPending}
           onCancel={() => setConfirmRevision(null)}
           onConfirm={() => doRevert(confirmRev.revision, false)}

@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import cronstrue from "cronstrue";
 import { namespacedPath, HTTP_METHODS, triggerDestinations } from "../../lib/workflow-doc.js";
 import { CRON_CUSTOM, CRON_PRESETS, matchCronPreset, scheduleForPreset } from "../../lib/cron-presets.js";
+import { FormInput, FormSelect } from "../FormControls.jsx";
 
 export function TriggerCard({
   trigger,
@@ -169,8 +170,8 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
   return (
     <div className="space-y-3">
       <Field label="Method">
-        <select
-          className="select select-bordered select-sm w-full"
+        <FormSelect
+          className="w-full"
           value={trigger.method || "POST"}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, method: e.target.value })}
@@ -183,12 +184,12 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
           {HTTP_METHODS.includes(trigger.method || "POST") ? null : (
             <option value={trigger.method}>{trigger.method}</option>
           )}
-        </select>
+        </FormSelect>
       </Field>
 
       <Field label="Path">
-        <input
-          className="input input-bordered input-sm w-full font-mono"
+        <FormInput
+          className="w-full font-mono"
           value={trigger.path ?? ""}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, path: e.target.value })}
@@ -198,8 +199,8 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
 
       <Field label="URL">
         <div className="flex w-full items-center gap-1">
-          <input
-            className="input input-bordered input-sm w-full font-mono opacity-80"
+          <FormInput
+            className="w-full font-mono opacity-80"
             value={url}
             readOnly
             tabIndex={-1}
@@ -224,8 +225,8 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
       />
 
       <Field label="Response page">
-        <select
-          className="select select-bordered select-sm w-full"
+        <FormSelect
+          className="w-full"
           value={trigger.response ?? ""}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, response: e.target.value })}
@@ -239,7 +240,7 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
           {trigger.response && !pages.some((p) => p.name === trigger.response) ? (
             <option value={trigger.response}>{trigger.response}</option>
           ) : null}
-        </select>
+        </FormSelect>
       </Field>
 
       <FailureAlertFields
@@ -343,10 +344,10 @@ function AuthPicker({ auths, selectedIds, inlineCount, disabled, onChange }) {
 
       <div className="relative w-full">
         <div className="join w-full">
-          <input
+          <FormInput
             ref={inputRef}
             type="search"
-            className="input input-bordered input-sm join-item w-full min-w-0"
+            className="join-item w-full min-w-0"
             placeholder={auths.length === 0 ? "No auth profiles yet" : "Add auth…"}
             value={query}
             disabled={disabled || auths.length === 0}
@@ -424,8 +425,7 @@ function CronFields({ trigger, disabled, onChange, alertDestinations }) {
     <div className="space-y-2">
       <label className="form-control">
         <span className="label py-0 text-sm">Preset</span>
-        <select
-          className="select select-sm"
+        <FormSelect
           value={preset}
           disabled={disabled}
           onChange={(e) => {
@@ -441,12 +441,12 @@ function CronFields({ trigger, disabled, onChange, alertDestinations }) {
             </option>
           ))}
           <option value={CRON_CUSTOM}>Custom</option>
-        </select>
+        </FormSelect>
       </label>
       <label className="form-control">
         <span className="label py-0 text-sm">Schedule</span>
-        <input
-          className="input input-sm font-mono"
+        <FormInput
+          className="font-mono"
           value={trigger.schedule ?? ""}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, schedule: e.target.value })}
@@ -473,8 +473,8 @@ function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) 
     <div className="space-y-3 border-t border-base-300 pt-3">
       <p className="text-sm font-medium opacity-80">Failure alert</p>
       <Field label="Consecutive failures">
-        <input
-          className="input input-bordered input-sm w-full"
+        <FormInput
+          className="w-full"
           type="number"
           min="1"
           step="1"
@@ -496,8 +496,8 @@ function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) 
           </>
         }
       >
-        <select
-          className="select select-bordered select-sm w-full"
+        <FormSelect
+          className="w-full"
           value={trigger.onFailureWorkflow ?? ""}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, onFailureWorkflow: e.target.value })}
@@ -514,7 +514,7 @@ function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) 
           ) ? (
             <option value={trigger.onFailureWorkflow}>{trigger.onFailureWorkflow}</option>
           ) : null}
-        </select>
+        </FormSelect>
       </Field>
     </div>
   );
