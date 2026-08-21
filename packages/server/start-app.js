@@ -14,6 +14,7 @@ import usersPlugin from "./src/api/users.js";
 import scriptsPluginFactory from "./src/api/scripts.js";
 import workflowsPluginFactory from "./src/api/workflows.js";
 import runsPlugin from "./src/api/runs.js";
+import { queryRunsFromRequest } from "./src/api/run-query.js";
 import dashboardPluginFactory from "./src/api/dashboard.js";
 import secretsPlugin from "./src/api/secrets.js";
 import kvPlugin from "./src/api/kv.js";
@@ -198,16 +199,8 @@ export async function startApp(opts = {}) {
       "/admin/runs",
       { onRequest: [server.authenticate] },
       async (req, reply) => {
-        const q = /** @type {Record<string, string | undefined>} */ (req.query);
-        const limit = q.limit ? Number(q.limit) : undefined;
-        const runs = await store.listRuns({
-          owner: q.owner,
-          workflow: q.workflow,
-          status: q.status,
-          limit: Number.isFinite(limit) ? limit : undefined,
-          before: q.before,
-        });
-        return reply.send({ runs });
+        const q = /** @type {Record<string, string | undefined>} */ (req.query ?? {});
+        return reply.send(await queryRunsFromRequest(q));
       },
     );
 

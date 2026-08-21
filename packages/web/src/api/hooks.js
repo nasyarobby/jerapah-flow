@@ -298,16 +298,22 @@ export function useReregisterWorkflows() {
 }
 
 export function useRuns(filters = {}) {
-  const { owner, workflow, status, limit } = filters;
+  const { owner, workflow, status, trigger, after, before, limit, offset, sort, order } = filters;
   return useQuery({
-    queryKey: ["runs", { owner, workflow, status, limit }],
+    queryKey: ["runs", { owner, workflow, status, trigger, after, before, limit, offset, sort, order }],
     queryFn: async () => {
       const params = {};
       if (owner) params.owner = owner;
       if (workflow) params.workflow = workflow;
       if (status) params.status = status;
-      if (limit) params.limit = limit;
-      return (await api.get("/runs", { params })).data.runs;
+      if (trigger) params.trigger = trigger;
+      if (after) params.after = after;
+      if (before) params.before = before;
+      if (limit != null) params.limit = limit;
+      if (offset != null) params.offset = offset;
+      if (sort) params.sort = sort;
+      if (order) params.order = order;
+      return (await api.get("/runs", { params })).data;
     },
   });
 }
