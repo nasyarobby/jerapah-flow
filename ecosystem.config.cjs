@@ -43,6 +43,7 @@ module.exports = {
       script: "packages/server/control.js",
       interpreter: "node",
       instances: 1,
+      exec_mode: "fork",
       autorestart: true,
       max_restarts: 20,
       env: {
@@ -56,6 +57,7 @@ module.exports = {
       script: "packages/server/web-server.js",
       interpreter: "node",
       instances: 1,
+      exec_mode: "fork",
       autorestart: true,
       max_restarts: 20,
       env: {
