@@ -12,7 +12,7 @@ export function TriggerGraphNode({ data, selected }) {
       <p className="font-mono text-[11px] opacity-70 truncate" title={data.label}>
         {data.label}
       </p>
-      <Handle type="source" position={Position.Right} isConnectable={false} className="!h-3 !w-3" />
+      <Handle type="source" position={Position.Right} isConnectable={false} className="!h-3 !w-3 opacity-40" />
     </div>
   );
 }
@@ -33,7 +33,7 @@ export function StepGraphNode({ data, selected }) {
         type="target"
         position={Position.Left}
         id="in"
-        className="!h-3 !w-3 !bg-primary"
+        className="nodrag nopan !h-3.5 !w-3.5 !bg-primary"
         isConnectable
       />
       <div className="flex items-center gap-1">
@@ -62,7 +62,7 @@ export function StepGraphNode({ data, selected }) {
         type="source"
         position={Position.Right}
         id="out"
-        className="!h-3 !w-3 !bg-primary"
+        className="nodrag nopan !h-3.5 !w-3.5 !bg-primary"
         isConnectable
       />
     </div>

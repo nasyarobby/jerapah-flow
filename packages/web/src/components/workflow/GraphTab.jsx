@@ -284,7 +284,7 @@ function GraphTabInner({
             onEdgesDelete={onEdgesDelete}
             nodesConnectable={!disabled}
             nodesDraggable={!disabled}
-            connectionRadius={40}
+            connectionRadius={80}
             defaultEdgeOptions={{ type: "smoothstep" }}
             proOptions={{ hideAttribution: false }}
           >
