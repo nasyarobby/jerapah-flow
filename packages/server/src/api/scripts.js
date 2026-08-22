@@ -258,7 +258,7 @@ export default function scriptsPluginFactory(registry) {
         req.body ?? {}
       );
 
-      let owner = "default";
+      let owner = "local";
       if (body.owner != null && body.owner !== "") {
         try {
           owner = fsStore.assertOwner(String(body.owner));

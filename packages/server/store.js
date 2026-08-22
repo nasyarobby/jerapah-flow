@@ -582,12 +582,13 @@ export async function listUsers() {
 
 /**
  * @param {string} id
- * @param {{ passwordHash?: string, role?: string }} patch
+ * @param {{ passwordHash?: string, role?: string, username?: string }} patch
  */
 export async function updateUser(id, patch) {
   const update = { updated_at: nowIso() };
   if (patch.passwordHash) update.password_hash = patch.passwordHash;
   if (patch.role) update.role = patch.role;
+  if (patch.username) update.username = patch.username;
   await db("users").where({ id }).update(update);
   return getUserById(id);
 }

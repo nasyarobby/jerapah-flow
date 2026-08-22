@@ -4,7 +4,6 @@ import { LuArrowLeft, LuCopy, LuPause, LuPlay, LuSave } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import {
   useCreateWorkflow,
-  useOwners,
   useSaveWorkflow,
   useSetWorkflowEnabled,
   useWorkflow,
@@ -24,6 +23,7 @@ import {
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { WorkflowRevisionBanner } from "../components/workflow/WorkflowRevisionBanner.jsx";
 import { NEW_WORKFLOW_YAML, parseWorkflowYaml } from "../lib/workflow-doc.js";
+import { DEFAULT_OWNER } from "../lib/tenant.js";
 import { useNotifications } from "../notifications.jsx";
 
 function WorkflowEditorLayout({
@@ -100,26 +100,15 @@ function WorkflowEditorLayout({
 export function WorkflowNewPage() {
   const navigate = useNavigate();
   const { notify } = useNotifications();
-  const { data: owners = [] } = useOwners();
-  const [owner, setOwner] = useState("local");
   const [ready, setReady] = useState(() => shouldSkipNewWorkflowPreset());
   const [content, setContent] = useState(NEW_WORKFLOW_YAML);
   const [savedYaml, setSavedYaml] = useState(NEW_WORKFLOW_YAML);
   const [saveWarnings, setSaveWarnings] = useState(null);
   const create = useCreateWorkflow();
 
-  useEffect(() => {
-    // Prefer local when it exists; otherwise first owner. Do not clobber a typed value.
-    setOwner((prev) => {
-      if (prev && prev !== "local") return prev;
-      if (owners.includes("local") || owners.length === 0) return "local";
-      return owners[0];
-    });
-  }, [owners]);
-
   function onSave(saveAnyway = false) {
     create.mutate(
-      { owner, content, saveAnyway },
+      { owner: DEFAULT_OWNER, content, saveAnyway },
       {
         onSuccess: (data) => {
           setSaveWarnings(null);
@@ -159,34 +148,17 @@ export function WorkflowNewPage() {
         title="New workflow"
         onSave={() => onSave(false)}
         savePending={create.isPending}
-        saveDisabled={!owner}
         saveError={create.isError && !saveWarnings ? errorMessage(create.error) : null}
       >
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <WorkflowVisualEditor
             yaml={content}
             onYamlChange={setContent}
-            owner={owner}
+            owner={DEFAULT_OWNER}
             file=""
             savedYaml={savedYaml}
             showTest={false}
-            extraChrome={
-              <input
-                className="input input-sm w-full sm:max-w-xs"
-                placeholder="owner"
-                value={owner}
-                onChange={(e) => setOwner(e.target.value)}
-                list="new-workflow-owners"
-                required
-              />
-            }
           />
-          <datalist id="new-workflow-owners">
-            {owners.includes("local") ? null : <option value="local" />}
-            {owners.map((o) => (
-              <option key={o} value={o} />
-            ))}
-          </datalist>
         </div>
       </WorkflowEditorLayout>
       {saveWarnings ? (

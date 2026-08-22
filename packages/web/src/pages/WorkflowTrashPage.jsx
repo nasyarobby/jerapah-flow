@@ -61,7 +61,6 @@ export function WorkflowTrashPage() {
               <tr>
                 <th>Name</th>
                 <th>File</th>
-                <th>Owner</th>
                 <th>Deleted</th>
                 <th>Age</th>
                 <th>Purge in</th>
@@ -73,7 +72,6 @@ export function WorkflowTrashPage() {
                 <tr key={item.id} className="hover">
                   <td>{item.name ?? "—"}</td>
                   <td className="font-mono text-xs">{item.file}</td>
-                  <td className="font-mono text-xs">{item.owner}</td>
                   <td className="whitespace-nowrap">{formatTime(item.deleted_at)}</td>
                   <td>{formatAge(item.age_ms)}</td>
                   <td>

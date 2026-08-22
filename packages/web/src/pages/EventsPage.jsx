@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { useOwners, useRuns } from "../api/hooks.js";
+import { useRuns } from "../api/hooks.js";
 import { formatTime, StatusBadge } from "../lib/format";
 
 const PAGE_SIZES = [25, 50, 100];
@@ -47,7 +47,6 @@ export function EventsPage() {
   const [params, setParams] = useSearchParams();
   const workflow = params.get("workflow") || "";
   const status = params.get("status") || "";
-  const owner = params.get("owner") || "";
   const trigger = params.get("trigger") || "";
   const afterDate = params.get("after") || "";
   const beforeDate = params.get("before") || "";
@@ -57,11 +56,9 @@ export function EventsPage() {
   const sort = params.get("sort") || "started_at";
   const order = params.get("order") === "asc" ? "asc" : "desc";
 
-  const { data: owners = [] } = useOwners();
   const { data, isLoading } = useRuns({
     workflow: workflow || undefined,
     status: status || undefined,
-    owner: owner || undefined,
     trigger: trigger || undefined,
     after: dateToAfterIso(afterDate),
     before: dateToBeforeIso(beforeDate),
@@ -115,18 +112,6 @@ export function EventsPage() {
           <option value="success">success</option>
           <option value="failed">failed</option>
           <option value="skipped">skipped</option>
-        </select>
-        <select
-          className="select select-sm w-full sm:max-w-xs"
-          value={owner}
-          onChange={(e) => update("owner", e.target.value)}
-        >
-          <option value="">all owners</option>
-          {owners.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
         </select>
         <select
           className="select select-sm w-full sm:max-w-xs"

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { errorMessage } from "../api/client.js";
-import { useOwners, useScripts, useUpsertProfile } from "../api/hooks.js";
+import { useScripts, useUpsertProfile } from "../api/hooks.js";
 import { FormInput, FormSelect } from "./FormControls.jsx";
 import { ConfigFields } from "./workflow/ConfigFields.jsx";
+import { DEFAULT_OWNER } from "../lib/tenant.js";
 
 /**
  * @param {"add" | "edit"} mode
@@ -16,11 +17,10 @@ import { ConfigFields } from "./workflow/ConfigFields.jsx";
  * @param {number} [usageCount]
  */
 export function ProfileEditorModal({ mode, initial, onClose, onSaved, usageCount = 0 }) {
-  const { data: owners = [] } = useOwners();
   const { data: scripts = [] } = useScripts();
   const upsert = useUpsertProfile();
   const [form, setForm] = useState(() => ({
-    owner: initial.owner || owners[0] || "default",
+    owner: initial.owner || DEFAULT_OWNER,
     name: initial.name || "",
     script: initial.script || "",
     config:
@@ -72,7 +72,7 @@ export function ProfileEditorModal({ mode, initial, onClose, onSaved, usageCount
     submit();
   }
 
-  const title = mode === "add" ? "New profile" : `Edit ${form.owner}/${form.name}`;
+  const title = mode === "add" ? "New profile" : `Edit ${form.name}`;
 
   return (
     <dialog className="modal modal-open">
@@ -80,49 +80,23 @@ export function ProfileEditorModal({ mode, initial, onClose, onSaved, usageCount
         <h3 className="font-bold">{title}</h3>
         <form className="mt-3 space-y-2" onSubmit={onSubmit}>
           {mode === "add" ? (
-            <>
-              <label className="form-control w-full">
-                <span className="label py-0 text-sm">Owner</span>
-                {owners.length > 0 ? (
-                  <FormSelect
-                    className="w-full"
-                    value={form.owner}
-                    onChange={(e) => setForm({ ...form, owner: e.target.value })}
-                    required
-                  >
-                    {owners.map((o) => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
-                    ))}
-                  </FormSelect>
-                ) : (
-                  <FormInput
-                    className="w-full"
-                    value={form.owner}
-                    onChange={(e) => setForm({ ...form, owner: e.target.value })}
-                    required
-                  />
-                )}
-              </label>
-              <label className="form-control w-full">
-                <span className="label py-0 text-sm">Name</span>
-                <FormInput
-                  className="w-full font-mono"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  required
-                  pattern="[A-Za-z0-9._-]+"
-                  title="Letters, numbers, dots, underscores, hyphens. Cannot be changed later."
-                />
-                <span className="label-text-alt opacity-60">
-                  YAML id. Locked after create so live workflow refs stay valid.
-                </span>
-              </label>
-            </>
+            <label className="form-control w-full">
+              <span className="label py-0 text-sm">Name</span>
+              <FormInput
+                className="w-full font-mono"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                required
+                pattern="[A-Za-z0-9._-]+"
+                title="Letters, numbers, dots, underscores, hyphens. Cannot be changed later."
+              />
+              <span className="label-text-alt opacity-60">
+                YAML id. Locked after create so live workflow refs stay valid.
+              </span>
+            </label>
           ) : (
             <p className="text-sm opacity-70">
-              <span className="font-mono">{form.owner}/{form.name}</span>
+              <span className="font-mono">{form.name}</span>
               <span className="ml-2 opacity-60">(name cannot be changed)</span>
             </p>
           )}

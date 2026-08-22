@@ -20,7 +20,13 @@ pnpm dev
 - UI (dev): http://localhost:8500
 - API: http://localhost:8700
 
-The first account created becomes **admin**. Later accounts are created from Users.
+The first account created becomes **admin**. JerapahFlow is a **single-machine, single-user** automation app: the Users page is not linked in the nav (still available at `/users` if typed). New workflows, secrets, variables, and profiles default to the internal namespace `local`.
+
+Reset or create the admin login from the host:
+
+```bash
+pnpm --dir packages/server reset-admin -- --username admin --password 'your-password'
+```
 
 ### Process modes
 
@@ -52,7 +58,7 @@ The first account created becomes **admin**. Later accounts are created from Use
 | **Live workflows** | Yes | `packages/server/data/workflows/<owner>/` (gitignored) |
 | **Example presets** | No | `examples/workflows/*.yaml` — offered when creating a new workflow |
 
-- Live YAML is **instance data**, same as SQLite and secrets — not product source. Prefer owner `local` for personal workflows.
+- Live YAML is **instance data**, same as SQLite and secrets — not product source. New resources use owner `local` (owner remains in storage/URLs for a possible future multi-tenant mode; the UI hides it).
 - On first start, if the instance store is empty and a legacy `packages/server/workflows/` tree still exists, it is copied into `data/workflows/`.
 - New workflow editor starts empty; optional presets copy example YAML into the editor (nothing is saved until Save).
 - Override the live store in tests with `JFLOW_WORKFLOWS_DIR`.

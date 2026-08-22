@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
-import { useDeleteProfile, useOwners, useProfileUsage, useProfiles } from "../api/hooks.js";
-import { FormSelect } from "../components/FormControls.jsx";
+import { useDeleteProfile, useProfileUsage, useProfiles } from "../api/hooks.js";
 import { Modal } from "../components/Modal.jsx";
 import { ProfileEditorModal } from "../components/ProfileEditorModal.jsx";
 import { ScriptIcon } from "../components/ScriptIcon.jsx";
 import { useRouteDrivenModal } from "../hooks/useRouteDrivenModal.js";
 import { formatTime } from "../lib/format";
+import { DEFAULT_OWNER } from "../lib/tenant.js";
 
 function previewConfig(config) {
   if (!config || typeof config !== "object") return "";
@@ -37,50 +37,32 @@ export function ProfilesPage() {
   const isNewRoute = /\/profiles\/new\/?$/.test(location.pathname);
   const isEditRoute = Boolean(routeOwner && routeName);
 
-  const { data: owners = [] } = useOwners();
-  const [ownerFilter, setOwnerFilter] = useState(
-    () => routeOwner || params.get("owner") || "",
-  );
-  const { data: profiles = [], isLoading } = useProfiles(ownerFilter || undefined);
+  const { data: profiles = [], isLoading } = useProfiles();
   const del = useDeleteProfile();
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [highlightName, setHighlightName] = useState(() => routeName || "");
   const highlightRef = useRef(null);
 
-  const listPath = ownerFilter
-    ? `/profiles?owner=${encodeURIComponent(ownerFilter)}`
-    : "/profiles";
+  const listPath = "/profiles";
 
   const { editor, closeEditor } = useRouteDrivenModal({
     isNewRoute,
     isEditRoute,
     listPath,
-    newRouteKey: () => `new:${params.get("owner") || ""}:${params.get("name") || ""}`,
-    canOpenNew: () => Boolean(params.get("owner") || ownerFilter || owners.length > 0),
-    onBeforeOpenNew: () => {
-      if (params.get("owner")) setOwnerFilter(params.get("owner"));
-    },
-    buildNewEditor: () => {
-      const owner = params.get("owner") || ownerFilter || owners[0] || "default";
-      return {
-        mode: "add",
-        initial: {
-          owner,
-          name: params.get("name") || "",
-          script: params.get("script") || "",
-          config: {},
-          description: "",
-        },
-      };
-    },
+    newRouteKey: () => `new:${params.get("name") || ""}:${params.get("script") || ""}`,
+    canOpenNew: () => true,
+    buildNewEditor: () => ({
+      mode: "add",
+      initial: {
+        owner: DEFAULT_OWNER,
+        name: params.get("name") || "",
+        script: params.get("script") || "",
+        config: {},
+        description: "",
+      },
+    }),
     editRouteKey: () => `edit:${routeOwner}/${routeName}`,
-    canOpenEdit: () => {
-      if (ownerFilter !== routeOwner) {
-        setOwnerFilter(routeOwner);
-        return false;
-      }
-      return !isLoading;
-    },
+    canOpenEdit: () => !isLoading,
     onOpenEdit: () => setHighlightName(routeName),
     buildEditEditor: () => {
       const row = profiles.find((p) => p.owner === routeOwner && p.name === routeName);
@@ -100,7 +82,7 @@ export function ProfilesPage() {
       return {
         mode: "add",
         initial: {
-          owner: routeOwner,
+          owner: routeOwner || DEFAULT_OWNER,
           name: routeName,
           script: "",
           config: {},
@@ -108,8 +90,8 @@ export function ProfilesPage() {
         },
       };
     },
-    newDeps: [params, owners, ownerFilter],
-    editDeps: [routeOwner, routeName, ownerFilter, isLoading, profiles],
+    newDeps: [params],
+    editDeps: [routeOwner, routeName, isLoading, profiles],
   });
 
   useEffect(() => {
@@ -121,42 +103,14 @@ export function ProfilesPage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Profiles</h1>
-        <div className="flex gap-2">
-          <FormSelect
-            value={ownerFilter}
-            onChange={(e) => {
-              setOwnerFilter(e.target.value);
-              setHighlightName("");
-              navigate(
-                e.target.value
-                  ? `/profiles?owner=${encodeURIComponent(e.target.value)}`
-                  : "/profiles",
-                { replace: true },
-              );
-            }}
-          >
-            <option value="">all owners</option>
-            {owners.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </FormSelect>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() =>
-              navigate(
-                ownerFilter
-                  ? `/profiles/new?owner=${encodeURIComponent(ownerFilter)}`
-                  : "/profiles/new",
-              )
-            }
-          >
-            <LuPlus className="size-4" />
-            Add
-          </button>
-        </div>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => navigate("/profiles/new")}
+        >
+          <LuPlus className="size-4" />
+          Add
+        </button>
       </div>
 
       <p className="text-sm opacity-70">
@@ -174,7 +128,7 @@ export function ProfilesPage() {
             const highlighted =
               highlightName &&
               row.name === highlightName &&
-              (!ownerFilter || row.owner === ownerFilter);
+              (!routeOwner || row.owner === routeOwner);
             const preview = previewConfig(row.config);
             return (
               <article
@@ -191,7 +145,6 @@ export function ProfilesPage() {
                       <h2 className="font-mono font-semibold truncate" title={row.name}>
                         {row.name}
                       </h2>
-                      <p className="text-xs opacity-60 font-mono truncate">{row.owner}</p>
                     </div>
                   </div>
                   <p className="text-xs font-mono opacity-80 truncate" title={row.script}>
@@ -275,7 +228,7 @@ function DeleteProfileDialog({ profile, del, onClose }) {
   const usage = useProfileUsage(profile.id, true);
   const usages = usage.data ?? [];
   const used = usages.length > 0;
-  const title = `Delete ${profile.owner}/${profile.name}?`;
+  const title = `Delete ${profile.name}?`;
 
   return (
     <Modal open onClose={onClose} boxClassName="max-w-md" aria-label={title}>

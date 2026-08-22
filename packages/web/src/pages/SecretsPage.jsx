@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
-import { useDeleteSecret, useOwners, useSecrets } from "../api/hooks.js";
+import { useDeleteSecret, useSecrets } from "../api/hooks.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
-import { FormSelect } from "../components/FormControls.jsx";
 import { SecretEditorModal } from "../components/SecretEditorModal.jsx";
 import { useRouteDrivenModal } from "../hooks/useRouteDrivenModal.js";
 import { formatTime } from "../lib/format";
+import { DEFAULT_OWNER } from "../lib/tenant.js";
 
 export function SecretsPage() {
   const navigate = useNavigate();
@@ -17,51 +17,36 @@ export function SecretsPage() {
   const isNewRoute = /\/secrets\/new\/?$/.test(location.pathname);
   const isEditRoute = Boolean(routeOwner && routeName);
 
-  const { data: owners = [] } = useOwners();
-  const [ownerFilter, setOwnerFilter] = useState(
-    () => routeOwner || params.get("owner") || "",
-  );
-  const { data: secrets = [], isLoading } = useSecrets(ownerFilter || undefined);
+  const { data: secrets = [], isLoading } = useSecrets();
   const del = useDeleteSecret();
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [highlightName, setHighlightName] = useState(() => routeName || "");
   const highlightRef = useRef(null);
 
-  const listPath = ownerFilter
-    ? `/secrets?owner=${encodeURIComponent(ownerFilter)}`
-    : "/secrets";
+  const listPath = "/secrets";
 
   const { editor, closeEditor } = useRouteDrivenModal({
     isNewRoute,
     isEditRoute,
     listPath,
-    newRouteKey: () => `new:${params.get("owner") || ""}:${params.get("name") || ""}`,
-    canOpenNew: () => Boolean(params.get("owner") || ownerFilter || owners.length > 0),
-    onBeforeOpenNew: () => {
-      if (params.get("owner")) setOwnerFilter(params.get("owner"));
-    },
-    buildNewEditor: () => {
-      const owner = params.get("owner") || ownerFilter || owners[0] || "default";
-      return {
-        mode: "add",
-        initial: { owner, name: params.get("name") || "" },
-      };
-    },
+    newRouteKey: () => `new:${params.get("name") || ""}`,
+    canOpenNew: () => true,
+    buildNewEditor: () => ({
+      mode: "add",
+      initial: {
+        owner: DEFAULT_OWNER,
+        name: params.get("name") || "",
+      },
+    }),
     editRouteKey: () => `edit:${routeOwner}/${routeName}`,
-    canOpenEdit: () => {
-      if (ownerFilter !== routeOwner) {
-        setOwnerFilter(routeOwner);
-        return false;
-      }
-      return true;
-    },
+    canOpenEdit: () => true,
     onOpenEdit: () => setHighlightName(routeName),
     buildEditEditor: () => ({
       mode: "replace",
       initial: { owner: routeOwner, name: routeName },
     }),
-    newDeps: [params, owners, ownerFilter],
-    editDeps: [routeOwner, routeName, ownerFilter],
+    newDeps: [params],
+    editDeps: [routeOwner, routeName],
   });
 
   useEffect(() => {
@@ -73,42 +58,14 @@ export function SecretsPage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Secrets</h1>
-        <div className="flex gap-2">
-          <FormSelect
-            value={ownerFilter}
-            onChange={(e) => {
-              setOwnerFilter(e.target.value);
-              setHighlightName("");
-              navigate(
-                e.target.value
-                  ? `/secrets?owner=${encodeURIComponent(e.target.value)}`
-                  : "/secrets",
-                { replace: true },
-              );
-            }}
-          >
-            <option value="">all owners</option>
-            {owners.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </FormSelect>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() =>
-              navigate(
-                ownerFilter
-                  ? `/secrets/new?owner=${encodeURIComponent(ownerFilter)}`
-                  : "/secrets/new",
-              )
-            }
-          >
-            <LuPlus className="size-4" />
-            Add
-          </button>
-        </div>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => navigate("/secrets/new")}
+        >
+          <LuPlus className="size-4" />
+          Add
+        </button>
       </div>
 
       {isLoading ? (
@@ -120,7 +77,6 @@ export function SecretsPage() {
           <table className="table table-sm">
             <thead>
               <tr>
-                <th>Owner</th>
                 <th>Name</th>
                 <th>Updated</th>
                 <th />
@@ -129,16 +85,16 @@ export function SecretsPage() {
             <tbody>
               {secrets.map((s) => {
                 const highlighted =
-                  highlightName &&
-                  s.name === highlightName &&
-                  (!ownerFilter || s.owner === ownerFilter);
+                  highlightName && s.name === highlightName && s.owner === routeOwner;
+                const highlightByNameOnly =
+                  highlightName && s.name === highlightName && !routeOwner;
+                const isHi = highlighted || highlightByNameOnly;
                 return (
                   <tr
                     key={s.id}
-                    ref={highlighted ? highlightRef : undefined}
-                    className={`hover ${highlighted ? "bg-primary/10 outline outline-1 outline-primary/40" : ""}`}
+                    ref={isHi ? highlightRef : undefined}
+                    className={`hover ${isHi ? "bg-primary/10 outline outline-1 outline-primary/40" : ""}`}
                   >
-                    <td className="font-mono">{s.owner}</td>
                     <td className="font-mono">{s.name}</td>
                     <td className="whitespace-nowrap">{formatTime(s.updated_at)}</td>
                     <td className="text-right whitespace-nowrap">
@@ -186,7 +142,7 @@ export function SecretsPage() {
 
       <ConfirmDialog
         open={Boolean(confirmDelete)}
-        title={confirmDelete ? `Delete ${confirmDelete.owner}/${confirmDelete.name}?` : ""}
+        title={confirmDelete ? `Delete ${confirmDelete.name}?` : ""}
         message="This cannot be undone. Workflows that retrieve this name will fail."
         error={del.isError ? errorMessage(del.error) : null}
         loading={del.isPending}

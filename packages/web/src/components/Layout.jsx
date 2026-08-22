@@ -17,7 +17,6 @@ import {
   LuShield,
   LuSun,
   LuTags,
-  LuUsers,
 } from "react-icons/lu";
 import { useLogout, useOpsStatus } from "../api/hooks.js";
 import { brandMark } from "../theme/brand.js";
@@ -52,7 +51,6 @@ const navSections = [
     items: [
       { to: "/manage", label: "Manage", icon: LuServer },
       { to: "/backup", label: "Backup", icon: LuArchive },
-      { to: "/users", label: "Users", icon: LuUsers },
     ],
   },
 ];

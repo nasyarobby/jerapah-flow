@@ -16,7 +16,6 @@ import { formatTime, WorkflowStatusBadge } from "../lib/format";
 
 const SORT_COLUMNS = [
   { key: "name", label: "Name", defaultOrder: "asc" },
-  { key: "owner", label: "Owner", defaultOrder: "asc" },
   { key: "status", label: "Status", defaultOrder: "asc" },
   { key: "lastModifiedAt", label: "Last modified", defaultOrder: "desc" },
   { key: "lastInvokedAt", label: "Last run", defaultOrder: "desc" },
@@ -59,12 +58,6 @@ function compareName(a, b) {
 
 function compareWorkflows(a, b, sort) {
   if (sort === "name") return compareName(a, b);
-  if (sort === "owner") {
-    const byOwner = String(a.owner ?? "").localeCompare(String(b.owner ?? ""), undefined, {
-      sensitivity: "base",
-    });
-    return byOwner !== 0 ? byOwner : compareName(a, b);
-  }
   if (sort === "status") {
     const byStatus = statusSortKey(a).localeCompare(statusSortKey(b));
     return byStatus !== 0 ? byStatus : compareName(a, b);
@@ -196,7 +189,6 @@ export function WorkflowsPage() {
             <thead>
               <tr>
                 <SortHeader column="name" label="Name" sort={sort} order={order} onSort={setSort} />
-                <SortHeader column="owner" label="Owner" sort={sort} order={order} onSort={setSort} />
                 <SortHeader column="status" label="Status" sort={sort} order={order} onSort={setSort} />
                 <th>Triggers</th>
                 <SortHeader
@@ -244,7 +236,6 @@ export function WorkflowsPage() {
                       </span>
                     ) : null}
                   </td>
-                  <td className="font-mono text-xs">{w.owner}</td>
                   <td>
                     <WorkflowStatusBadge workflow={w} />
                   </td>

@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
-import { useDeleteVariable, useOwners, useVariables } from "../api/hooks.js";
+import { useDeleteVariable, useVariables } from "../api/hooks.js";
 import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
-import { FormSelect } from "../components/FormControls.jsx";
 import { VariableEditorModal } from "../components/VariableEditorModal.jsx";
 import { useRouteDrivenModal } from "../hooks/useRouteDrivenModal.js";
 import { formatTime } from "../lib/format";
+import { DEFAULT_OWNER } from "../lib/tenant.js";
 
 function displayValue(value) {
   if (typeof value === "string") return value === "" ? '""' : value;
@@ -22,49 +22,31 @@ export function VariablesPage() {
   const isNewRoute = /\/variables\/new\/?$/.test(location.pathname);
   const isEditRoute = Boolean(routeOwner && routeName);
 
-  const { data: owners = [] } = useOwners();
-  const [ownerFilter, setOwnerFilter] = useState(
-    () => routeOwner || params.get("owner") || "",
-  );
-  const { data: variables = [], isLoading } = useVariables(ownerFilter || undefined);
+  const { data: variables = [], isLoading } = useVariables();
   const del = useDeleteVariable();
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [highlightName, setHighlightName] = useState(() => routeName || "");
   const highlightRef = useRef(null);
 
-  const listPath = ownerFilter
-    ? `/variables?owner=${encodeURIComponent(ownerFilter)}`
-    : "/variables";
+  const listPath = "/variables";
 
   const { editor, closeEditor } = useRouteDrivenModal({
     isNewRoute,
     isEditRoute,
     listPath,
-    newRouteKey: () => `new:${params.get("owner") || ""}:${params.get("name") || ""}`,
-    canOpenNew: () => Boolean(params.get("owner") || ownerFilter || owners.length > 0),
-    onBeforeOpenNew: () => {
-      if (params.get("owner")) setOwnerFilter(params.get("owner"));
-    },
-    buildNewEditor: () => {
-      const owner = params.get("owner") || ownerFilter || owners[0] || "default";
-      return {
-        mode: "add",
-        initial: {
-          owner,
-          name: params.get("name") || "",
-          type: "string",
-          value: "",
-        },
-      };
-    },
+    newRouteKey: () => `new:${params.get("name") || ""}`,
+    canOpenNew: () => true,
+    buildNewEditor: () => ({
+      mode: "add",
+      initial: {
+        owner: DEFAULT_OWNER,
+        name: params.get("name") || "",
+        type: "string",
+        value: "",
+      },
+    }),
     editRouteKey: () => `edit:${routeOwner}/${routeName}`,
-    canOpenEdit: () => {
-      if (ownerFilter !== routeOwner) {
-        setOwnerFilter(routeOwner);
-        return false;
-      }
-      return !isLoading;
-    },
+    canOpenEdit: () => !isLoading,
     onOpenEdit: () => setHighlightName(routeName),
     buildEditEditor: () => {
       const row = variables.find((v) => v.owner === routeOwner && v.name === routeName);
@@ -82,15 +64,15 @@ export function VariablesPage() {
       return {
         mode: "add",
         initial: {
-          owner: routeOwner,
+          owner: routeOwner || DEFAULT_OWNER,
           name: routeName,
           type: "string",
           value: "",
         },
       };
     },
-    newDeps: [params, owners, ownerFilter],
-    editDeps: [routeOwner, routeName, ownerFilter, isLoading, variables],
+    newDeps: [params],
+    editDeps: [routeOwner, routeName, isLoading, variables],
   });
 
   useEffect(() => {
@@ -102,42 +84,14 @@ export function VariablesPage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Variables</h1>
-        <div className="flex gap-2">
-          <FormSelect
-            value={ownerFilter}
-            onChange={(e) => {
-              setOwnerFilter(e.target.value);
-              setHighlightName("");
-              navigate(
-                e.target.value
-                  ? `/variables?owner=${encodeURIComponent(e.target.value)}`
-                  : "/variables",
-                { replace: true },
-              );
-            }}
-          >
-            <option value="">all owners</option>
-            {owners.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </FormSelect>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() =>
-              navigate(
-                ownerFilter
-                  ? `/variables/new?owner=${encodeURIComponent(ownerFilter)}`
-                  : "/variables/new",
-              )
-            }
-          >
-            <LuPlus className="size-4" />
-            Add
-          </button>
-        </div>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => navigate("/variables/new")}
+        >
+          <LuPlus className="size-4" />
+          Add
+        </button>
       </div>
 
       {isLoading ? (
@@ -149,7 +103,6 @@ export function VariablesPage() {
           <table className="table table-sm">
             <thead>
               <tr>
-                <th>Owner</th>
                 <th>Name</th>
                 <th>Type</th>
                 <th>Value</th>
@@ -162,14 +115,13 @@ export function VariablesPage() {
                 const highlighted =
                   highlightName &&
                   row.name === highlightName &&
-                  (!ownerFilter || row.owner === ownerFilter);
+                  (!routeOwner || row.owner === routeOwner);
                 return (
                   <tr
                     key={row.id}
                     ref={highlighted ? highlightRef : undefined}
                     className={`hover ${highlighted ? "bg-primary/10 outline outline-1 outline-primary/40" : ""}`}
                   >
-                    <td className="font-mono">{row.owner}</td>
                     <td className="font-mono">{row.name}</td>
                     <td className="font-mono text-xs">{row.type}</td>
                     <td
@@ -224,7 +176,7 @@ export function VariablesPage() {
 
       <ConfirmDialog
         open={Boolean(confirmDelete)}
-        title={confirmDelete ? `Delete ${confirmDelete.owner}/${confirmDelete.name}?` : ""}
+        title={confirmDelete ? `Delete ${confirmDelete.name}?` : ""}
         message={
           confirmDelete
             ? `This cannot be undone. Workflows that reference $VAR_${confirmDelete.name} will fail.`
