@@ -51,21 +51,21 @@ async function freshUrl(pathname) {
   state.body = "<html><body>v1</body></html>";
 
   const first = await run({ url });
-  assert(first.data.hasChanges === true, "first run should report hasChanges=true");
+  assert(first.output.hasChanges === true, "first run should report hasChanges=true");
   assert(
-    first.data.httpResponse === "<html><body>v1</body></html>",
+    first.output.httpResponse === "<html><body>v1</body></html>",
     "httpResponse should hold the raw body",
   );
-  assert(typeof first.data.fingerprint === "string", "fingerprint hash should be set");
+  assert(typeof first.output.fingerprint === "string", "fingerprint hash should be set");
 
   const second = await run({ url });
-  assert(second.data.hasChanges === false, "unchanged body should report hasChanges=false");
+  assert(second.output.hasChanges === false, "unchanged body should report hasChanges=false");
 
   state.body = "<html><body>v2 CHANGED</body></html>";
   const third = await run({ url });
-  assert(third.data.hasChanges === true, "changed body should report hasChanges=true");
+  assert(third.output.hasChanges === true, "changed body should report hasChanges=true");
   assert(
-    third.data.fingerprintPrevious === second.data.fingerprint,
+    third.output.fingerprintPrevious === second.output.fingerprint,
     "fingerprintPrevious should equal the prior hash",
   );
 }
@@ -77,20 +77,20 @@ async function freshUrl(pathname) {
   state.body = { version: "1.0.0", servedAt: "2020-01-01T00:00:00Z" };
 
   const first = await run({ url, fingerprint: "data.httpResponse.version" });
-  assert(first.data.hasChanges === true, "json first run should report a change");
+  assert(first.output.hasChanges === true, "json first run should report a change");
 
   // Change only an unwatched field -> no change.
   state.body = { version: "1.0.0", servedAt: "2020-06-01T00:00:00Z" };
   const second = await run({ url, fingerprint: "data.httpResponse.version" });
   assert(
-    second.data.hasChanges === false,
+    second.output.hasChanges === false,
     "changing an unwatched field should not report a change",
   );
 
   // Change the watched field -> change.
   state.body = { version: "2.0.0", servedAt: "2020-06-01T00:00:00Z" };
   const third = await run({ url, fingerprint: "data.httpResponse.version" });
-  assert(third.data.hasChanges === true, "changing the watched field should report a change");
+  assert(third.output.hasChanges === true, "changing the watched field should report a change");
 
   state.contentType = "text/html; charset=utf-8";
 }
@@ -106,13 +106,13 @@ async function freshUrl(pathname) {
     transform: '"changed=" & $string(data.hasChanges)',
   });
   assert(
-    withTransform.data.message === "changed=true",
-    `transform should populate outputVar, got ${JSON.stringify(withTransform.data.message)}`,
+    withTransform.output.message === "changed=true",
+    `transform should populate outputVar, got ${JSON.stringify(withTransform.output.message)}`,
   );
 
   const rawOutput = await run({ url: await freshUrl("/output-raw"), outputVar: "payload" });
   assert(
-    rawOutput.data.payload === rawOutput.data.httpResponse,
+    rawOutput.output.payload === rawOutput.output.httpResponse,
     "outputVar without transform should store the raw response",
   );
 
@@ -131,11 +131,11 @@ async function freshUrl(pathname) {
   state.body = "<html><body>stable</body></html>";
 
   const first = await run({ url, skipRemaining: true });
-  assert(first.data.hasChanges === true, "skip test first run should change");
+  assert(first.output.hasChanges === true, "skip test first run should change");
   assert(first.skipRemaining !== true, "changed run must not set skipRemaining");
 
   const second = await run({ url, skipRemaining: true });
-  assert(second.data.hasChanges === false, "skip test second run should be unchanged");
+  assert(second.output.hasChanges === false, "skip test second run should be unchanged");
   assert(second.skipRemaining === true, "unchanged run with skipRemaining should halt");
 
   // Default (skipRemaining off) never halts, so downstream can still notify.

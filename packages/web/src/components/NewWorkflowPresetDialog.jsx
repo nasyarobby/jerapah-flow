@@ -136,7 +136,11 @@ export function NewWorkflowPresetDialog({ onChoose, onCancel }) {
               type="checkbox"
               className="checkbox checkbox-sm"
               checked={dontAsk}
-              onChange={(e) => setDontAsk(e.target.checked)}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setDontAsk(checked);
+                if (checked) setMode("empty");
+              }}
             />
             <span className="label-text">Don&apos;t ask this. Always create empty workflow.</span>
           </label>
