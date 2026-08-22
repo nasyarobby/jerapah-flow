@@ -28,6 +28,7 @@ import {
   parseGraphNodeId,
   readGraphLayout,
   removeStepEdge,
+  stepNodeId,
   writeGraphLayout,
 } from "../../lib/workflow-graph.js";
 import { ConfirmDialog } from "../ConfirmDialog.jsx";
@@ -40,6 +41,10 @@ import { StepGraphNode, TriggerGraphNode } from "./graph/GraphNodes.jsx";
 import "@xyflow/react/dist/style.css";
 
 const nodeTypes = { trigger: TriggerGraphNode, step: StepGraphNode };
+
+/** Two Control zoom-out steps from React Flow's default zoom (1). */
+const INITIAL_ZOOM = 1 / 1.2 ** 2;
+const FIT_VIEW = { padding: 0.2, maxZoom: INITIAL_ZOOM, duration: 200 };
 
 export function GraphTab(props) {
   return (
@@ -61,6 +66,10 @@ function GraphTabInner({
   excludeFile,
   auths = [],
   pages = [],
+  trySession,
+  onTrySuccess,
+  tryFocusUiId,
+  onTryFocus,
 }) {
   const { fitView } = useReactFlow();
   const [addStepOpen, setAddStepOpen] = useState(false);
@@ -94,7 +103,7 @@ function GraphTabInner({
   }, [doc, disabled, positions]);
 
   useEffect(() => {
-    const t = requestAnimationFrame(() => fitView({ padding: 0.2, duration: 200 }));
+    const t = requestAnimationFrame(() => fitView(FIT_VIEW));
     return () => cancelAnimationFrame(t);
   }, [owner, file, fitView]);
 
@@ -218,7 +227,7 @@ function GraphTabInner({
   function resetLayout() {
     clearGraphLayout(owner, file);
     persistPositions({});
-    requestAnimationFrame(() => fitView({ padding: 0.2, duration: 200 }));
+    requestAnimationFrame(() => fitView(FIT_VIEW));
   }
 
   const selectedStep = selected?.kind === "step" ? steps.find((s) => s.uiId === selected.uiId) : null;
@@ -285,6 +294,7 @@ function GraphTabInner({
             nodesConnectable={!disabled}
             nodesDraggable={!disabled}
             connectionRadius={80}
+            defaultViewport={{ x: 0, y: 0, zoom: INITIAL_ZOOM }}
             defaultEdgeOptions={{ type: "smoothstep" }}
             proOptions={{ hideAttribution: false }}
           >
@@ -309,6 +319,20 @@ function GraphTabInner({
             excludeFile={excludeFile}
             sortable={false}
             defaultExpanded
+            trySession={trySession}
+            onTrySuccess={onTrySuccess}
+            tryOpen={tryFocusUiId === selectedStep.uiId}
+            onTryOpenChange={(open) => {
+              onTryFocus?.(open ? selectedStep.uiId : null);
+            }}
+            onNavigateTry={(targetUiId) => {
+              const id = stepNodeId(targetUiId);
+              setSelectedId(id);
+              setNodes((prev) =>
+                prev.map((n) => ({ ...n, selected: n.id === id })),
+              );
+              onTryFocus?.(targetUiId);
+            }}
             onChange={(next) => {
               const copy = [...steps];
               copy[selectedStepIndex] = next;
@@ -317,6 +341,7 @@ function GraphTabInner({
             onRemove={() => {
               patchSteps(steps.filter((_, i) => i !== selectedStepIndex));
               setSelectedId(null);
+              onTryFocus?.(null);
             }}
           />
         ) : selectedTrigger && selectedTriggerIndex >= 0 ? (

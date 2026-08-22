@@ -14,7 +14,8 @@
     "migrate": "node -e \"import('./db.js').then((m) => m.migrate().then(() => process.exit(0)))\"",
     "test:plugins": "JFLOW_PLUGINS_DIR=./data/plugins-smoke-test JFLOW_DB_PATH=./data/plugins-smoke.db node test/plugins-smoke.js",
     "test:workflow-history": "node test/workflow-history-smoke.js",
-    "test:profiles": "node test/profiles-smoke.js"
+    "test:profiles": "node test/profiles-smoke.js",
+    "test:set-dry-run": "node test/set-dry-run-smoke.js"
   },
   "dependencies": {
     "@jerapah-flow/shared": "workspace:*",

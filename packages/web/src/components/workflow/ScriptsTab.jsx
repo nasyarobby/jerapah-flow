@@ -28,6 +28,10 @@ export function ScriptsTab({
   workflows = [],
   owner,
   excludeFile,
+  trySession,
+  onTrySuccess,
+  tryFocusUiId,
+  onTryFocus,
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const sensors = useSensors(
@@ -98,12 +102,24 @@ export function ScriptsTab({
                   workflows={workflows}
                   owner={owner}
                   excludeFile={excludeFile}
+                  trySession={trySession}
+                  onTrySuccess={onTrySuccess}
+                  tryOpen={tryFocusUiId === step.uiId}
+                  onTryOpenChange={(open) => {
+                    onTryFocus?.(open ? step.uiId : null);
+                  }}
+                  onNavigateTry={(targetUiId) => {
+                    onTryFocus?.(targetUiId);
+                  }}
                   onChange={(next) => {
                     const copy = [...steps];
                     copy[index] = next;
                     patchSteps(copy);
                   }}
-                  onRemove={() => patchSteps(steps.filter((_, i) => i !== index))}
+                  onRemove={() => {
+                    if (tryFocusUiId === step.uiId) onTryFocus?.(null);
+                    patchSteps(steps.filter((_, i) => i !== index));
+                  }}
                 />
               ))}
             </div>

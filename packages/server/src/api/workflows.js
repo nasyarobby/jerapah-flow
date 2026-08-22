@@ -366,6 +366,7 @@ export default function workflowsPluginFactory(registry) {
             enabled: parsed ? parsed.enabled !== false : false,
             registered: registered.includes(file),
             loadError: loadError ?? (parsed ? null : "unreadable"),
+            lastModifiedAt: fsStore.workflowLastModifiedAt(owner, file),
             lastInvokedAt: st.lastInvokedAt,
             lastStatus: st.lastStatus ?? null,
             invocationCount: st.invocationCount,
@@ -374,6 +375,13 @@ export default function workflowsPluginFactory(registry) {
           });
         }
       }
+      items.sort((a, b) => {
+        const byName = String(a.name ?? "").localeCompare(String(b.name ?? ""), undefined, {
+          sensitivity: "base",
+        });
+        if (byName !== 0) return byName;
+        return String(a.key ?? "").localeCompare(String(b.key ?? ""));
+      });
       return { workflows: items };
     });
 

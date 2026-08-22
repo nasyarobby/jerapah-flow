@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../client.js";
 
 export function useKvNamespaces() {
@@ -20,6 +20,15 @@ export function useKv(filters = {}) {
       if (offset != null) params.offset = offset;
       return (await api.get("/kv", { params })).data;
     },
+  });
+}
+
+export function useDeleteKv() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ namespace, key }) =>
+      (await api.delete("/kv", { params: { namespace, key } })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["kv"] }),
   });
 }
 

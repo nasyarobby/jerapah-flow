@@ -1,6 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useHttpAuths, useHttpPages, useProfiles, useScripts, useWorkflows } from "../../api/hooks.js";
 import { dataFromInputMeta, firstInputMeta } from "../../lib/script.js";
+import {
+  emptyTrySession,
+  pruneTrySession,
+  recordTrySuccess,
+} from "../../lib/try-session.js";
 import { parseWorkflowYaml, stringifyWorkflowDoc } from "../../lib/workflow-doc.js";
 import { FormInput, FormTextarea } from "../FormControls.jsx";
 import { GraphTab } from "./GraphTab.jsx";
@@ -23,6 +28,8 @@ export function WorkflowVisualEditor({
   const [tab, setTab] = useState("graph");
   const [lastEdited, setLastEdited] = useState("yaml");
   const [doc, setDoc] = useState(() => parseWorkflowYaml(yaml).doc);
+  const [trySession, setTrySession] = useState(emptyTrySession);
+  const [tryFocusUiId, setTryFocusUiId] = useState(/** @type {string | null} */ (null));
 
   const parsedDoc = useMemo(() => parseWorkflowYaml(yaml), [yaml]);
   const displayDoc = lastEdited === "visual" && doc ? doc : parsedDoc.doc;
@@ -39,6 +46,38 @@ export function WorkflowVisualEditor({
   const scriptCount = displayDoc?.scripts?.length ?? 0;
   const triggerCount = displayDoc?.triggers?.length ?? 0;
   const unsaved = savedYaml != null && yaml !== savedYaml;
+  const trySessionCount = Object.keys(trySession.byStep ?? {}).length;
+
+  useEffect(() => {
+    setTrySession((prev) => {
+      const next = pruneTrySession(prev, displayDoc?.scripts ?? []);
+      const prevKeys = Object.keys(prev.byStep ?? {});
+      const nextKeys = Object.keys(next.byStep ?? {});
+      if (
+        prevKeys.length === nextKeys.length &&
+        prevKeys.every((k) => next.byStep[k]) &&
+        prev.lastTriedUiId === next.lastTriedUiId
+      ) {
+        return prev;
+      }
+      return next;
+    });
+    const ids = new Set((displayDoc?.scripts ?? []).map((s) => s.uiId));
+    setTryFocusUiId((cur) => (cur && !ids.has(cur) ? null : cur));
+  }, [displayDoc?.scripts]);
+
+  function onTrySuccess(uiId, result) {
+    if (!uiId) return;
+    setTrySession((prev) => recordTrySuccess(prev, uiId, result));
+  }
+
+  function onTryFocus(uiId) {
+    setTryFocusUiId(uiId ?? null);
+  }
+
+  function clearTrySession() {
+    setTrySession(emptyTrySession());
+  }
 
   function patchDoc(mutator) {
     const base = lastEdited === "visual" && doc ? doc : parsedDoc.doc;
@@ -108,6 +147,10 @@ export function WorkflowVisualEditor({
     excludeFile: file,
     auths,
     pages,
+    trySession,
+    onTrySuccess,
+    tryFocusUiId,
+    onTryFocus,
   };
 
   return (
@@ -138,6 +181,16 @@ export function WorkflowVisualEditor({
           }
         />
         {unsaved ? <span className="badge badge-warning badge-sm">Unsaved</span> : null}
+        {trySessionCount > 0 ? (
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            title="Clear Try session (cached step outputs for seeding)"
+            onClick={clearTrySession}
+          >
+            Clear try session ({trySessionCount})
+          </button>
+        ) : null}
       </div>
 
       <div role="tablist" className="tabs tabs-box shrink-0 w-full sm:w-auto">
@@ -192,6 +245,10 @@ export function WorkflowVisualEditor({
           workflows={workflows}
           owner={owner}
           excludeFile={file}
+          trySession={trySession}
+          onTrySuccess={onTrySuccess}
+          tryFocusUiId={tryFocusUiId}
+          onTryFocus={onTryFocus}
         />
       ) : null}
       {tab === "triggers" ? (

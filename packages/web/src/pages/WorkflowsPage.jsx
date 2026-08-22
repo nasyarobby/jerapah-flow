@@ -14,11 +14,78 @@ import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
 import { formatTime, WorkflowStatusBadge } from "../lib/format";
 
+const SORT_COLUMNS = [
+  { key: "name", label: "Name", defaultOrder: "asc" },
+  { key: "owner", label: "Owner", defaultOrder: "asc" },
+  { key: "status", label: "Status", defaultOrder: "asc" },
+  { key: "lastModifiedAt", label: "Last modified", defaultOrder: "desc" },
+  { key: "lastInvokedAt", label: "Last run", defaultOrder: "desc" },
+  { key: "invocationCount", label: "Runs", defaultOrder: "desc" },
+];
+
+function SortHeader({ column, label, sort, order, onSort }) {
+  const active = sort === column;
+  return (
+    <th>
+      <button
+        type="button"
+        className={`font-semibold hover:underline ${active ? "" : "opacity-80"}`}
+        onClick={() => onSort(column)}
+      >
+        {label}
+        {active ? (order === "asc" ? " ↑" : " ↓") : ""}
+      </button>
+    </th>
+  );
+}
+
+function statusSortKey(w) {
+  if (w.loadError) return "0-broken";
+  if (!w.enabled) return "1-disabled";
+  if (w.lastStatus === "failed") return "2-failed";
+  if (w.lastStatus === "queued") return "3-queued";
+  if (w.lastStatus === "running") return "4-running";
+  if (w.lastStatus === "success") return "5-working";
+  return "6-never";
+}
+
+function compareName(a, b) {
+  const byName = String(a.name ?? "").localeCompare(String(b.name ?? ""), undefined, {
+    sensitivity: "base",
+  });
+  if (byName !== 0) return byName;
+  return String(a.key ?? "").localeCompare(String(b.key ?? ""));
+}
+
+function compareWorkflows(a, b, sort) {
+  if (sort === "name") return compareName(a, b);
+  if (sort === "owner") {
+    const byOwner = String(a.owner ?? "").localeCompare(String(b.owner ?? ""), undefined, {
+      sensitivity: "base",
+    });
+    return byOwner !== 0 ? byOwner : compareName(a, b);
+  }
+  if (sort === "status") {
+    const byStatus = statusSortKey(a).localeCompare(statusSortKey(b));
+    return byStatus !== 0 ? byStatus : compareName(a, b);
+  }
+  if (sort === "invocationCount") {
+    const byCount = (Number(a.invocationCount) || 0) - (Number(b.invocationCount) || 0);
+    return byCount !== 0 ? byCount : compareName(a, b);
+  }
+  const aTime = a[sort] ?? "";
+  const bTime = b[sort] ?? "";
+  const byTime = String(aTime).localeCompare(String(bTime));
+  return byTime !== 0 ? byTime : compareName(a, b);
+}
+
 export function WorkflowsPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const editParam = params.get("edit");
   const { data: workflows = [], isLoading } = useWorkflows();
+  const [sort, setSortColumn] = useState("name");
+  const [order, setOrder] = useState("asc");
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [duplicateSource, setDuplicateSource] = useState(null);
   const [runError, setRunError] = useState(null);
@@ -68,6 +135,19 @@ export function WorkflowsPage() {
       ? `${setEnabled.variables.owner}/${setEnabled.variables.file}`
       : null;
 
+  const dir = order === "desc" ? -1 : 1;
+  const sortedWorkflows = [...workflows].sort((a, b) => dir * compareWorkflows(a, b, sort));
+
+  function setSort(column) {
+    const spec = SORT_COLUMNS.find((c) => c.key === column);
+    if (sort === column) {
+      setOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortColumn(column);
+    setOrder(spec?.defaultOrder ?? "asc");
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -115,17 +195,36 @@ export function WorkflowsPage() {
           <table className="table table-sm">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Owner</th>
-                <th>Status</th>
+                <SortHeader column="name" label="Name" sort={sort} order={order} onSort={setSort} />
+                <SortHeader column="owner" label="Owner" sort={sort} order={order} onSort={setSort} />
+                <SortHeader column="status" label="Status" sort={sort} order={order} onSort={setSort} />
                 <th>Triggers</th>
-                <th>Last run</th>
-                <th>Runs</th>
+                <SortHeader
+                  column="lastModifiedAt"
+                  label="Last modified"
+                  sort={sort}
+                  order={order}
+                  onSort={setSort}
+                />
+                <SortHeader
+                  column="lastInvokedAt"
+                  label="Last run"
+                  sort={sort}
+                  order={order}
+                  onSort={setSort}
+                />
+                <SortHeader
+                  column="invocationCount"
+                  label="Runs"
+                  sort={sort}
+                  order={order}
+                  onSort={setSort}
+                />
                 <th />
               </tr>
             </thead>
             <tbody>
-              {workflows.map((w) => (
+              {sortedWorkflows.map((w) => (
                 <tr key={w.key} className="hover">
                   <td>
                     <Link
@@ -152,6 +251,7 @@ export function WorkflowsPage() {
                   <td>
                     <TriggerList triggers={w.triggers} />
                   </td>
+                  <td className="whitespace-nowrap">{formatTime(w.lastModifiedAt)}</td>
                   <td className="whitespace-nowrap">{formatTime(w.lastInvokedAt)}</td>
                   <td>{w.invocationCount}</td>
                   <td className="text-right whitespace-nowrap">

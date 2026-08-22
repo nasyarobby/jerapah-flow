@@ -6,6 +6,8 @@ import {
   canConnectSteps,
   enteringDagWouldStripWhen,
   removeStepEdge,
+  stepPredecessors,
+  stepSuccessors,
   wouldCreateCycle,
 } from "./workflow-graph.js";
 
@@ -86,4 +88,28 @@ test("removeStepEdge drops a list dependency", () => {
   const scripts = removeStepEdge(doc, "a", "b");
   assert.equal(scripts[1].needs, null);
   assert.equal(isDagDoc({ scripts }), false);
+});
+
+test("stepSuccessors / stepPredecessors linear", () => {
+  const scripts = [step("a"), step("b"), step("c")];
+  assert.deepEqual(stepSuccessors(scripts, "a"), ["b"]);
+  assert.deepEqual(stepSuccessors(scripts, "b"), ["c"]);
+  assert.deepEqual(stepSuccessors(scripts, "c"), []);
+  assert.deepEqual(stepPredecessors(scripts, "a"), []);
+  assert.deepEqual(stepPredecessors(scripts, "b"), ["a"]);
+  assert.deepEqual(stepPredecessors(scripts, "c"), ["b"]);
+});
+
+test("stepSuccessors / stepPredecessors DAG multi", () => {
+  const scripts = [
+    step("a", { id: "a" }),
+    step("b", { id: "b" }),
+    step("c", { id: "c", needs: ["a", "b"] }),
+    step("d", { id: "d", needs: ["a"] }),
+  ];
+  assert.deepEqual(stepSuccessors(scripts, "a").sort(), ["c", "d"]);
+  assert.deepEqual(stepSuccessors(scripts, "b"), ["c"]);
+  assert.deepEqual(stepPredecessors(scripts, "c").sort(), ["a", "b"]);
+  assert.deepEqual(stepPredecessors(scripts, "d"), ["a"]);
+  assert.deepEqual(stepPredecessors(scripts, "a"), []);
 });

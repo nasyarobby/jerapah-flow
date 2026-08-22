@@ -142,11 +142,6 @@ export function WorkflowNewPage() {
         saveError={create.isError && !saveWarnings ? errorMessage(create.error) : null}
       >
         <div className="flex min-h-0 flex-1 flex-col gap-3">
-          <p className="text-sm opacity-70 shrink-0">
-            A UUID filename is assigned on save (for example{" "}
-            <span className="font-mono">a1b2c3d4-….yaml</span>). Edit the{" "}
-            <span className="font-mono">name:</span> field for the display name.
-          </p>
           <WorkflowVisualEditor
             yaml={content}
             onYamlChange={setContent}

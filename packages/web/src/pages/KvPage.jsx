@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useKv, useKvNamespaces } from "../api/hooks.js";
+import { LuTrash2 } from "react-icons/lu";
+import { errorMessage } from "../api/client.js";
+import { useDeleteKv, useKv, useKvNamespaces } from "../api/hooks.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { FormSelect } from "../components/FormControls.jsx";
 import { formatTime } from "../lib/format";
 
@@ -19,8 +22,10 @@ export function KvPage() {
   const q = params.get("q") || "";
   const offset = Math.max(Number(params.get("offset")) || 0, 0);
   const [expanded, setExpanded] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const { data: namespaces = [] } = useKvNamespaces();
+  const del = useDeleteKv();
   const { data, isLoading } = useKv({
     namespace: namespace || undefined,
     q: q || undefined,
@@ -83,6 +88,7 @@ export function KvPage() {
                   <th>Value</th>
                   <th>Updated</th>
                   <th>Expires</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -119,6 +125,21 @@ export function KvPage() {
                       <td className="whitespace-nowrap align-top">
                         {item.expiresAt ? formatTime(item.expiresAt) : "—"}
                       </td>
+                      <td className="text-right whitespace-nowrap align-top">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs text-error"
+                          title="Delete"
+                          aria-label="Delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDelete(item);
+                          }}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <LuTrash2 className="size-4" />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -148,6 +169,29 @@ export function KvPage() {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={
+          confirmDelete ? `Delete ${confirmDelete.namespace}/${confirmDelete.key}?` : ""
+        }
+        message="This cannot be undone. Scripts that read this key will get null."
+        error={del.isError ? errorMessage(del.error) : null}
+        loading={del.isPending}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() =>
+          del.mutate(
+            { namespace: confirmDelete.namespace, key: confirmDelete.key },
+            {
+              onSuccess: () => {
+                const id = rowId(confirmDelete);
+                setConfirmDelete(null);
+                setExpanded((current) => (current === id ? null : current));
+              },
+            },
+          )
+        }
+      />
     </div>
   );
 }

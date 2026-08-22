@@ -124,6 +124,22 @@ function adjacencyFromScripts(scripts) {
   return children;
 }
 
+/** Outgoing neighbors (linear next, or DAG children). */
+export function stepSuccessors(scripts, uiId) {
+  return adjacencyFromScripts(scripts ?? []).get(uiId) ?? [];
+}
+
+/** Incoming neighbors (linear previous, or DAG parents). */
+export function stepPredecessors(scripts, uiId) {
+  const children = adjacencyFromScripts(scripts ?? []);
+  /** @type {string[]} */
+  const out = [];
+  for (const [from, tos] of children) {
+    if (tos.includes(uiId)) out.push(from);
+  }
+  return out;
+}
+
 export function wouldCreateCycle(scripts, fromUiId, toUiId) {
   if (fromUiId === toUiId) return true;
   const children = adjacencyFromScripts(scripts);

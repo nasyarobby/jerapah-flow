@@ -110,6 +110,31 @@ export function readWorkflowYaml(owner, file) {
   return fs.readFileSync(filePath, "utf8");
 }
 
+/**
+ * Last content change time for a workflow YAML file.
+ * Uses birthtime (creation) when the file has not been modified since it was created.
+ * @returns {string | null} ISO timestamp
+ */
+export function workflowLastModifiedAt(owner, file) {
+  try {
+    assertOwner(owner);
+    assertWorkflowFile(file);
+  } catch {
+    return null;
+  }
+  const filePath = path.join(WORKFLOWS_DIR, owner, file);
+  try {
+    const st = fs.statSync(filePath);
+    const birthMs = Number.isFinite(st.birthtimeMs) && st.birthtimeMs > 0 ? st.birthtimeMs : null;
+    const mtimeMs = Number.isFinite(st.mtimeMs) && st.mtimeMs > 0 ? st.mtimeMs : null;
+    const unmodified = birthMs != null && (mtimeMs == null || mtimeMs <= birthMs + 1000);
+    const ms = unmodified ? birthMs : (mtimeMs ?? birthMs);
+    return ms != null ? new Date(ms).toISOString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function writeWorkflowYaml(owner, file, content) {
   assertOwner(owner);
   assertWorkflowFile(file);

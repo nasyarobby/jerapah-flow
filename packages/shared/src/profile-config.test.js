@@ -5,6 +5,7 @@ import {
   isPlainObject,
   mergeProfileConfig,
   namespacedPath,
+  overlayFromMerged,
 } from "./index.js";
 
 describe("isPlainObject", () => {
@@ -29,6 +30,29 @@ describe("mergeProfileConfig", () => {
     expect(mergeProfileConfig({ nested: { a: 1 } }, { nested: { b: 2 } })).toEqual({
       nested: { b: 2 },
     });
+  });
+});
+
+describe("overlayFromMerged", () => {
+  it("returns full merged when there is no profile", () => {
+    expect(overlayFromMerged(null, { a: 1, b: 2 })).toEqual({ a: 1, b: 2 });
+    expect(overlayFromMerged(undefined, { x: 1 })).toEqual({ x: 1 });
+  });
+
+  it("keeps only keys that differ from the profile", () => {
+    expect(overlayFromMerged({ a: 1, b: 2 }, { a: 1, b: 3, c: 4 })).toEqual({
+      b: 3,
+      c: 4,
+    });
+    expect(overlayFromMerged({ a: 1 }, { a: 1 })).toEqual({});
+    expect(overlayFromMerged({ nested: { a: 1 } }, { nested: { a: 1 } })).toEqual({});
+    expect(overlayFromMerged({ nested: { a: 1 } }, { nested: { b: 2 } })).toEqual({
+      nested: { b: 2 },
+    });
+  });
+
+  it("treats empty-string override as a real overlay key", () => {
+    expect(overlayFromMerged({ url: "http://a" }, { url: "" })).toEqual({ url: "" });
   });
 });
 

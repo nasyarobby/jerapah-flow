@@ -1,1 +1,1 @@
-export { mergeProfileConfig, configHasOverlay } from "@jerapah-flow/shared";
+export { mergeProfileConfig, overlayFromMerged, configHasOverlay } from "@jerapah-flow/shared";
