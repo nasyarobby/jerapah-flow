@@ -105,8 +105,9 @@ Optional `script.meta.reads = "ctx"` documents expression hosts. `meta.input` / 
 | `pnpm dev:server` | Monolith API/runner only |
 | `pnpm dev:web` | UI only (proxies `/api` → :8700, `/ops` → :8600) |
 | `pnpm build` | Production UI build |
-| `pnpm start` | Monolith: API + worker + built UI |
+| `pnpm start` | Monolith: API + worker + built UI (serves `dist` on :8700) |
 | `pnpm start:control` | Control plane only (migrates, manages PM2 children) |
+| `pnpm start:web` | Production UI on :8500 (`dist` + proxies to control/HTTP) |
 | `pnpm start:api` | HTTP API + cron enqueue (`JFLOW_ROLE=api`) |
 | `pnpm start:worker` | BullMQ worker only |
 | `pnpm migrate` | Apply SQLite migrations |
@@ -140,10 +141,12 @@ Desired state is stored in `packages/server/data/control-state.json` (generation
 | `JFLOW_ROLE` | `all` | `all` (HTTP + cron + worker), `api`, or `worker`. Prefer `pnpm start:api` / `start:worker` under control. |
 | `JFLOW_CONFIG_GENERATION` | `1` | Set by control/PM2 so children report config generation in heartbeats. |
 | `JFLOW_CONTROL_PORT` | `8600` | Control ops API port. |
+| `JFLOW_UI_PORT` | `8500` | Production UI server (`web-server.js`) port. |
+| `JFLOW_HTTP_PORT` | `8700` | HTTP API port (PM2 children / UI proxy target). |
 | `JFLOW_LOG_LEVEL` | `debug` | Pino level |
 | `JFLOW_RETENTION_DAYS` | `30` | Run history prune |
-| `JFLOW_CORS_ORIGIN` | `http://localhost:8500` | Vite origin in dev |
-| `PORT` | `8700` | HTTP API port |
+| `JFLOW_CORS_ORIGIN` | `http://localhost:8500` | Browser origin (Vite in dev, UI server in prod) |
+| `PORT` | `8700` | HTTP API port (alias; prefer `JFLOW_HTTP_PORT` under control) |
 | `NODE_ENV` | — | Set `production` for secure cookies (unless overridden) |
 | `COOKIE_SECURE` | (from `NODE_ENV`) | `true`/`false` — force Secure cookie flag. Use `false` for plain HTTP LAN access (`http://192.168.x.x`) |
 
@@ -151,14 +154,29 @@ Workflow runs are **queued** via BullMQ. HTTP and manual triggers return `202 { 
 
 ## Production
 
+Control-plane topology (same ports as `pnpm dev:pm2`):
+
+| Process | Port | Role |
+|---|---|---|
+| `jflow-web` | **8500** | Built UI + proxies `/api` → :8700, `/ops` + `/api/auth` → :8600 |
+| `jflow-control` | **8600** | Migrations, Ops API, starts/stops PM2 HTTP + workers |
+| `jflow-http` | **8700** | API + cron enqueue (managed by control) |
+| `jflow-worker` | — | BullMQ workers (managed by control) |
+
 ```bash
 pnpm install
 pnpm build
 # Redis must be reachable at REDIS_URL (set REDIS_PASS if Redis requires AUTH)
-# Recommended: run control (migrates + manages PM2 HTTP/workers)
-JFLOW_JWT_SECRET=... JFLOW_SECRETS_KEY=... REDIS_URL=redis://127.0.0.1:6379 REDIS_PASS=... NODE_ENV=production pnpm start:control
-# Or monolith (dev-style):
-# ... pnpm start
+# Put secrets in .env (JFLOW_JWT_SECRET, JFLOW_SECRETS_KEY, REDIS_URL, …)
+pm2 start ecosystem.config.cjs
+# UI: http://localhost:8500
 ```
 
-With control, serve the built UI from Vite preview, a reverse proxy, or set `JFLOW_SERVE_UI=1` on the HTTP process.
+Or without the ecosystem file:
+
+```bash
+NODE_ENV=production pnpm start:control   # :8600 + PM2 children
+NODE_ENV=production pnpm start:web       # :8500
+```
+
+Monolith (no Ops stop/scale): `pnpm build && pnpm start` serves the UI from the API process on :8700. Optional `JFLOW_SERVE_UI=1` on `start:api` does the same when you run HTTP alone — do **not** use that under control-plane mode (stopping HTTP would take down the UI).
