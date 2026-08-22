@@ -20,7 +20,13 @@ pnpm dev
 - UI (dev): http://localhost:8500
 - API: http://localhost:8700
 
-The first account created becomes **admin**. Later accounts are created from Users.
+The first account created becomes **admin**. JerapahFlow is a **single-machine, single-user** automation app: the Users page is not linked in the nav (still available at `/users` if typed). New workflows, secrets, variables, and profiles default to the internal namespace `local`.
+
+Reset or create the admin login from the host:
+
+```bash
+pnpm --dir packages/server reset-admin -- --username admin --password 'your-password'
+```
 
 ### Process modes
 
@@ -36,13 +42,26 @@ The first account created becomes **admin**. Later accounts are created from Use
 | Kind | Name in YAML | Editable | Location |
 |---|---|---|---|
 | **Core** | `fetch-http.js`, `s3.js`, … | No (fork only) | `packages/server/scripts/` |
-| **Plugin** | `plugin/<id>` | Yes | `plugins/<id>/` |
+| **User plugin** | `plugin/<id>` | Yes | `plugins/<id>/` |
+| **Example source** | install → `plugin/<id>` | After install | `examples/plugins/<id>/` |
 
 - App version is **`0.1.0`** (root `package.json`). Plugin manifests declare `jerapah: ">=0.1.0 <1.0.0"`.
 - Install plugins via admin API: zip (base64), HTTPS git URL, example, or fork a core script.
 - Install/update/uninstall sets **restart-needed** — drain-restart HTTP + workers under `pnpm dev:pm2`.
-- Example plugin: `examples/plugins/get-current-time` → `plugin/get-current-time`.
-- User plugins in this repo: `plugins/joplin-api` → `plugin/joplin-api`, `plugins/send-sms` → `plugin/send-sms`.
+- Shipped example source (install from UI/API): `examples/plugins/get-current-time` → runtime `plugin/get-current-time`.
+- `plugins/joplin-api` and `plugins/send-sms` are **personal/user plugins** appropriate for a fork — not shipped examples. See **AGENTS.md** for creating user plugins under `plugins/<id>/`.
+
+## Workflows (instance data vs examples)
+
+| Kind | Loaded by runner? | Location |
+|---|---|---|
+| **Live workflows** | Yes | `packages/server/data/workflows/<owner>/` (gitignored) |
+| **Example presets** | No | `examples/workflows/*.yaml` — offered when creating a new workflow |
+
+- Live YAML is **instance data**, same as SQLite and secrets — not product source. New resources use owner `local` (owner remains in storage/URLs for a possible future multi-tenant mode; the UI hides it).
+- On first start, if the instance store is empty and a legacy `packages/server/workflows/` tree still exists, it is copied into `data/workflows/`.
+- New workflow editor starts empty; optional presets copy example YAML into the editor (nothing is saved until Save).
+- Override the live store in tests with `JFLOW_WORKFLOWS_DIR`.
 
 ```bash
 # Smoke
@@ -113,6 +132,7 @@ Desired state is stored in `packages/server/data/control-state.json` (generation
 | `JFLOW_JWT_SECRET` | `jflow-dev-secret` (dev only) | **Required in production**. |
 | `JFLOW_SECRETS_KEY` | `jflow-dev-secrets-key` (dev only) | Master key for named secrets. **Required in production**. Changing it makes existing secrets unreadable. 64 hex chars are used as a raw AES-256 key; any other string is derived with scrypt. |
 | `JFLOW_DB_PATH` | `packages/server/data/jerapah-flow.db` | SQLite file. |
+| `JFLOW_WORKFLOWS_DIR` | `packages/server/data/workflows` | Live workflow YAML (instance data). |
 | `REDIS_URL` | `redis://127.0.0.1:6379` | Redis for BullMQ workflow queue. **Required** — the server will not start if Redis is unreachable. |
 | `REDIS_PASS` | — | Optional Redis AUTH password (sent via ioredis `password`). Prefer this over embedding credentials in `REDIS_URL` so logs stay clean. |
 | `JFLOW_QUEUE_NAME` | `jerapah-workflows` | BullMQ queue name. |

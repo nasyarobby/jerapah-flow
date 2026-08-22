@@ -18,7 +18,7 @@ scripts:
   - script: fetch-binary.js
   - script: ntfy.js
     config:
-      url: https://ntfy.sh/jerapah-flow
+      url: $VAR_ntfy_channel
 triggers:
   - type: HTTP
     method: POST

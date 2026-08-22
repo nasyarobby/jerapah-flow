@@ -4,13 +4,13 @@ import { LuArrowLeft, LuCopy, LuPause, LuPlay, LuSave } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import {
   useCreateWorkflow,
-  useOwners,
   useSaveWorkflow,
   useSetWorkflowEnabled,
   useWorkflow,
   useWorkflowRevision,
 } from "../api/hooks.js";
 import { DuplicateWorkflowDialog } from "../components/DuplicateWorkflowDialog.jsx";
+import { NewWorkflowPresetDialog, shouldSkipNewWorkflowPreset } from "../components/NewWorkflowPresetDialog.jsx";
 import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
 import { WorkflowVisualEditor } from "../components/workflow/WorkflowVisualEditor.jsx";
 import { WorkflowHistoryPanel } from "../components/workflow/WorkflowHistoryPanel.jsx";
@@ -20,11 +20,10 @@ import {
   saveErrorMessage,
   saveWarningsFromError,
 } from "../components/workflow/SaveWorkflowWarningsDialog.jsx";
-import {
-  ConfirmDialog,
-  WorkflowRevisionBanner,
-} from "../components/workflow/WorkflowRevisionBanner.jsx";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
+import { WorkflowRevisionBanner } from "../components/workflow/WorkflowRevisionBanner.jsx";
 import { NEW_WORKFLOW_YAML, parseWorkflowYaml } from "../lib/workflow-doc.js";
+import { DEFAULT_OWNER } from "../lib/tenant.js";
 import { useNotifications } from "../notifications.jsx";
 
 function WorkflowEditorLayout({
@@ -101,20 +100,15 @@ function WorkflowEditorLayout({
 export function WorkflowNewPage() {
   const navigate = useNavigate();
   const { notify } = useNotifications();
-  const { data: owners = [] } = useOwners();
-  const [owner, setOwner] = useState("");
+  const [ready, setReady] = useState(() => shouldSkipNewWorkflowPreset());
   const [content, setContent] = useState(NEW_WORKFLOW_YAML);
-  const [savedYaml] = useState(NEW_WORKFLOW_YAML);
+  const [savedYaml, setSavedYaml] = useState(NEW_WORKFLOW_YAML);
   const [saveWarnings, setSaveWarnings] = useState(null);
   const create = useCreateWorkflow();
 
-  useEffect(() => {
-    if (!owner && owners[0]) setOwner(owners[0]);
-  }, [owner, owners]);
-
   function onSave(saveAnyway = false) {
     create.mutate(
-      { owner, content, saveAnyway },
+      { owner: DEFAULT_OWNER, content, saveAnyway },
       {
         onSuccess: (data) => {
           setSaveWarnings(null);
@@ -134,37 +128,36 @@ export function WorkflowNewPage() {
     );
   }
 
+  if (!ready) {
+    return (
+      <NewWorkflowPresetDialog
+        onCancel={() => navigate("/workflows")}
+        onChoose={(yaml) => {
+          const initial = yaml == null || yaml === "" ? NEW_WORKFLOW_YAML : yaml;
+          setContent(initial);
+          setSavedYaml(initial);
+          setReady(true);
+        }}
+      />
+    );
+  }
+
   return (
     <>
       <WorkflowEditorLayout
         title="New workflow"
         onSave={() => onSave(false)}
         savePending={create.isPending}
-        saveDisabled={!owner}
         saveError={create.isError && !saveWarnings ? errorMessage(create.error) : null}
       >
         <div className="flex min-h-0 flex-1 flex-col gap-3">
-          <p className="text-sm opacity-70 shrink-0">
-            A UUID filename is assigned on save (for example{" "}
-            <span className="font-mono">a1b2c3d4-….yaml</span>). Edit the{" "}
-            <span className="font-mono">name:</span> field for the display name.
-          </p>
           <WorkflowVisualEditor
             yaml={content}
             onYamlChange={setContent}
-            owner={owner}
+            owner={DEFAULT_OWNER}
             file=""
             savedYaml={savedYaml}
             showTest={false}
-            extraChrome={
-              <input
-                className="input input-sm w-full sm:max-w-xs"
-                placeholder="owner"
-                value={owner}
-                onChange={(e) => setOwner(e.target.value)}
-                required
-              />
-            }
           />
         </div>
       </WorkflowEditorLayout>
@@ -465,6 +458,7 @@ export function WorkflowEditPage() {
           title="Discard unsaved changes?"
           message="You have unsaved edits. Switching versions will discard them."
           confirmLabel="Discard"
+          confirmClass="btn-warning"
           pending={false}
           onCancel={() => setDiscardConfirm(null)}
           onConfirm={() => {

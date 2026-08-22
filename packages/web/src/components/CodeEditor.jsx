@@ -6,7 +6,7 @@ export function CodeEditor({ language, value, onChange, height = "50vh", readOnl
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
   return (
-    <div className="overflow-hidden rounded-box border border-base-300 h-full min-h-0">
+    <div className="nokey overflow-hidden rounded-box border border-base-300 h-full min-h-0">
       <Editor
         height={height}
         language={language}

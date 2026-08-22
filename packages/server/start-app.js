@@ -14,10 +14,12 @@ import usersPlugin from "./src/api/users.js";
 import scriptsPluginFactory from "./src/api/scripts.js";
 import workflowsPluginFactory from "./src/api/workflows.js";
 import runsPlugin from "./src/api/runs.js";
+import { queryRunsFromRequest } from "./src/api/run-query.js";
 import dashboardPluginFactory from "./src/api/dashboard.js";
 import secretsPlugin from "./src/api/secrets.js";
 import kvPlugin from "./src/api/kv.js";
 import variablesPlugin from "./src/api/variables.js";
+import profilesPlugin from "./src/api/profiles.js";
 import httpPagesPlugin from "./src/api/http-pages.js";
 import httpAuthsPlugin from "./src/api/http-auths.js";
 import { WEB_DIST } from "./paths.js";
@@ -29,6 +31,7 @@ import {
   getRedisUrlForLog,
 } from "./workflow-queue.js";
 import { purgeExpiredTrash } from "./workflow-trash.js";
+import { migrateLegacyWorkflowsIfNeeded } from "./workflow-migrate.js";
 import {
   getConfigGeneration,
   startHeartbeatLoop,
@@ -126,6 +129,12 @@ export async function startApp(opts = {}) {
     }
   });
 
+  try {
+    migrateLegacyWorkflowsIfNeeded();
+  } catch (err) {
+    log.warn({ err }, "legacy workflow migrate failed");
+  }
+
   const registry = createRegistry(server, {
     queue: workflowQueue,
     // Cron + HTTP triggers enqueue jobs; only the API process may own them.
@@ -168,6 +177,7 @@ export async function startApp(opts = {}) {
         await api.register(usersPlugin);
         await api.register(secretsPlugin);
         await api.register(variablesPlugin);
+        await api.register(profilesPlugin);
         await api.register(kvPlugin);
         await api.register(httpPagesPlugin);
         await api.register(httpAuthsPlugin);
@@ -198,16 +208,8 @@ export async function startApp(opts = {}) {
       "/admin/runs",
       { onRequest: [server.authenticate] },
       async (req, reply) => {
-        const q = /** @type {Record<string, string | undefined>} */ (req.query);
-        const limit = q.limit ? Number(q.limit) : undefined;
-        const runs = await store.listRuns({
-          owner: q.owner,
-          workflow: q.workflow,
-          status: q.status,
-          limit: Number.isFinite(limit) ? limit : undefined,
-          before: q.before,
-        });
-        return reply.send({ runs });
+        const q = /** @type {Record<string, string | undefined>} */ (req.query ?? {});
+        return reply.send(await queryRunsFromRequest(q));
       },
     );
 

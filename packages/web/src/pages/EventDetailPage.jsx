@@ -4,7 +4,7 @@ import { LuArrowLeft, LuFilter } from "react-icons/lu";
 import { useRun } from "../api/hooks.js";
 import { JsonViewBlock } from "../components/JsonViewBlock.jsx";
 import { LogViewer } from "../components/LogViewer.jsx";
-import { formatTime, StatusBadge } from "../lib/format.jsx";
+import { formatTime, StatusBadge } from "../lib/format";
 
 function stepLabel(s) {
   if (s.script === "set") return "set";

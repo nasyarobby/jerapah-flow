@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { SERVER_ROOT } from "./paths.js";
 
 const ROOT_PKG = path.resolve(SERVER_ROOT, "../../package.json");
@@ -75,5 +74,3 @@ export function satisfiesRange(version, range) {
   }
   return true;
 }
-
-void fileURLToPath;

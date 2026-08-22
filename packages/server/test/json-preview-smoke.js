@@ -1,4 +1,9 @@
-import { jsonPreviewReplacer, summarizeBinary } from "../json-preview.js";
+import {
+  encodeBinaryForWire,
+  jsonPreviewReplacer,
+  reviveBinaryFromWire,
+  summarizeBinary,
+} from "../json-preview.js";
 import { serialize, toDisplayValue } from "../store.js";
 import { safeSerialize } from "../src/api/dry-run-logger.js";
 
@@ -51,6 +56,20 @@ if (dry.n !== "1" || Array.isArray(dry.file.data)) {
 const typed = safeSerialize({ file: new Uint8Array(png) });
 if (typed.file.length !== png.length || typed.file.type !== "Buffer") {
   throw new Error(`Uint8Array: ${JSON.stringify(typed)}`);
+}
+
+const wired = encodeBinaryForWire({ file: png, n: 1n });
+if (wired.n !== "1" || wired.file.encoding !== "base64" || typeof wired.file.data !== "string") {
+  throw new Error(`encodeBinaryForWire: ${JSON.stringify(wired)}`);
+}
+const revived = reviveBinaryFromWire(JSON.parse(JSON.stringify(wired)));
+if (!Buffer.isBuffer(revived.file) || !revived.file.equals(png)) {
+  throw new Error("reviveBinaryFromWire failed to restore bytes");
+}
+const previewOnly = { type: "Buffer", length: png.length, preview: "89", truncated: true };
+const left = reviveBinaryFromWire(previewOnly);
+if (Buffer.isBuffer(left)) {
+  throw new Error("preview-only summary should not revive");
 }
 
 console.log("json-preview-smoke: ok");

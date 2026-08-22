@@ -1,12 +1,29 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { LuChevronDown, LuCopy, LuGripVertical, LuTrash2, LuX } from "react-icons/lu";
+import { useState } from "react";
+import { LuChevronDown, LuCopy, LuGripVertical, LuTrash2 } from "react-icons/lu";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import cronstrue from "cronstrue";
 import { namespacedPath, HTTP_METHODS, triggerDestinations } from "../../lib/workflow-doc.js";
 import { CRON_CUSTOM, CRON_PRESETS, matchCronPreset, scheduleForPreset } from "../../lib/cron-presets.js";
+import { FormInput, FormSelect } from "../FormControls.jsx";
+import { AuthPicker } from "./AuthPicker.jsx";
 
-export function TriggerCard({
+export function TriggerCard(props) {
+  if (props.sortable === false) {
+    return <TriggerCardView {...props} drag={null} />;
+  }
+  return <TriggerCardSortable {...props} />;
+}
+
+function TriggerCardSortable(props) {
+  const drag = useSortable({
+    id: props.trigger.uiId,
+    disabled: props.disabled,
+  });
+  return <TriggerCardView {...props} drag={drag} />;
+}
+
+function TriggerCardView({
   trigger,
   index,
   owner,
@@ -17,18 +34,25 @@ export function TriggerCard({
   pages = [],
   workflows = [],
   excludeFile,
+  sortable = true,
+  defaultExpanded = false,
+  drag,
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: trigger.uiId,
-    disabled,
-  });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = drag ?? {
+    attributes: {},
+    listeners: {},
+    setNodeRef: undefined,
+    transform: null,
+    transition: undefined,
+    isDragging: false,
+  };
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.6 : 1,
   };
   const type = trigger.type;
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const alertDestinations = triggerDestinations(workflows, { owner, excludeFile });
 
   return (
@@ -41,16 +65,18 @@ export function TriggerCard({
     >
       <div className={`card-body gap-3 ${expanded ? "p-4" : "p-3"}`}>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs btn-square cursor-grab active:cursor-grabbing"
-            aria-label={`Drag trigger ${index + 1}`}
-            disabled={disabled}
-            {...attributes}
-            {...listeners}
-          >
-            <LuGripVertical className="size-4 opacity-60" />
-          </button>
+          {sortable !== false ? (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs btn-square cursor-grab active:cursor-grabbing"
+              aria-label={`Drag trigger ${index + 1}`}
+              disabled={disabled}
+              {...attributes}
+              {...listeners}
+            >
+              <LuGripVertical className="size-4 opacity-60" />
+            </button>
+          ) : null}
           <button
             type="button"
             className="min-w-0 flex-1 text-left"
@@ -174,8 +200,8 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
   return (
     <div className="space-y-3">
       <Field label="Method">
-        <select
-          className="select select-bordered select-sm w-full"
+        <FormSelect
+          className="w-full"
           value={trigger.method || "POST"}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, method: e.target.value })}
@@ -188,12 +214,12 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
           {HTTP_METHODS.includes(trigger.method || "POST") ? null : (
             <option value={trigger.method}>{trigger.method}</option>
           )}
-        </select>
+        </FormSelect>
       </Field>
 
       <Field label="Path">
-        <input
-          className="input input-bordered input-sm w-full font-mono"
+        <FormInput
+          className="w-full font-mono"
           value={trigger.path ?? ""}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, path: e.target.value })}
@@ -203,8 +229,8 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
 
       <Field label="URL">
         <div className="flex w-full items-center gap-1">
-          <input
-            className="input input-bordered input-sm w-full font-mono opacity-80"
+          <FormInput
+            className="w-full font-mono opacity-80"
             value={url}
             readOnly
             tabIndex={-1}
@@ -229,8 +255,8 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
       />
 
       <Field label="Response page">
-        <select
-          className="select select-bordered select-sm w-full"
+        <FormSelect
+          className="w-full"
           value={trigger.response ?? ""}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, response: e.target.value })}
@@ -244,7 +270,7 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
           {trigger.response && !pages.some((p) => p.name === trigger.response) ? (
             <option value={trigger.response}>{trigger.response}</option>
           ) : null}
-        </select>
+        </FormSelect>
       </Field>
 
       <FailureAlertFields
@@ -257,164 +283,6 @@ function HttpFields({ trigger, owner, disabled, onChange, auths, pages, alertDes
   );
 }
 
-/**
- * Searchable dropdown: pick an auth to add; chips with X to remove.
- * YAML stores profile UUIDs; UI shows names.
- */
-function AuthPicker({ auths, selectedIds, inlineCount, disabled, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const rootRef = useRef(null);
-  const inputRef = useRef(null);
-  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const byId = useMemo(() => new Map(auths.map((a) => [a.id, a])), [auths]);
-
-  const available = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return auths
-      .filter((a) => !selectedSet.has(a.id))
-      .filter((a) => {
-        if (!q) return true;
-        return (
-          a.name.toLowerCase().includes(q) ||
-          String(a.type).toLowerCase().includes(q) ||
-          a.id.toLowerCase().includes(q)
-        );
-      });
-  }, [auths, selectedSet, query]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e) {
-      if (rootRef.current && !rootRef.current.contains(e.target)) {
-        setOpen(false);
-        setQuery("");
-      }
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
-
-  function addAuth(id) {
-    if (selectedSet.has(id)) return;
-    onChange([...selectedIds, id]);
-    setQuery("");
-    setOpen(false);
-  }
-
-  function removeAuth(id) {
-    onChange(selectedIds.filter((x) => x !== id));
-  }
-
-  return (
-    <div className="flex w-full flex-col gap-1" ref={rootRef}>
-      <span className="text-sm font-medium opacity-80">Auth (any of)</span>
-
-      {selectedIds.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {selectedIds.map((id) => {
-            const auth = byId.get(id);
-            return (
-              <span
-                key={id}
-                className="badge badge-outline gap-1 h-7 px-2 font-normal"
-                title={id}
-              >
-                <span className="max-w-[10rem] truncate">
-                  {auth ? (
-                    <>
-                      {auth.name}
-                      <span className="opacity-60"> · {auth.type}</span>
-                    </>
-                  ) : (
-                    <span className="opacity-60">missing</span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-xs btn-square -mr-1"
-                  title="Remove"
-                  aria-label={`Remove ${auth?.name ?? id}`}
-                  disabled={disabled}
-                  onClick={() => removeAuth(id)}
-                >
-                  <LuX className="size-3.5" />
-                </button>
-              </span>
-            );
-          })}
-        </div>
-      ) : null}
-
-      <div className="relative w-full">
-        <div className="join w-full">
-          <input
-            ref={inputRef}
-            type="search"
-            className="input input-bordered input-sm join-item w-full min-w-0"
-            placeholder={auths.length === 0 ? "No auth profiles yet" : "Add auth…"}
-            value={query}
-            disabled={disabled || auths.length === 0}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setOpen(true);
-            }}
-            onFocus={() => setOpen(true)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                setOpen(false);
-                setQuery("");
-                inputRef.current?.blur();
-              }
-              if (e.key === "Enter") {
-                e.preventDefault();
-                if (available[0]) addAuth(available[0].id);
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="btn btn-sm join-item btn-square"
-            disabled={disabled || auths.length === 0}
-            aria-label="Open auth list"
-            onClick={() => {
-              setOpen((v) => !v);
-              if (!open) inputRef.current?.focus();
-            }}
-          >
-            <LuChevronDown className={`size-4 transition-transform ${open ? "rotate-180" : ""}`} />
-          </button>
-        </div>
-        {open && !disabled && auths.length > 0 ? (
-          <ul className="menu menu-sm absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-box border border-base-300 bg-base-100 shadow-lg p-1">
-            {available.length === 0 ? (
-              <li className="disabled">
-                <span className="opacity-60">
-                  {query.trim() ? "No matches" : "All profiles selected"}
-                </span>
-              </li>
-            ) : (
-              available.map((a) => (
-                <li key={a.id}>
-                  <button type="button" onClick={() => addAuth(a.id)}>
-                    <span className="font-mono text-sm">{a.name}</span>
-                    <span className="opacity-60 text-xs">{a.type}</span>
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        ) : null}
-      </div>
-
-      {inlineCount > 0 ? (
-        <span className="text-xs opacity-60">
-          + {inlineCount} inline auth{inlineCount === 1 ? "" : "s"} (edit in YAML)
-        </span>
-      ) : null}
-    </div>
-  );
-}
 
 function CronFields({ trigger, disabled, onChange, alertDestinations }) {
   const preset = matchCronPreset(trigger.schedule);
@@ -429,8 +297,7 @@ function CronFields({ trigger, disabled, onChange, alertDestinations }) {
     <div className="space-y-2">
       <label className="form-control">
         <span className="label py-0 text-sm">Preset</span>
-        <select
-          className="select select-sm"
+        <FormSelect
           value={preset}
           disabled={disabled}
           onChange={(e) => {
@@ -446,12 +313,12 @@ function CronFields({ trigger, disabled, onChange, alertDestinations }) {
             </option>
           ))}
           <option value={CRON_CUSTOM}>Custom</option>
-        </select>
+        </FormSelect>
       </label>
       <label className="form-control">
         <span className="label py-0 text-sm">Schedule</span>
-        <input
-          className="input input-sm font-mono"
+        <FormInput
+          className="font-mono"
           value={trigger.schedule ?? ""}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, schedule: e.target.value })}
@@ -478,8 +345,8 @@ function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) 
     <div className="space-y-3 border-t border-base-300 pt-3">
       <p className="text-sm font-medium opacity-80">Failure alert</p>
       <Field label="Consecutive failures">
-        <input
-          className="input input-bordered input-sm w-full"
+        <FormInput
+          className="w-full"
           type="number"
           min="1"
           step="1"
@@ -501,8 +368,8 @@ function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) 
           </>
         }
       >
-        <select
-          className="select select-bordered select-sm w-full"
+        <FormSelect
+          className="w-full"
           value={trigger.onFailureWorkflow ?? ""}
           disabled={disabled}
           onChange={(e) => onChange({ ...trigger, onFailureWorkflow: e.target.value })}
@@ -519,7 +386,7 @@ function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) 
           ) ? (
             <option value={trigger.onFailureWorkflow}>{trigger.onFailureWorkflow}</option>
           ) : null}
-        </select>
+        </FormSelect>
       </Field>
       <label className="label cursor-pointer justify-start gap-3 py-0">
         <input
@@ -536,70 +403,5 @@ function FailureAlertFields({ trigger, disabled, onChange, alertDestinations }) 
         </span>
       </label>
     </div>
-  );
-}
-
-export function AddTriggerDialog({ open, onClose, onPick }) {
-  const [kind, setKind] = useState("HTTP");
-  if (!open) return null;
-
-  return (
-    <dialog className="modal modal-open">
-      <div className="modal-box">
-        <h3 className="font-bold text-lg">Add trigger</h3>
-        <div className="form-control mt-3">
-          <label className="label cursor-pointer justify-start gap-3">
-            <input
-              type="radio"
-              name="trig-kind"
-              className="radio radio-sm"
-              checked={kind === "HTTP"}
-              onChange={() => setKind("HTTP")}
-            />
-            <span>HTTP — webhook at <span className="font-mono">/u/owner/path</span></span>
-          </label>
-          <label className="label cursor-pointer justify-start gap-3">
-            <input
-              type="radio"
-              name="trig-kind"
-              className="radio radio-sm"
-              checked={kind === "cron"}
-              onChange={() => setKind("cron")}
-            />
-            <span>Cron — run on a schedule</span>
-          </label>
-          <label className="label cursor-pointer justify-start gap-3">
-            <input
-              type="radio"
-              name="trig-kind"
-              className="radio radio-sm"
-              checked={kind === "workflow"}
-              onChange={() => setKind("workflow")}
-            />
-            <span>Workflow — callable by other workflows</span>
-          </label>
-        </div>
-        <div className="modal-action">
-          <button type="button" className="btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              onPick(kind);
-              setKind("HTTP");
-            }}
-          >
-            Add
-          </button>
-        </div>
-      </div>
-      <form method="dialog" className="modal-backdrop">
-        <button type="button" onClick={onClose}>
-          close
-        </button>
-      </form>
-    </dialog>
   );
 }

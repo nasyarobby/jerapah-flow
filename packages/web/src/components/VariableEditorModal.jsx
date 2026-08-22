@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { errorMessage } from "../api/client.js";
-import { useOwners, useUpsertVariable } from "../api/hooks.js";
+import { useUpsertVariable } from "../api/hooks.js";
+import { FormInput, FormSelect, FormTextarea } from "./FormControls.jsx";
+import { DEFAULT_OWNER } from "../lib/tenant.js";
 
 const TYPES = ["string", "number", "boolean"];
 
@@ -12,25 +14,16 @@ function defaultValue(type) {
 
 /**
  * Add / edit a plaintext workflow variable.
- * Reusable: mount when open; parent supplies mode + initial fields.
  *
  * @param {"add" | "edit"} mode
  * @param {{ owner: string, name?: string, type?: string, value?: string | number | boolean }} initial
  * @param {() => void} onClose
  * @param {(saved: unknown) => void} [onSaved]
- * @param {boolean} [lockOwner] When true, owner cannot be changed (add mode).
  */
-export function VariableEditorModal({
-  mode,
-  initial,
-  onClose,
-  onSaved,
-  lockOwner = false,
-}) {
-  const { data: owners = [] } = useOwners();
+export function VariableEditorModal({ mode, initial, onClose, onSaved }) {
   const upsert = useUpsertVariable();
   const [form, setForm] = useState(() => ({
-    owner: initial.owner || owners[0] || "default",
+    owner: initial.owner || DEFAULT_OWNER,
     name: initial.name || "",
     type: initial.type || "string",
     value:
@@ -71,7 +64,7 @@ export function VariableEditorModal({
     );
   }
 
-  const title = mode === "add" ? "New variable" : `Edit ${form.owner}/${form.name}`;
+  const title = mode === "add" ? "New variable" : `Edit ${form.name}`;
 
   return (
     <dialog className="modal modal-open">
@@ -79,50 +72,22 @@ export function VariableEditorModal({
         <h3 className="font-bold">{title}</h3>
         <form className="mt-3 space-y-2" onSubmit={onSubmit}>
           {mode === "add" ? (
-            <>
-              <label className="form-control w-full">
-                <span className="label py-0 text-sm">Owner</span>
-                {owners.length > 0 ? (
-                  <select
-                    className="select w-full"
-                    value={form.owner}
-                    onChange={(e) => setForm({ ...form, owner: e.target.value })}
-                    required
-                    disabled={lockOwner}
-                  >
-                    {owners.map((o) => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    className="input w-full"
-                    value={form.owner}
-                    onChange={(e) => setForm({ ...form, owner: e.target.value })}
-                    required
-                    disabled={lockOwner}
-                  />
-                )}
-              </label>
-              <label className="form-control w-full">
-                <span className="label py-0 text-sm">Name</span>
-                <input
-                  className="input w-full font-mono"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  required
-                  pattern="[A-Za-z0-9._-]+"
-                  title="Letters, numbers, dots, underscores, hyphens"
-                />
-              </label>
-            </>
+            <label className="form-control w-full">
+              <span className="label py-0 text-sm">Name</span>
+              <FormInput
+                className="w-full font-mono"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                required
+                pattern="[A-Za-z0-9._-]+"
+                title="Letters, numbers, dots, underscores, hyphens"
+              />
+            </label>
           ) : null}
           <label className="form-control w-full">
             <span className="label py-0 text-sm">Type</span>
-            <select
-              className="select w-full"
+            <FormSelect
+              className="w-full"
               value={form.type}
               onChange={(e) => onTypeChange(e.target.value)}
             >
@@ -131,31 +96,31 @@ export function VariableEditorModal({
                   {t}
                 </option>
               ))}
-            </select>
+            </FormSelect>
           </label>
           <label className="form-control w-full">
             <span className="label py-0 text-sm">Value</span>
             {form.type === "boolean" ? (
-              <select
-                className="select w-full"
+              <FormSelect
+                className="w-full"
                 value={form.value === true ? "true" : "false"}
                 onChange={(e) => setForm({ ...form, value: e.target.value === "true" })}
               >
                 <option value="true">true</option>
                 <option value="false">false</option>
-              </select>
+              </FormSelect>
             ) : form.type === "number" ? (
-              <input
+              <FormInput
                 type="number"
-                className="input w-full font-mono"
+                className="w-full font-mono"
                 value={form.value}
                 onChange={(e) => setForm({ ...form, value: e.target.value })}
                 required
                 step="any"
               />
             ) : (
-              <textarea
-                className="textarea w-full font-mono min-h-24"
+              <FormTextarea
+                className="w-full font-mono min-h-24"
                 value={form.value}
                 onChange={(e) => setForm({ ...form, value: e.target.value })}
                 spellCheck={false}

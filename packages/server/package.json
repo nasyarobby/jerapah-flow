@@ -13,9 +13,13 @@
     "start:control": "node control.js",
     "migrate": "node -e \"import('./db.js').then((m) => m.migrate().then(() => process.exit(0)))\"",
     "test:plugins": "JFLOW_PLUGINS_DIR=./data/plugins-smoke-test JFLOW_DB_PATH=./data/plugins-smoke.db node test/plugins-smoke.js",
-    "test:workflow-history": "node test/workflow-history-smoke.js"
+    "test:workflow-history": "JFLOW_WORKFLOWS_DIR=./data/workflow-history-smoke JFLOW_DB_PATH=./data/workflow-history-smoke.db node test/workflow-history-smoke.js",
+    "reset-admin": "node reset-admin.js",
+    "test:profiles": "node test/profiles-smoke.js",
+    "test:set-dry-run": "node test/set-dry-run-smoke.js"
   },
   "dependencies": {
+    "@jerapah-flow/shared": "workspace:*",
     "@aws-sdk/client-s3": "^3.1111.0",
     "@aws-sdk/s3-request-presigner": "^3.1111.0",
     "@fastify/cookie": "^11.0.2",
@@ -38,6 +42,7 @@
     "pino": "^10.3.1",
     "pino-roll": "^4.0.0",
     "pm2": "^6.0.13",
+    "rss-parser": "^3.13.0",
     "ssh2-sftp-client": "^12.1.1",
     "webdav": "^5.10.0",
     "yaml": "^2.9.0"

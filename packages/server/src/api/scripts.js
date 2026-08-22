@@ -8,7 +8,6 @@ import {
 import * as fsStore from "../../fs-store.js";
 import {
   forkCoreScript,
-  getInstalledPlugin,
   listCoreScriptNames,
   listInstalledPlugins,
   resolveScriptRef,
@@ -22,11 +21,16 @@ import {
   installPluginFromZipBuffer,
 } from "../../plugin-install.js";
 import { createDryRunLogger, safeSerialize } from "./dry-run-logger.js";
+import {
+  encodeBinaryForWire,
+  reviveBinaryFromWire,
+} from "../../json-preview.js";
 import { normalizeStepResult } from "../../step-result.js";
 import { resolveConfigRefs } from "../../config-refs.js";
 import { getAppVersion } from "../../app-version.js";
 import { EXAMPLE_PLUGINS_DIR } from "../../paths.js";
 import { pluginScriptRef } from "../../plugin-manifest.js";
+import { evaluateJsonata, SET_STEP_SCRIPT } from "../../workflow-parse.js";
 
 /**
  * @param {{ referencedScripts: () => Set<string> }} registry
@@ -250,14 +254,11 @@ export default function scriptsPluginFactory(registry) {
       const rawName = decodeURIComponent(
         /** @type {{ name: string }} */ (req.params).name,
       );
-      const body = /** @type {{ content?: string, data?: unknown, context?: unknown, config?: unknown, owner?: string }} */ (
+      const body = /** @type {{ content?: string, expression?: string, data?: unknown, context?: unknown, config?: unknown, owner?: string }} */ (
         req.body ?? {}
       );
-      if (typeof body.content !== "string") {
-        return reply.code(400).send({ error: "content is required" });
-      }
 
-      let owner = "default";
+      let owner = "local";
       if (body.owner != null && body.owner !== "") {
         try {
           owner = fsStore.assertOwner(String(body.owner));
@@ -266,21 +267,98 @@ export default function scriptsPluginFactory(registry) {
         }
       }
 
-      const incomingContext =
+      const incomingContext = reviveBinaryFromWire(
         body.context != null &&
-        typeof body.context === "object" &&
-        !Array.isArray(body.context)
+          typeof body.context === "object" &&
+          !Array.isArray(body.context)
           ? body.context
-          : {};
+          : {},
+      );
+      const incomingData = reviveBinaryFromWire(body.data ?? null);
+
+      const { log, logs } = createDryRunLogger();
+      const started = Date.now();
+
+      // Set steps are inline JSONata (no script file). Match registry runCompiledStep.
+      if (rawName === SET_STEP_SCRIPT || rawName === `${SET_STEP_SCRIPT}.js`) {
+        const configObj =
+          body.config != null &&
+          typeof body.config === "object" &&
+          !Array.isArray(body.config)
+            ? /** @type {Record<string, unknown>} */ (body.config)
+            : null;
+        const expression =
+          typeof body.expression === "string"
+            ? body.expression
+            : typeof configObj?.expression === "string"
+              ? configObj.expression
+              : null;
+        if (expression == null || !expression.trim()) {
+          return reply.code(400).send({ error: "expression is required" });
+        }
+
+        try {
+          const config = await resolveConfigRefs(
+            { ...(configObj ?? {}), expression },
+            {
+              owner,
+              workflowKey: "dry-run",
+              context: incomingContext,
+            },
+          );
+          const ctx = {
+            data: incomingData,
+            context: incomingContext,
+            config,
+          };
+          const value = await evaluateJsonata(expression, ctx);
+          const result = normalizeStepResult(
+            {
+              output: value,
+              context: incomingContext,
+              skipRemaining: false,
+            },
+            incomingContext,
+            SET_STEP_SCRIPT,
+          );
+          log.info({ expression }, "set: dry-run evaluated");
+          return {
+            status: "success",
+            output: safeSerialize(result.output),
+            context: safeSerialize(result.context),
+            wireOutput: encodeBinaryForWire(result.output),
+            wireContext: encodeBinaryForWire(result.context),
+            skipRemaining: result.skipRemaining,
+            error: null,
+            logs,
+            durationMs: Date.now() - started,
+            meta: null,
+            metaError: null,
+          };
+        } catch (err) {
+          return {
+            status: "failed",
+            output: null,
+            context: null,
+            skipRemaining: false,
+            error: err instanceof Error ? err.message : String(err),
+            logs,
+            durationMs: Date.now() - started,
+            meta: null,
+            metaError: null,
+          };
+        }
+      }
+
+      if (typeof body.content !== "string") {
+        return reply.code(400).send({ error: "content is required" });
+      }
 
       const resolved = resolveScriptRef(rawName);
       const pluginDir =
         resolved.kind === "plugin" && !resolved.error
           ? resolved.pluginDir ?? null
           : null;
-
-      const { log, logs } = createDryRunLogger();
-      const started = Date.now();
 
       try {
         const config = await resolveConfigRefs(body.config ?? null, {
@@ -289,7 +367,7 @@ export default function scriptsPluginFactory(registry) {
           context: incomingContext,
         });
         const ctx = {
-          data: body.data ?? null,
+          data: incomingData,
           context: incomingContext,
           config,
         };
@@ -313,6 +391,8 @@ export default function scriptsPluginFactory(registry) {
           status: "success",
           output: safeSerialize(result.output),
           context: safeSerialize(result.context),
+          wireOutput: encodeBinaryForWire(result.output),
+          wireContext: encodeBinaryForWire(result.context),
           skipRemaining: result.skipRemaining,
           error: null,
           logs,
@@ -475,7 +555,5 @@ export default function scriptsPluginFactory(registry) {
         }
       },
     );
-
-    void getInstalledPlugin;
   };
 }

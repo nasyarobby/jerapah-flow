@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useKv, useKvNamespaces } from "../api/hooks.js";
-import { formatTime } from "../lib/format.jsx";
+import { LuTrash2 } from "react-icons/lu";
+import { errorMessage } from "../api/client.js";
+import { useDeleteKv, useKv, useKvNamespaces } from "../api/hooks.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
+import { FormSelect } from "../components/FormControls.jsx";
+import { formatTime } from "../lib/format";
 
 const PAGE_SIZE = 50;
 
@@ -18,8 +22,10 @@ export function KvPage() {
   const q = params.get("q") || "";
   const offset = Math.max(Number(params.get("offset")) || 0, 0);
   const [expanded, setExpanded] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const { data: namespaces = [] } = useKvNamespaces();
+  const del = useDeleteKv();
   const { data, isLoading } = useKv({
     namespace: namespace || undefined,
     q: q || undefined,
@@ -48,8 +54,8 @@ export function KvPage() {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">KV</h1>
       <div className="flex flex-col sm:flex-row gap-2">
-        <select
-          className="select select-sm w-full sm:max-w-xs"
+        <FormSelect
+          className="w-full sm:max-w-xs"
           value={namespace}
           onChange={(e) => update("namespace", e.target.value)}
         >
@@ -59,7 +65,7 @@ export function KvPage() {
               {ns}
             </option>
           ))}
-        </select>
+        </FormSelect>
         <input
           className="input input-sm w-full sm:max-w-sm"
           placeholder="search key or value"
@@ -82,6 +88,7 @@ export function KvPage() {
                   <th>Value</th>
                   <th>Updated</th>
                   <th>Expires</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -93,6 +100,15 @@ export function KvPage() {
                       key={id}
                       className="hover cursor-pointer"
                       onClick={() => setExpanded(open ? null : id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setExpanded(open ? null : id);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={open}
                     >
                       <td className="font-mono text-xs align-top">{item.namespace}</td>
                       <td className="font-mono text-xs align-top">{item.key}</td>
@@ -108,6 +124,21 @@ export function KvPage() {
                       <td className="whitespace-nowrap align-top">{formatTime(item.updatedAt)}</td>
                       <td className="whitespace-nowrap align-top">
                         {item.expiresAt ? formatTime(item.expiresAt) : "—"}
+                      </td>
+                      <td className="text-right whitespace-nowrap align-top">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs text-error"
+                          title="Delete"
+                          aria-label="Delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDelete(item);
+                          }}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <LuTrash2 className="size-4" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -138,6 +169,29 @@ export function KvPage() {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={
+          confirmDelete ? `Delete ${confirmDelete.namespace}/${confirmDelete.key}?` : ""
+        }
+        message="This cannot be undone. Scripts that read this key will get null."
+        error={del.isError ? errorMessage(del.error) : null}
+        loading={del.isPending}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() =>
+          del.mutate(
+            { namespace: confirmDelete.namespace, key: confirmDelete.key },
+            {
+              onSuccess: () => {
+                const id = rowId(confirmDelete);
+                setConfirmDelete(null);
+                setExpanded((current) => (current === id ? null : current));
+              },
+            },
+          )
+        }
+      />
     </div>
   );
 }

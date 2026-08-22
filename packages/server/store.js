@@ -222,19 +222,29 @@ export async function insertLogs(rows) {
   );
 }
 
+/** @type {Record<string, string>} */
+const RUN_SORT_COLUMNS = {
+  status: "status",
+  workflow: "workflow_name",
+  revision: "workflow_revision",
+  trigger: "trigger_type",
+  started_at: "started_at",
+  duration: "duration_ms",
+};
+
 /**
+ * @param {import("knex").Knex.QueryBuilder} q
  * @param {{
  *   owner?: string,
  *   workflow?: string,
  *   status?: string | string[],
- *   limit?: number,
+ *   trigger_type?: string,
+ *   after?: string,
  *   before?: string,
- * }} [filters]
+ * }} filters
  */
-export async function listRuns(filters = {}) {
-  const limit = Math.min(Math.max(filters.limit ?? 50, 1), 200);
-  let q = db("workflow_runs").select("*").orderBy("started_at", "desc");
-  if (filters.owner) q = q.where("owner", filters.owner);
+function applyRunFilters(q, filters) {
+  if (filters.owner) q.where("owner", filters.owner);
   if (filters.workflow) {
     const key = String(filters.workflow);
     if (key.includes("*")) {
@@ -243,25 +253,102 @@ export async function listRuns(filters = {}) {
         .replaceAll("%", "\\%")
         .replaceAll("_", "\\_")
         .replaceAll("*", "%");
-      q = q.whereRaw("workflow LIKE ? ESCAPE '\\'", [pattern]);
+      q.whereRaw("workflow LIKE ? ESCAPE '\\'", [pattern]);
     } else {
-      q = q.where("workflow", key);
+      q.where("workflow", key);
     }
   }
   if (filters.status) {
     if (Array.isArray(filters.status)) {
-      q = q.whereIn("status", filters.status);
+      q.whereIn("status", filters.status);
     } else {
-      q = q.where("status", filters.status);
+      q.where("status", filters.status);
     }
   }
-  if (filters.before) q = q.where("started_at", "<", filters.before);
-  const rows = await q.limit(limit);
-  return rows.map((row) => ({
+  if (filters.trigger_type) q.where("trigger_type", filters.trigger_type);
+  if (filters.after) q.where("started_at", ">=", filters.after);
+  if (filters.before) q.where("started_at", "<", filters.before);
+  return q;
+}
+
+/**
+ * @param {import("knex").Knex.QueryBuilder} q
+ * @param {string | undefined} sort
+ * @param {string | undefined} order
+ */
+function applyRunSort(q, sort, order) {
+  const column = RUN_SORT_COLUMNS[sort ?? ""] ?? "started_at";
+  const direction = order === "asc" ? "asc" : "desc";
+  q.orderBy(column, direction);
+  if (column !== "started_at") q.orderBy("started_at", "desc");
+  return q;
+}
+
+/**
+ * @param {Record<string, unknown>} row
+ */
+function mapRunRow(row) {
+  return {
     ...row,
     input: deserialize(row.input),
     output: deserialize(row.output),
-  }));
+  };
+}
+
+/**
+ * @param {{
+ *   owner?: string,
+ *   workflow?: string,
+ *   status?: string | string[],
+ *   trigger_type?: string,
+ *   after?: string,
+ *   before?: string,
+ *   limit?: number,
+ *   offset?: number,
+ *   sort?: string,
+ *   order?: string,
+ * }} [filters]
+ */
+export async function queryRuns(filters = {}) {
+  const limit = Math.min(Math.max(filters.limit ?? 50, 1), 200);
+  const offset = Math.max(Number(filters.offset) || 0, 0);
+
+  let q = db("workflow_runs");
+  q = applyRunFilters(q, filters);
+
+  const countRow = await q.clone().count({ count: "*" }).first();
+  const total = Number(countRow?.count ?? 0);
+
+  let rowsQ = q.clone().select("*");
+  rowsQ = applyRunSort(rowsQ, filters.sort, filters.order);
+  const rows = await rowsQ.limit(limit).offset(offset);
+
+  return {
+    runs: rows.map(mapRunRow),
+    total,
+    limit,
+    offset,
+  };
+}
+
+/**
+ * @param {{
+ *   owner?: string,
+ *   workflow?: string,
+ *   status?: string | string[],
+ *   trigger_type?: string,
+ *   after?: string,
+ *   before?: string,
+ *   limit?: number,
+ * }} [filters]
+ */
+export async function listRuns(filters = {}) {
+  const limit = Math.min(Math.max(filters.limit ?? 50, 1), 200);
+  let q = db("workflow_runs").select("*");
+  q = applyRunFilters(q, filters);
+  q = applyRunSort(q, "started_at", "desc");
+  const rows = await q.limit(limit);
+  return rows.map(mapRunRow);
 }
 
 /**
@@ -495,12 +582,13 @@ export async function listUsers() {
 
 /**
  * @param {string} id
- * @param {{ passwordHash?: string, role?: string }} patch
+ * @param {{ passwordHash?: string, role?: string, username?: string }} patch
  */
 export async function updateUser(id, patch) {
   const update = { updated_at: nowIso() };
   if (patch.passwordHash) update.password_hash = patch.passwordHash;
   if (patch.role) update.role = patch.role;
+  if (patch.username) update.username = patch.username;
   await db("users").where({ id }).update(update);
   return getUserById(id);
 }

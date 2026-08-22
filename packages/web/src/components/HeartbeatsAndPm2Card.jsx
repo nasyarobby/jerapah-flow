@@ -2,7 +2,7 @@ import { useState } from "react";
 import { errorMessage } from "../api/client.js";
 import { HeartbeatsToolbar } from "./HeartbeatsToolbar.jsx";
 import { useNotifications } from "../notifications.jsx";
-import { formatBytes, formatCpu, formatDuration } from "../lib/format.js";
+import { formatBytes, formatCpu, formatDuration } from "../lib/format";
 
 const MAX_WORKERS = 32;
 

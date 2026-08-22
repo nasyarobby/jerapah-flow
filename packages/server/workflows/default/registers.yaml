@@ -1,20 +1,6 @@
 scripts:
-  - time-to-ntfy-example.yaml
-  - test.yaml
   - cron-example.yaml
-  - fetch-devto.yaml
-  - comic-monkeyuser-to-ntfy.yaml
-  - time-and-comic-to-ntfy.yaml
-  - rss-selfhst-to-ntfy.yaml
-  - send-gmail.yaml
-  - test-send-gmail.yaml
-  - track.yaml
-  - rss-devto-to-ntfy.yaml
-  - test-minio.yaml
-  - dev-joplin-sync.yaml
-  - dev-joplin-daily.yaml
-  - dev-joplin-get-note.yaml
-  - web-dave.yaml
-  - jadwal-sholat-jakart.yaml
   - detect-example-changes.yaml
-  - test-sftp.yaml
+  - time-to-ntfy-example.yaml
+  - comic-monkeyuser-to-ntfy.yaml
+  - afb272d4-b217-49ac-8c8b-755a6d8dac4a.yaml

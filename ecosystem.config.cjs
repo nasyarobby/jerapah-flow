@@ -1,3 +1,8 @@
+/**
+ * Production PM2 ecosystem (monolith runner).
+ * Use for deployed/single-process starts. For local multi-process Ops UI, use
+ * `pnpm dev:pm2` → packages/server/ecosystem.dev.cjs / control.js instead.
+ */
 const fs = require("fs");
 const path = require("path");
 

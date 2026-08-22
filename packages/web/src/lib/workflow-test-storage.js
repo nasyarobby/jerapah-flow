@@ -1,11 +1,9 @@
+import { isPlainObject } from "@jerapah-flow/shared";
+
 const PREFIX = "jerapah-flow.workflowTestData:";
 
 export function workflowTestStorageKey(owner, file) {
   return `${PREFIX}${owner}/${file}`;
-}
-
-function isPlainObject(value) {
-  return value != null && typeof value === "object" && !Array.isArray(value);
 }
 
 /** Overlay saved test JSON on the schema/YAML seed. Stored object keys win. */

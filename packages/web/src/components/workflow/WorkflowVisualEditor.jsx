@@ -1,32 +1,18 @@
-import { useMemo, useState } from "react";
-import { parse as parseYaml } from "yaml";
-import { useHttpAuths, useHttpPages, useScripts, useWorkflows } from "../../api/hooks.js";
+import { useEffect, useMemo, useState } from "react";
+import { useHttpAuths, useHttpPages, useProfiles, useScripts, useWorkflows } from "../../api/hooks.js";
 import { dataFromInputMeta, firstInputMeta } from "../../lib/script.js";
-import { workflowToFlowchart } from "../../lib/workflow-mermaid.js";
+import {
+  emptyTrySession,
+  pruneTrySession,
+  recordTrySuccess,
+} from "../../lib/try-session.js";
 import { parseWorkflowYaml, stringifyWorkflowDoc } from "../../lib/workflow-doc.js";
+import { FormInput, FormTextarea } from "../FormControls.jsx";
+import { GraphTab } from "./GraphTab.jsx";
 import { ScriptsTab } from "./ScriptsTab.jsx";
 import { TriggersTab } from "./TriggersTab.jsx";
 import { YamlTab } from "./YamlTab.jsx";
 import { WorkflowTestPanel } from "./WorkflowTestPanel.jsx";
-
-export function useYamlPreview(content) {
-  return useMemo(() => {
-    try {
-      const parsedYaml = parseYaml(content);
-      return {
-        parsed: parsedYaml,
-        parseError: null,
-        mermaid: workflowToFlowchart(parsedYaml),
-      };
-    } catch (err) {
-      return {
-        parsed: null,
-        parseError: err instanceof Error ? err.message : String(err),
-        mermaid: { chart: "", scriptIds: {} },
-      };
-    }
-  }, [content]);
-}
 
 export function WorkflowVisualEditor({
   yaml,
@@ -39,16 +25,19 @@ export function WorkflowVisualEditor({
   testOpen,
   onTestClose,
 }) {
-  const [tab, setTab] = useState("scripts");
+  const [tab, setTab] = useState("graph");
   const [lastEdited, setLastEdited] = useState("yaml");
   const [doc, setDoc] = useState(() => parseWorkflowYaml(yaml).doc);
+  const [trySession, setTrySession] = useState(emptyTrySession);
+  const [tryFocusUiId, setTryFocusUiId] = useState(/** @type {string | null} */ (null));
 
-  const { parsed, parseError, mermaid } = useYamlPreview(yaml);
   const parsedDoc = useMemo(() => parseWorkflowYaml(yaml), [yaml]);
   const displayDoc = lastEdited === "visual" && doc ? doc : parsedDoc.doc;
   const visualDisabled = !displayDoc;
+  const parseError = parsedDoc.parseError;
 
   const { data: scripts = [] } = useScripts();
+  const { data: profiles = [] } = useProfiles(owner || undefined, { enabled: Boolean(owner) });
   const { data: workflows = [] } = useWorkflows(owner || undefined);
   const { data: auths = [] } = useHttpAuths();
   const { data: allPages = [] } = useHttpPages();
@@ -57,6 +46,38 @@ export function WorkflowVisualEditor({
   const scriptCount = displayDoc?.scripts?.length ?? 0;
   const triggerCount = displayDoc?.triggers?.length ?? 0;
   const unsaved = savedYaml != null && yaml !== savedYaml;
+  const trySessionCount = Object.keys(trySession.byStep ?? {}).length;
+
+  useEffect(() => {
+    setTrySession((prev) => {
+      const next = pruneTrySession(prev, displayDoc?.scripts ?? []);
+      const prevKeys = Object.keys(prev.byStep ?? {});
+      const nextKeys = Object.keys(next.byStep ?? {});
+      if (
+        prevKeys.length === nextKeys.length &&
+        prevKeys.every((k) => next.byStep[k]) &&
+        prev.lastTriedUiId === next.lastTriedUiId
+      ) {
+        return prev;
+      }
+      return next;
+    });
+    const ids = new Set((displayDoc?.scripts ?? []).map((s) => s.uiId));
+    setTryFocusUiId((cur) => (cur && !ids.has(cur) ? null : cur));
+  }, [displayDoc?.scripts]);
+
+  function onTrySuccess(uiId, result) {
+    if (!uiId) return;
+    setTrySession((prev) => recordTrySuccess(prev, uiId, result));
+  }
+
+  function onTryFocus(uiId) {
+    setTryFocusUiId(uiId ?? null);
+  }
+
+  function clearTrySession() {
+    setTrySession(emptyTrySession());
+  }
 
   function patchDoc(mutator) {
     const base = lastEdited === "visual" && doc ? doc : parsedDoc.doc;
@@ -90,9 +111,17 @@ export function WorkflowVisualEditor({
     return map;
   }, [scripts]);
 
+  const profilesByName = useMemo(() => {
+    const map = new Map();
+    for (const p of profiles) {
+      if (p?.name) map.set(p.name, p);
+    }
+    return map;
+  }, [profiles]);
+
   const inputMeta = useMemo(
-    () => firstInputMeta(displayDoc?.scripts, scriptsByName),
-    [displayDoc?.scripts, scriptsByName],
+    () => firstInputMeta(displayDoc?.scripts, scriptsByName, profilesByName),
+    [displayDoc?.scripts, scriptsByName, profilesByName],
   );
 
   const defaultData = useMemo(() => {
@@ -106,12 +135,30 @@ export function WorkflowVisualEditor({
   if (visualDisabled) testDisabledReason = "Fix YAML before running.";
   else if (unsaved) testDisabledReason = "Save the workflow before running. Test uses the saved YAML.";
 
+  const graphProps = {
+    doc: displayDoc,
+    onPatch: patchDoc,
+    disabled: visualDisabled,
+    scripts,
+    profiles,
+    workflows,
+    owner,
+    file,
+    excludeFile: file,
+    auths,
+    pages,
+    trySession,
+    onTrySuccess,
+    tryFocusUiId,
+    onTryFocus,
+  };
+
   return (
     <>
       <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         {extraChrome}
-        <input
-          className="input input-sm sm:max-w-xs"
+        <FormInput
+          className="sm:max-w-xs"
           placeholder="name"
           value={displayDoc?.name ?? ""}
           disabled={visualDisabled}
@@ -121,8 +168,8 @@ export function WorkflowVisualEditor({
             })
           }
         />
-        <textarea
-          className="textarea textarea-sm min-h-10 w-full sm:max-w-md"
+        <FormTextarea
+          className="min-h-10 w-full sm:max-w-md"
           placeholder="description"
           rows={1}
           value={displayDoc?.description ?? ""}
@@ -134,9 +181,27 @@ export function WorkflowVisualEditor({
           }
         />
         {unsaved ? <span className="badge badge-warning badge-sm">Unsaved</span> : null}
+        {trySessionCount > 0 ? (
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            title="Clear Try session (cached step outputs for seeding)"
+            onClick={clearTrySession}
+          >
+            Clear try session ({trySessionCount})
+          </button>
+        ) : null}
       </div>
 
       <div role="tablist" className="tabs tabs-box shrink-0 w-full sm:w-auto">
+        <button
+          type="button"
+          role="tab"
+          className={`tab ${tab === "graph" ? "tab-active" : ""}`}
+          onClick={() => selectTab("graph")}
+        >
+          Graph
+        </button>
         <button
           type="button"
           role="tab"
@@ -169,15 +234,21 @@ export function WorkflowVisualEditor({
         </p>
       ) : null}
 
+      {tab === "graph" ? <GraphTab {...graphProps} /> : null}
       {tab === "scripts" ? (
         <ScriptsTab
           doc={displayDoc}
           onPatch={patchDoc}
           disabled={visualDisabled}
           scripts={scripts}
+          profiles={profiles}
           workflows={workflows}
           owner={owner}
           excludeFile={file}
+          trySession={trySession}
+          onTrySuccess={onTrySuccess}
+          tryFocusUiId={tryFocusUiId}
+          onTryFocus={onTryFocus}
         />
       ) : null}
       {tab === "triggers" ? (
@@ -193,13 +264,7 @@ export function WorkflowVisualEditor({
         />
       ) : null}
       {tab === "yaml" ? (
-        <YamlTab
-          content={yaml}
-          onChange={onYamlTabChange}
-          parseError={parseError}
-          mermaid={mermaid}
-          parsed={parsed}
-        />
+        <YamlTab content={yaml} onChange={onYamlTabChange} parseError={parseError} />
       ) : null}
 
       {showTest && owner && file ? (

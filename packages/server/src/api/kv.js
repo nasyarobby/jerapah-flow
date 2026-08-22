@@ -1,4 +1,4 @@
-import { kvNamespaces, kvQuery } from "../../kv-store.js";
+import { kvDelete, kvNamespaces, kvQuery } from "../../kv-store.js";
 
 /**
  * @param {import("fastify").FastifyInstance} fastify
@@ -18,5 +18,18 @@ export default async function kvPlugin(fastify) {
       limit: Number.isFinite(limit) ? limit : undefined,
       offset: Number.isFinite(offset) ? offset : undefined,
     });
+  });
+
+  fastify.delete("/kv", async (req, reply) => {
+    const q = /** @type {Record<string, string | undefined>} */ (req.query ?? {});
+    try {
+      const deleted = await kvDelete(String(q.namespace ?? ""), String(q.key ?? ""));
+      if (!deleted) {
+        return reply.code(404).send({ error: "kv entry not found" });
+      }
+      return { ok: true };
+    } catch (err) {
+      return reply.code(400).send({ error: err.message });
+    }
   });
 }

@@ -1,9 +1,17 @@
 import jsonata from "jsonata";
 
-function ensureDataObject(ctx) {
-  if (ctx.data == null || typeof ctx.data !== "object" || Array.isArray(ctx.data)) {
-    ctx.data = {};
+function passContext(ctx) {
+  if (ctx?.context != null && typeof ctx.context === "object" && !Array.isArray(ctx.context)) {
+    return { ...ctx.context };
   }
+  return {};
+}
+
+function mergeData(data) {
+  if (data != null && typeof data === "object" && !Array.isArray(data)) {
+    return { ...data };
+  }
+  return {};
 }
 
 const ALLOWED_METHODS = new Set([
@@ -35,6 +43,19 @@ function previewValue(value) {
   return { preview: `${json.slice(0, 500)}...`, truncated: true };
 }
 
+/**
+ * Eval context for fingerprint/transform JSONata (reads `data.*`).
+ * @param {unknown} ctx
+ * @param {Record<string, unknown>} data
+ */
+function evalCtx(ctx, data) {
+  return {
+    data,
+    context: passContext(ctx),
+    config: ctx?.config ?? {},
+  };
+}
+
 async function detectUrlChanges(ctx) {
   const url = ctx.config?.url;
   if (typeof url !== "string" || url.length === 0) {
@@ -63,7 +84,7 @@ async function detectUrlChanges(ctx) {
     );
   }
 
-  ensureDataObject(ctx);
+  const data = mergeData(ctx.data);
 
   log.info({ url, method, key }, "detect-url-changes: fetching url");
   const response = await $axios.request({
@@ -77,28 +98,31 @@ async function detectUrlChanges(ctx) {
     "detect-url-changes: fetch complete",
   );
 
-  ctx.data.httpResponse = response.data;
+  data.httpResponse = response.data;
 
-  let fingerprintSource = ctx.data.httpResponse;
+  let fingerprintSource = data.httpResponse;
   if (typeof fingerprintExpr === "string" && fingerprintExpr.length > 0) {
     log.info(
       { jsonata: fingerprintExpr },
       "detect-url-changes: evaluating fingerprint jsonata",
     );
-    fingerprintSource = await jsonata(fingerprintExpr).evaluate(ctx);
+    fingerprintSource = await jsonata(fingerprintExpr).evaluate(evalCtx(ctx, data));
   }
 
   const result = await $fingerprint.claim(key, fingerprintSource, {
     maxAge: ctx.config?.maxAge,
   });
 
-  ctx.data.hasChanges = result.changed;
-  ctx.data.fingerprint = result.hash;
-  ctx.data.fingerprintChanged = result.changed;
-  ctx.data.fingerprintPrevious = result.previous;
-  ctx.data.fingerprintAt = result.changed ? result.at : result.previousAt;
-  ctx.data.fingerprintAge = result.ageMs;
-  ctx.data.fingerprintExpired = result.expired;
+  const extra = {
+    hasChanges: result.changed,
+    fingerprint: result.hash,
+    fingerprintChanged: result.changed,
+    fingerprintPrevious: result.previous,
+    fingerprintAt: result.changed ? result.at : result.previousAt,
+    fingerprintAge: result.ageMs,
+    fingerprintExpired: result.expired,
+  };
+  Object.assign(data, extra);
 
   log.info(
     {
@@ -116,28 +140,35 @@ async function detectUrlChanges(ctx) {
         { outputVar, jsonata: transformExpr },
         "detect-url-changes: evaluating transform jsonata",
       );
-      const transformed = await jsonata(transformExpr).evaluate(ctx);
-      ctx.data[outputVar] = transformed;
+      const transformed = await jsonata(transformExpr).evaluate(evalCtx(ctx, data));
+      data[outputVar] = transformed;
       log.info(
         { outputVar, value: previewValue(transformed) },
         "detect-url-changes: saved transform result",
       );
     } else {
-      ctx.data[outputVar] = ctx.data.httpResponse;
+      data[outputVar] = data.httpResponse;
       log.info({ outputVar }, "detect-url-changes: saved raw response to outputVar");
     }
   }
 
+  /** @type {{ output: Record<string, unknown>, context: Record<string, unknown>, skipRemaining?: true }} */
+  const envelope = {
+    output: data,
+    context: { ...passContext(ctx), ...extra },
+  };
   if (skipRemainingWhenUnchanged && !result.changed) {
-    ctx.skipRemaining = true;
+    envelope.skipRemaining = true;
   }
-
-  return ctx;
+  return envelope;
 }
 
 detectUrlChanges.meta = {
   description:
     "Fetch a URL, fingerprint the response (or a JSONata-derived value), and report whether it changed since the last run",
+  previewConfigKey: "url",
+  tags: ["HTTP"],
+  reads: "ctx",
   config: {
     url: { type: "string", required: true, description: "URL to fetch" },
     method: {
@@ -201,6 +232,15 @@ detectUrlChanges.meta = {
     fingerprintPrevious: { type: "string", required: false },
     fingerprintAt: { type: "string", required: false, description: "ISO timestamp of the stored record" },
     fingerprintAge: { type: "number", required: false, description: "Age in milliseconds" },
+    fingerprintExpired: { type: "boolean" },
+  },
+  context: {
+    hasChanges: { type: "boolean" },
+    fingerprint: { type: "string" },
+    fingerprintChanged: { type: "boolean" },
+    fingerprintPrevious: { type: "string", required: false },
+    fingerprintAt: { type: "string", required: false },
+    fingerprintAge: { type: "number", required: false },
     fingerprintExpired: { type: "boolean" },
   },
   example: {

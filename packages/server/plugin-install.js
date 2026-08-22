@@ -8,7 +8,6 @@ import {
   installPluginFromDirectory,
   pluginDir,
 } from "./plugin-store.js";
-import { readManifestFile } from "./plugin-manifest.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -214,5 +213,3 @@ export function ensureExampleInstalled(exampleId) {
   });
   return { ...installed, already: false };
 }
-
-void readManifestFile;

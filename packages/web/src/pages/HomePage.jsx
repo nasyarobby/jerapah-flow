@@ -6,7 +6,7 @@ import {
   LuTriangleAlert,
 } from "react-icons/lu";
 import { useDashboard } from "../api/hooks.js";
-import { formatTime, StatusBadge } from "../lib/format.jsx";
+import { formatTime, StatusBadge } from "../lib/format";
 
 export function HomePage() {
   const { data, isLoading, error } = useDashboard();

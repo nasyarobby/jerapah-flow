@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { LuPlus } from "react-icons/lu";
 import { defaultConfigFromMeta } from "../../lib/script.js";
-import { newScriptStep, newSetStep } from "../../lib/workflow-doc.js";
+import { newProfileStep, newScriptStep, newSetStep, withAllocatedStepId } from "../../lib/workflow-doc.js";
 import { AddScriptDialog } from "./AddScriptDialog.jsx";
 import { ScriptCard } from "./ScriptCard.jsx";
 
@@ -24,9 +24,14 @@ export function ScriptsTab({
   onPatch,
   disabled,
   scripts = [],
+  profiles = [],
   workflows = [],
   owner,
   excludeFile,
+  trySession,
+  onTrySuccess,
+  tryFocusUiId,
+  onTryFocus,
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const sensors = useSensors(
@@ -41,6 +46,10 @@ export function ScriptsTab({
   for (const s of scripts) {
     const name = typeof s === "string" ? s : s.name;
     scriptsByName.set(name, s);
+  }
+  const profilesByName = new Map();
+  for (const p of profiles) {
+    if (p?.name) profilesByName.set(p.name, p);
   }
 
   function patchSteps(next) {
@@ -72,7 +81,7 @@ export function ScriptsTab({
           onClick={() => setAddOpen(true)}
         >
           <LuPlus className="size-4" />
-          Add script
+          Add step
         </button>
       </div>
       {steps.length === 0 ? (
@@ -88,16 +97,29 @@ export function ScriptsTab({
                   index={index}
                   otherSteps={steps}
                   scriptsByName={scriptsByName}
+                  profilesByName={profilesByName}
                   disabled={disabled}
                   workflows={workflows}
                   owner={owner}
                   excludeFile={excludeFile}
+                  trySession={trySession}
+                  onTrySuccess={onTrySuccess}
+                  tryOpen={tryFocusUiId === step.uiId}
+                  onTryOpenChange={(open) => {
+                    onTryFocus?.(open ? step.uiId : null);
+                  }}
+                  onNavigateTry={(targetUiId) => {
+                    onTryFocus?.(targetUiId);
+                  }}
                   onChange={(next) => {
                     const copy = [...steps];
                     copy[index] = next;
                     patchSteps(copy);
                   }}
-                  onRemove={() => patchSteps(steps.filter((_, i) => i !== index))}
+                  onRemove={() => {
+                    if (tryFocusUiId === step.uiId) onTryFocus?.(null);
+                    patchSteps(steps.filter((_, i) => i !== index));
+                  }}
                 />
               ))}
             </div>
@@ -106,16 +128,14 @@ export function ScriptsTab({
       )}
       <AddScriptDialog
         open={addOpen}
+        owner={owner}
         onClose={() => setAddOpen(false)}
         onPick={(picked) => {
-          if (picked.kind === "set") {
-            patchSteps([...steps, newSetStep()]);
-          } else {
-            patchSteps([
-              ...steps,
-              newScriptStep(picked.name, defaultConfigFromMeta(picked.meta)),
-            ]);
-          }
+          let next;
+          if (picked.kind === "set") next = newSetStep();
+          else if (picked.kind === "profile") next = newProfileStep(picked.name, picked.script);
+          else next = newScriptStep(picked.name, defaultConfigFromMeta(picked.meta));
+          patchSteps([...steps, withAllocatedStepId(next, steps)]);
           setAddOpen(false);
         }}
       />

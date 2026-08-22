@@ -26,6 +26,8 @@ import {
   collectWorkflowWarnings,
   parseWorkflowDocument,
 } from "../../workflow-validate-warnings.js";
+import { getProfilePlain } from "../../profiles-store.js";
+import { resolveScriptRef } from "../../plugin-store.js";
 import {
   recordRevision,
   listRevisions,
@@ -43,6 +45,11 @@ import {
   createWorkflowBackupBuffer,
   restoreWorkflowBackup,
 } from "../../workflow-backup.js";
+import {
+  listExampleWorkflows,
+  readExampleWorkflow,
+  assertExampleWorkflowId,
+} from "../../workflow-examples.js";
 
 /**
  * Reload this process and notify other HTTP/worker processes via Redis.
@@ -81,12 +88,67 @@ function scriptNames(workflow) {
   for (const raw of workflow.scripts ?? []) {
     try {
       const parsed = parseScriptStep(raw);
-      names.push(parsed.kind === "set" ? "set" : parsed.script);
+      if (parsed.kind === "set") names.push("set");
+      else if (parsed.profile) names.push(`profile:${parsed.profile}`);
+      else names.push(parsed.script);
     } catch {
       names.push(null);
     }
   }
   return names;
+}
+
+/**
+ * @param {unknown} parsed
+ * @param {string} owner
+ */
+async function collectProfileWarnings(parsed, owner) {
+  /** @type {Array<{ code: string, message: string, path?: string }>} */
+  const warnings = [];
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !owner) {
+    return warnings;
+  }
+  for (const [i, raw] of (parsed.scripts ?? []).entries()) {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const profileName = raw.profile;
+    if (typeof profileName !== "string" || !profileName) continue;
+    const pathKey = `scripts[${i}]`;
+    let profile;
+    try {
+      profile = await getProfilePlain(owner, profileName);
+    } catch {
+      warnings.push({
+        code: "unknown_profile",
+        message: `Profile "${profileName}" is not a valid name`,
+        path: pathKey,
+      });
+      continue;
+    }
+    if (!profile) {
+      warnings.push({
+        code: "unknown_profile",
+        message: `Profile "${profileName}" not found`,
+        path: pathKey,
+      });
+      continue;
+    }
+    if (typeof raw.script === "string" && raw.script && raw.script !== profile.script) {
+      warnings.push({
+        code: "profile_script_mismatch",
+        message: `Step script "${raw.script}" does not match profile "${profileName}" (${profile.script})`,
+        path: pathKey,
+      });
+    }
+    const resolved = resolveScriptRef(profile.script);
+    if (resolved.error) {
+      warnings.push({
+        code: "unknown_script",
+        message: resolved.error,
+        path: `${pathKey}.profile`,
+      });
+    }
+  }
+  return warnings;
 }
 
 /**
@@ -110,8 +172,11 @@ async function validateStrictWorkflow(parsed) {
  * }} opts
  */
 async function saveWorkflowContent(opts) {
-  const { warnings, parsed, parseError } = collectWorkflowWarnings(opts.content);
-  const saveAnyway = Boolean(opts.saveAnyway);
+    const { warnings, parsed, parseError } = collectWorkflowWarnings(opts.content);
+    if (parsed) {
+      warnings.push(...(await collectProfileWarnings(parsed, opts.owner)));
+    }
+    const saveAnyway = Boolean(opts.saveAnyway);
 
   if (!saveAnyway) {
     if (parseError) {
@@ -185,6 +250,22 @@ export default function workflowsPluginFactory(registry) {
   return async function workflowsPlugin(fastify) {
     fastify.get("/owners", async () => {
       return { owners: fsStore.listOwners() };
+    });
+
+    fastify.get("/workflow-examples", async () => {
+      return { examples: listExampleWorkflows() };
+    });
+
+    fastify.get("/workflow-examples/:id", async (req, reply) => {
+      const { id } = /** @type {{ id: string }} */ (req.params);
+      if (!assertExampleWorkflowId(id)) {
+        return reply.code(400).send({ error: "invalid example id" });
+      }
+      const example = readExampleWorkflow(id);
+      if (!example) {
+        return reply.code(404).send({ error: "example not found" });
+      }
+      return example;
     });
 
     fastify.get("/workflows/trash", async () => {
@@ -307,6 +388,7 @@ export default function workflowsPluginFactory(registry) {
             enabled: parsed ? parsed.enabled !== false : false,
             registered: registered.includes(file),
             loadError: loadError ?? (parsed ? null : "unreadable"),
+            lastModifiedAt: fsStore.workflowLastModifiedAt(owner, file),
             lastInvokedAt: st.lastInvokedAt,
             lastStatus: st.lastStatus ?? null,
             invocationCount: st.invocationCount,
@@ -315,6 +397,13 @@ export default function workflowsPluginFactory(registry) {
           });
         }
       }
+      items.sort((a, b) => {
+        const byName = String(a.name ?? "").localeCompare(String(b.name ?? ""), undefined, {
+          sensitivity: "base",
+        });
+        if (byName !== 0) return byName;
+        return String(a.key ?? "").localeCompare(String(b.key ?? ""));
+      });
       return { workflows: items };
     });
 

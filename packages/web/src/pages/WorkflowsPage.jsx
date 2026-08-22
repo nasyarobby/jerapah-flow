@@ -10,14 +10,75 @@ import {
   useWorkflows,
 } from "../api/hooks.js";
 import { DuplicateWorkflowDialog } from "../components/DuplicateWorkflowDialog.jsx";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
-import { formatTime, WorkflowStatusBadge } from "../lib/format.jsx";
+import { formatTime, WorkflowStatusBadge } from "../lib/format";
+
+const SORT_COLUMNS = [
+  { key: "name", label: "Name", defaultOrder: "asc" },
+  { key: "status", label: "Status", defaultOrder: "asc" },
+  { key: "lastModifiedAt", label: "Last modified", defaultOrder: "desc" },
+  { key: "lastInvokedAt", label: "Last run", defaultOrder: "desc" },
+  { key: "invocationCount", label: "Runs", defaultOrder: "desc" },
+];
+
+function SortHeader({ column, label, sort, order, onSort }) {
+  const active = sort === column;
+  return (
+    <th>
+      <button
+        type="button"
+        className={`font-semibold hover:underline ${active ? "" : "opacity-80"}`}
+        onClick={() => onSort(column)}
+      >
+        {label}
+        {active ? (order === "asc" ? " ↑" : " ↓") : ""}
+      </button>
+    </th>
+  );
+}
+
+function statusSortKey(w) {
+  if (w.loadError) return "0-broken";
+  if (!w.enabled) return "1-disabled";
+  if (w.lastStatus === "failed") return "2-failed";
+  if (w.lastStatus === "queued") return "3-queued";
+  if (w.lastStatus === "running") return "4-running";
+  if (w.lastStatus === "success") return "5-working";
+  return "6-never";
+}
+
+function compareName(a, b) {
+  const byName = String(a.name ?? "").localeCompare(String(b.name ?? ""), undefined, {
+    sensitivity: "base",
+  });
+  if (byName !== 0) return byName;
+  return String(a.key ?? "").localeCompare(String(b.key ?? ""));
+}
+
+function compareWorkflows(a, b, sort) {
+  if (sort === "name") return compareName(a, b);
+  if (sort === "status") {
+    const byStatus = statusSortKey(a).localeCompare(statusSortKey(b));
+    return byStatus !== 0 ? byStatus : compareName(a, b);
+  }
+  if (sort === "invocationCount") {
+    const byCount = (Number(a.invocationCount) || 0) - (Number(b.invocationCount) || 0);
+    return byCount !== 0 ? byCount : compareName(a, b);
+  }
+  const aTime = a[sort] ?? "";
+  const bTime = b[sort] ?? "";
+  const byTime = String(aTime).localeCompare(String(bTime));
+  return byTime !== 0 ? byTime : compareName(a, b);
+}
 
 export function WorkflowsPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const editParam = params.get("edit");
   const { data: workflows = [], isLoading } = useWorkflows();
+  const [sort, setSortColumn] = useState("name");
+  const [order, setOrder] = useState("asc");
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [duplicateSource, setDuplicateSource] = useState(null);
   const [runError, setRunError] = useState(null);
@@ -67,6 +128,19 @@ export function WorkflowsPage() {
       ? `${setEnabled.variables.owner}/${setEnabled.variables.file}`
       : null;
 
+  const dir = order === "desc" ? -1 : 1;
+  const sortedWorkflows = [...workflows].sort((a, b) => dir * compareWorkflows(a, b, sort));
+
+  function setSort(column) {
+    const spec = SORT_COLUMNS.find((c) => c.key === column);
+    if (sort === column) {
+      setOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortColumn(column);
+    setOrder(spec?.defaultOrder ?? "asc");
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -80,6 +154,7 @@ export function WorkflowsPage() {
             type="button"
             className="btn btn-ghost btn-sm"
             title="Reregister workflows"
+            aria-label="Reregister workflows"
             disabled={reregister.isPending}
             onClick={() => reregister.mutate()}
           >
@@ -113,17 +188,35 @@ export function WorkflowsPage() {
           <table className="table table-sm">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Owner</th>
-                <th>Status</th>
+                <SortHeader column="name" label="Name" sort={sort} order={order} onSort={setSort} />
+                <SortHeader column="status" label="Status" sort={sort} order={order} onSort={setSort} />
                 <th>Triggers</th>
-                <th>Last run</th>
-                <th>Runs</th>
+                <SortHeader
+                  column="lastModifiedAt"
+                  label="Last modified"
+                  sort={sort}
+                  order={order}
+                  onSort={setSort}
+                />
+                <SortHeader
+                  column="lastInvokedAt"
+                  label="Last run"
+                  sort={sort}
+                  order={order}
+                  onSort={setSort}
+                />
+                <SortHeader
+                  column="invocationCount"
+                  label="Runs"
+                  sort={sort}
+                  order={order}
+                  onSort={setSort}
+                />
                 <th />
               </tr>
             </thead>
             <tbody>
-              {workflows.map((w) => (
+              {sortedWorkflows.map((w) => (
                 <tr key={w.key} className="hover">
                   <td>
                     <Link
@@ -143,17 +236,21 @@ export function WorkflowsPage() {
                       </span>
                     ) : null}
                   </td>
-                  <td className="font-mono text-xs">{w.owner}</td>
                   <td>
                     <WorkflowStatusBadge workflow={w} />
                   </td>
                   <td>
                     <TriggerList triggers={w.triggers} />
                   </td>
+                  <td className="whitespace-nowrap">{formatTime(w.lastModifiedAt)}</td>
                   <td className="whitespace-nowrap">{formatTime(w.lastInvokedAt)}</td>
                   <td>{w.invocationCount}</td>
                   <td className="text-right whitespace-nowrap">
-                    <label className="inline-flex items-center mr-1" title={w.enabled ? "Disable" : "Enable"}>
+                    <label
+                      className="inline-flex items-center mr-1"
+                      title={w.enabled ? "Disable" : "Enable"}
+                      aria-label={w.enabled ? "Disable" : "Enable"}
+                    >
                       <input
                         type="checkbox"
                         className="toggle toggle-success toggle-xs"
@@ -172,6 +269,7 @@ export function WorkflowsPage() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Run"
+                      aria-label="Run"
                       disabled={Boolean(w.loadError) || runningKey === w.key}
                       onClick={() => onRun(w)}
                     >
@@ -184,6 +282,7 @@ export function WorkflowsPage() {
                     <Link
                       className="btn btn-ghost btn-xs"
                       title="Events"
+                      aria-label="Events"
                       to={`/events?workflow=${encodeURIComponent(w.key)}`}
                     >
                       <LuActivity className="size-4" />
@@ -191,6 +290,7 @@ export function WorkflowsPage() {
                     <Link
                       className="btn btn-ghost btn-xs"
                       title="Edit"
+                      aria-label="Edit"
                       to={`/workflows/${encodeURIComponent(w.owner)}/${encodeURIComponent(w.file)}/edit`}
                     >
                       <LuPencil className="size-4" />
@@ -199,6 +299,7 @@ export function WorkflowsPage() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Duplicate"
+                      aria-label="Duplicate"
                       disabled={Boolean(w.loadError)}
                       onClick={() => setDuplicateSource(w)}
                     >
@@ -208,6 +309,7 @@ export function WorkflowsPage() {
                       type="button"
                       className="btn btn-ghost btn-xs text-error"
                       title="Move to trash"
+                      aria-label="Move to trash"
                       onClick={() => setConfirmDelete(w)}
                     >
                       <LuTrash2 className="size-4" />
@@ -233,43 +335,21 @@ export function WorkflowsPage() {
         />
       ) : null}
 
-      {confirmDelete ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold">Move {confirmDelete.key} to trash?</h3>
-            <p className="mt-2 text-sm opacity-70">
-              The workflow is removed from the list but kept in trash for 7 days. Revision history
-              is preserved.
-            </p>
-            {del.isError ? (
-              <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
-            ) : null}
-            <div className="modal-action">
-              <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-error"
-                disabled={del.isPending}
-                onClick={() =>
-                  del.mutate(
-                    { owner: confirmDelete.owner, file: confirmDelete.file },
-                    { onSuccess: () => setConfirmDelete(null) },
-                  )
-                }
-              >
-                Move to trash
-              </button>
-            </div>
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button type="button" onClick={() => setConfirmDelete(null)}>
-              close
-            </button>
-          </form>
-        </dialog>
-      ) : null}
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={confirmDelete ? `Move ${confirmDelete.key} to trash?` : ""}
+        message="The workflow is removed from the list but kept in trash for 7 days. Revision history is preserved."
+        confirmLabel="Move to trash"
+        error={del.isError ? errorMessage(del.error) : null}
+        loading={del.isPending}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() =>
+          del.mutate(
+            { owner: confirmDelete.owner, file: confirmDelete.file },
+            { onSuccess: () => setConfirmDelete(null) },
+          )
+        }
+      />
     </div>
   );
 }

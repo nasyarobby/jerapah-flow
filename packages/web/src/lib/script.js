@@ -1,3 +1,5 @@
+import { isPlainObject } from "@jerapah-flow/shared";
+
 export const NEW_SCRIPT_TEMPLATE = `async function main(ctx) {
   return { output: ctx.data ?? null, context: ctx.context ?? {} };
 }
@@ -26,12 +28,6 @@ export const DEFAULT_INPUT_CONTEXT = `{
   "config": {}
 }
 `;
-
-export function normalizeScriptName(name) {
-  const trimmed = name.trim();
-  if (!trimmed) return "";
-  return trimmed.endsWith(".js") ? trimmed : `${trimmed}.js`;
-}
 
 export function scriptTags(meta) {
   if (!Array.isArray(meta?.tags)) return [];
@@ -78,10 +74,6 @@ export function prettyJson(value) {
   }
 }
 
-function isPlainObject(value) {
-  return value != null && typeof value === "object" && !Array.isArray(value);
-}
-
 function defaultsFromFields(fields) {
   if (!isPlainObject(fields)) return {};
   /** @type {Record<string, unknown>} */
@@ -121,11 +113,14 @@ export function inputHasFields(meta) {
 }
 
 /** First script step with a non-empty `meta.input`; else first script meta. */
-export function firstInputMeta(steps, scriptsByName) {
+export function firstInputMeta(steps, scriptsByName, profilesByName) {
   let fallback = null;
   for (const step of steps ?? []) {
     if (step?.kind === "set") continue;
-    const name = typeof step === "string" ? step : step?.script;
+    let name = typeof step === "string" ? step : step?.script;
+    if (!name && step?.profile && profilesByName) {
+      name = profilesByName.get(step.profile)?.script;
+    }
     if (!name) continue;
     const listed = scriptsByName?.get(name);
     const meta = listed && typeof listed === "object" ? listed.meta ?? null : null;

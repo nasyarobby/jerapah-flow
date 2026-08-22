@@ -49,14 +49,8 @@ export function readScript(name) {
   return fs.readFileSync(filePath, "utf8");
 }
 
-export function writeScript(name, content) {
-  assertScriptName(name);
-  fs.mkdirSync(SCRIPTS_DIR, { recursive: true });
-  fs.writeFileSync(path.join(SCRIPTS_DIR, name), content, "utf8");
-}
-
 /**
- * Icon next to the script: `fetch-html.js` → `fetch-html.png` or `.jpg`.
+ * Icon next to the script: `fetch-html.js` → `fetch-html.png`, `.jpg`, or `.jpeg`.
  * @returns {{ filePath: string, contentType: string } | null}
  */
 export function resolveScriptIcon(name) {
@@ -65,6 +59,7 @@ export function resolveScriptIcon(name) {
   for (const { ext, contentType } of [
     { ext: "png", contentType: "image/png" },
     { ext: "jpg", contentType: "image/jpeg" },
+    { ext: "jpeg", contentType: "image/jpeg" },
   ]) {
     const filePath = path.join(SCRIPTS_DIR, `${base}.${ext}`);
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
@@ -76,22 +71,6 @@ export function resolveScriptIcon(name) {
 
 export function scriptHasIcon(name) {
   return resolveScriptIcon(name) != null;
-}
-
-export function deleteScript(name) {
-  assertScriptName(name);
-  const filePath = path.join(SCRIPTS_DIR, name);
-  if (!fs.existsSync(filePath)) return false;
-  const icon = resolveScriptIcon(name);
-  fs.unlinkSync(filePath);
-  if (icon) {
-    try {
-      fs.unlinkSync(icon.filePath);
-    } catch {
-      // ignore missing icon
-    }
-  }
-  return true;
 }
 
 export function listOwners() {
@@ -132,21 +111,37 @@ export function readWorkflowYaml(owner, file) {
   return fs.readFileSync(filePath, "utf8");
 }
 
+/**
+ * Last content change time for a workflow YAML file.
+ * Uses birthtime (creation) when the file has not been modified since it was created.
+ * @returns {string | null} ISO timestamp
+ */
+export function workflowLastModifiedAt(owner, file) {
+  try {
+    assertOwner(owner);
+    assertWorkflowFile(file);
+  } catch {
+    return null;
+  }
+  const filePath = path.join(WORKFLOWS_DIR, owner, file);
+  try {
+    const st = fs.statSync(filePath);
+    const birthMs = Number.isFinite(st.birthtimeMs) && st.birthtimeMs > 0 ? st.birthtimeMs : null;
+    const mtimeMs = Number.isFinite(st.mtimeMs) && st.mtimeMs > 0 ? st.mtimeMs : null;
+    const unmodified = birthMs != null && (mtimeMs == null || mtimeMs <= birthMs + 1000);
+    const ms = unmodified ? birthMs : (mtimeMs ?? birthMs);
+    return ms != null ? new Date(ms).toISOString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function writeWorkflowYaml(owner, file, content) {
   assertOwner(owner);
   assertWorkflowFile(file);
   const ownerDir = path.join(WORKFLOWS_DIR, owner);
   fs.mkdirSync(ownerDir, { recursive: true });
   fs.writeFileSync(path.join(ownerDir, file), content, "utf8");
-}
-
-export function deleteWorkflowYaml(owner, file) {
-  assertOwner(owner);
-  assertWorkflowFile(file);
-  const filePath = path.join(WORKFLOWS_DIR, owner, file);
-  if (!fs.existsSync(filePath)) return false;
-  fs.unlinkSync(filePath);
-  return true;
 }
 
 export function listOwnerYamlFiles(owner) {

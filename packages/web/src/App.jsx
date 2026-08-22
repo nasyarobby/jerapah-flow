@@ -20,6 +20,7 @@ import { ResponsesPage } from "./pages/ResponsesPage.jsx";
 import { UsersPage } from "./pages/UsersPage.jsx";
 import { SecretsPage } from "./pages/SecretsPage.jsx";
 import { VariablesPage } from "./pages/VariablesPage.jsx";
+import { ProfilesPage } from "./pages/ProfilesPage.jsx";
 import { OpsPage } from "./pages/OpsPage.jsx";
 import { BackupPage } from "./pages/BackupPage.jsx";
 
@@ -71,6 +72,9 @@ export function App() {
         <Route path="/variables" element={<VariablesPage />} />
         <Route path="/variables/new" element={<VariablesPage />} />
         <Route path="/variables/:owner/:name/edit" element={<VariablesPage />} />
+        <Route path="/profiles" element={<ProfilesPage />} />
+        <Route path="/profiles/new" element={<ProfilesPage />} />
+        <Route path="/profiles/:owner/:name/edit" element={<ProfilesPage />} />
         <Route path="/auth" element={<AuthProfilesPage />} />
         <Route path="/auth/new" element={<AuthProfilesPage />} />
         <Route path="/auth/:name/edit" element={<AuthProfilesPage />} />

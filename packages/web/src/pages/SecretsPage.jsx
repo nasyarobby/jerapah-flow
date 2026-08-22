@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
-import { useDeleteSecret, useOwners, useSecrets } from "../api/hooks.js";
+import { useDeleteSecret, useSecrets } from "../api/hooks.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { SecretEditorModal } from "../components/SecretEditorModal.jsx";
-import { formatTime } from "../lib/format.jsx";
+import { useRouteDrivenModal } from "../hooks/useRouteDrivenModal.js";
+import { formatTime } from "../lib/format";
+import { DEFAULT_OWNER } from "../lib/tenant.js";
 
 export function SecretsPage() {
   const navigate = useNavigate();
@@ -14,62 +17,37 @@ export function SecretsPage() {
   const isNewRoute = /\/secrets\/new\/?$/.test(location.pathname);
   const isEditRoute = Boolean(routeOwner && routeName);
 
-  const { data: owners = [] } = useOwners();
-  const [ownerFilter, setOwnerFilter] = useState(
-    () => routeOwner || params.get("owner") || "",
-  );
-  const { data: secrets = [], isLoading } = useSecrets(ownerFilter || undefined);
+  const { data: secrets = [], isLoading } = useSecrets();
   const del = useDeleteSecret();
-  const [editor, setEditor] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [highlightName, setHighlightName] = useState(() => routeName || "");
   const highlightRef = useRef(null);
-  const openedRouteKey = useRef(null);
 
-  const listPath = ownerFilter
-    ? `/secrets?owner=${encodeURIComponent(ownerFilter)}`
-    : "/secrets";
+  const listPath = "/secrets";
 
-  function closeEditor() {
-    setEditor(null);
-    openedRouteKey.current = null;
-    if (isNewRoute || isEditRoute) {
-      navigate(listPath, { replace: true });
-    }
-  }
-
-  useEffect(() => {
-    if (!isNewRoute) return;
-    const key = `new:${params.get("owner") || ""}:${params.get("name") || ""}`;
-    if (openedRouteKey.current === key) return;
-    if (!params.get("owner") && !ownerFilter && owners.length === 0) return;
-    const owner = params.get("owner") || ownerFilter || owners[0] || "default";
-    if (params.get("owner")) setOwnerFilter(params.get("owner"));
-    openedRouteKey.current = key;
-    setEditor({
+  const { editor, closeEditor } = useRouteDrivenModal({
+    isNewRoute,
+    isEditRoute,
+    listPath,
+    newRouteKey: () => `new:${params.get("name") || ""}`,
+    canOpenNew: () => true,
+    buildNewEditor: () => ({
       mode: "add",
-      initial: { owner, name: params.get("name") || "" },
-    });
-  }, [isNewRoute, params, owners, ownerFilter]);
-
-  useEffect(() => {
-    if (!isEditRoute) {
-      if (!isNewRoute) openedRouteKey.current = null;
-      return;
-    }
-    if (ownerFilter !== routeOwner) {
-      setOwnerFilter(routeOwner);
-      return;
-    }
-    const key = `edit:${routeOwner}/${routeName}`;
-    if (openedRouteKey.current === key) return;
-    openedRouteKey.current = key;
-    setHighlightName(routeName);
-    setEditor({
+      initial: {
+        owner: DEFAULT_OWNER,
+        name: params.get("name") || "",
+      },
+    }),
+    editRouteKey: () => `edit:${routeOwner}/${routeName}`,
+    canOpenEdit: () => true,
+    onOpenEdit: () => setHighlightName(routeName),
+    buildEditEditor: () => ({
       mode: "replace",
       initial: { owner: routeOwner, name: routeName },
-    });
-  }, [isEditRoute, isNewRoute, routeOwner, routeName, ownerFilter]);
+    }),
+    newDeps: [params],
+    editDeps: [routeOwner, routeName],
+  });
 
   useEffect(() => {
     if (!highlightName || isLoading) return;
@@ -80,43 +58,14 @@ export function SecretsPage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Secrets</h1>
-        <div className="flex gap-2">
-          <select
-            className="select select-sm"
-            value={ownerFilter}
-            onChange={(e) => {
-              setOwnerFilter(e.target.value);
-              setHighlightName("");
-              navigate(
-                e.target.value
-                  ? `/secrets?owner=${encodeURIComponent(e.target.value)}`
-                  : "/secrets",
-                { replace: true },
-              );
-            }}
-          >
-            <option value="">all owners</option>
-            {owners.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() =>
-              navigate(
-                ownerFilter
-                  ? `/secrets/new?owner=${encodeURIComponent(ownerFilter)}`
-                  : "/secrets/new",
-              )
-            }
-          >
-            <LuPlus className="size-4" />
-            Add
-          </button>
-        </div>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => navigate("/secrets/new")}
+        >
+          <LuPlus className="size-4" />
+          Add
+        </button>
       </div>
 
       {isLoading ? (
@@ -128,7 +77,6 @@ export function SecretsPage() {
           <table className="table table-sm">
             <thead>
               <tr>
-                <th>Owner</th>
                 <th>Name</th>
                 <th>Updated</th>
                 <th />
@@ -137,16 +85,16 @@ export function SecretsPage() {
             <tbody>
               {secrets.map((s) => {
                 const highlighted =
-                  highlightName &&
-                  s.name === highlightName &&
-                  (!ownerFilter || s.owner === ownerFilter);
+                  highlightName && s.name === highlightName && s.owner === routeOwner;
+                const highlightByNameOnly =
+                  highlightName && s.name === highlightName && !routeOwner;
+                const isHi = highlighted || highlightByNameOnly;
                 return (
                   <tr
                     key={s.id}
-                    ref={highlighted ? highlightRef : undefined}
-                    className={`hover ${highlighted ? "bg-primary/10 outline outline-1 outline-primary/40" : ""}`}
+                    ref={isHi ? highlightRef : undefined}
+                    className={`hover ${isHi ? "bg-primary/10 outline outline-1 outline-primary/40" : ""}`}
                   >
-                    <td className="font-mono">{s.owner}</td>
                     <td className="font-mono">{s.name}</td>
                     <td className="whitespace-nowrap">{formatTime(s.updated_at)}</td>
                     <td className="text-right whitespace-nowrap">
@@ -154,6 +102,7 @@ export function SecretsPage() {
                         type="button"
                         className="btn btn-ghost btn-xs"
                         title="Replace value"
+                        aria-label="Replace value"
                         onClick={() =>
                           navigate(
                             `/secrets/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.name)}/edit`,
@@ -166,6 +115,7 @@ export function SecretsPage() {
                         type="button"
                         className="btn btn-ghost btn-xs text-error"
                         title="Delete"
+                        aria-label="Delete"
                         onClick={() => setConfirmDelete(s)}
                       >
                         <LuTrash2 className="size-4" />
@@ -190,41 +140,17 @@ export function SecretsPage() {
         />
       ) : null}
 
-      {confirmDelete ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold">
-              Delete {confirmDelete.owner}/{confirmDelete.name}?
-            </h3>
-            <p className="text-sm mt-2">
-              This cannot be undone. Workflows that retrieve this name will fail.
-            </p>
-            {del.isError ? (
-              <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
-            ) : null}
-            <div className="modal-action">
-              <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-error"
-                disabled={del.isPending}
-                onClick={() =>
-                  del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
-                }
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button type="button" onClick={() => setConfirmDelete(null)}>
-              close
-            </button>
-          </form>
-        </dialog>
-      ) : null}
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={confirmDelete ? `Delete ${confirmDelete.name}?` : ""}
+        message="This cannot be undone. Workflows that retrieve this name will fail."
+        error={del.isError ? errorMessage(del.error) : null}
+        loading={del.isPending}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() =>
+          del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
+        }
+      />
     </div>
   );
 }

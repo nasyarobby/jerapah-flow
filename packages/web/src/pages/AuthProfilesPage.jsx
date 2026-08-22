@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { LuEye, LuEyeOff, LuPencil, LuPlus, LuTrash2 } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
@@ -8,7 +8,9 @@ import {
   useHttpAuths,
 } from "../api/hooks.js";
 import { AuthEditorModal } from "../components/AuthEditorModal.jsx";
-import { formatTime } from "../lib/format.jsx";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
+import { useRouteDrivenModal } from "../hooks/useRouteDrivenModal.js";
+import { formatTime } from "../lib/format";
 
 function CredDisplay({ field, fieldKey, authId, cache, onRevealed }) {
   const [open, setOpen] = useState(false);
@@ -66,7 +68,7 @@ function CredDisplay({ field, fieldKey, authId, cache, onRevealed }) {
         type="button"
         className="btn btn-ghost btn-xs btn-square"
         title={shown ? "Hide" : "Reveal"}
-        aria-label={shown ? "Hide value" : "Reveal value"}
+        aria-label={shown ? "Hide" : "Reveal"}
         disabled={loading}
         onClick={(e) => {
           e.stopPropagation();
@@ -148,43 +150,24 @@ export function AuthProfilesPage() {
 
   const { data: auths = [], isLoading } = useHttpAuths();
   const del = useDeleteHttpAuth();
-  const [editor, setEditor] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   /** @type {[Record<string, Record<string, string>>, Function]} */
   const [revealCache, setRevealCache] = useState({});
-  const openedRouteKey = useRef(null);
 
-  function closeEditor() {
-    setEditor(null);
-    openedRouteKey.current = null;
-    if (isNewRoute || isEditRoute) {
-      navigate("/auth", { replace: true });
-    }
-  }
-
-  useEffect(() => {
-    if (!isNewRoute) return;
-    if (openedRouteKey.current === "new") return;
-    openedRouteKey.current = "new";
-    setEditor({ mode: "add" });
-  }, [isNewRoute]);
-
-  useEffect(() => {
-    if (!isEditRoute) {
-      if (!isNewRoute) openedRouteKey.current = null;
-      return;
-    }
-    if (isLoading) return;
-    const key = `edit:${routeName}`;
-    if (openedRouteKey.current === key) return;
-    openedRouteKey.current = key;
-    const auth = auths.find((a) => a.name === routeName);
-    if (!auth) {
-      setEditor({ mode: "add" });
-      return;
-    }
-    setEditor({ mode: "edit", auth });
-  }, [isEditRoute, isNewRoute, routeName, isLoading, auths]);
+  const { editor, closeEditor } = useRouteDrivenModal({
+    isNewRoute,
+    isEditRoute,
+    listPath: "/auth",
+    buildNewEditor: () => ({ mode: "add" }),
+    editRouteKey: () => `edit:${routeName}`,
+    canOpenEdit: () => !isLoading,
+    buildEditEditor: () => {
+      const auth = auths.find((a) => a.name === routeName);
+      if (!auth) return { mode: "add" };
+      return { mode: "edit", auth };
+    },
+    editDeps: [routeName, isLoading, auths],
+  });
 
   return (
     <div className="space-y-4">
@@ -241,6 +224,7 @@ export function AuthProfilesPage() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Edit"
+                      aria-label="Edit"
                       onClick={() => navigate(`/auth/${encodeURIComponent(a.name)}/edit`)}
                     >
                       <LuPencil className="size-4" />
@@ -249,6 +233,7 @@ export function AuthProfilesPage() {
                       type="button"
                       className="btn btn-ghost btn-xs text-error"
                       title="Delete"
+                      aria-label="Delete"
                       onClick={() => setConfirmDelete(a)}
                     >
                       <LuTrash2 className="size-4" />
@@ -278,39 +263,17 @@ export function AuthProfilesPage() {
         />
       ) : null}
 
-      {confirmDelete ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold">Delete {confirmDelete.name}?</h3>
-            <p className="text-sm mt-2">
-              Workflows that reference this profile will fail auth until updated.
-            </p>
-            {del.isError ? (
-              <p className="text-error text-sm mt-2">{errorMessage(del.error)}</p>
-            ) : null}
-            <div className="modal-action">
-              <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-error"
-                disabled={del.isPending}
-                onClick={() =>
-                  del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
-                }
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button type="button" onClick={() => setConfirmDelete(null)}>
-              close
-            </button>
-          </form>
-        </dialog>
-      ) : null}
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title={confirmDelete ? `Delete ${confirmDelete.name}?` : ""}
+        message="Workflows that reference this profile will fail auth until updated."
+        error={del.isError ? errorMessage(del.error) : null}
+        loading={del.isPending}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() =>
+          del.mutate(confirmDelete.id, { onSuccess: () => setConfirmDelete(null) })
+        }
+      />
     </div>
   );
 }

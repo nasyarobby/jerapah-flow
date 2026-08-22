@@ -2,53 +2,14 @@ import { useState } from "react";
 import { LuHistory } from "react-icons/lu";
 import { errorMessage } from "../../api/client.js";
 import { useRevertWorkflowRevision } from "../../api/hooks.js";
-import { formatTime } from "../../lib/format.jsx";
+import { formatTime } from "../../lib/format";
 import { useNotifications } from "../../notifications.jsx";
+import { ConfirmDialog } from "../ConfirmDialog.jsx";
 import {
   SaveWorkflowWarningsDialog,
   isSaveWarningsError,
   saveWarningsFromError,
 } from "./SaveWorkflowWarningsDialog.jsx";
-
-function ConfirmDialog({
-  open,
-  title,
-  message,
-  confirmLabel,
-  confirmClass = "btn-warning",
-  pending,
-  onCancel,
-  onConfirm,
-}) {
-  if (!open) return null;
-  return (
-    <dialog className="modal modal-open">
-      <div className="modal-box max-w-md">
-        <h3 className="font-bold">{title}</h3>
-        <p className="mt-2 text-sm opacity-70">{message}</p>
-        <div className="modal-action">
-          <button type="button" className="btn btn-ghost" onClick={onCancel}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={`btn ${confirmClass}`}
-            disabled={pending}
-            onClick={onConfirm}
-          >
-            {pending ? <span className="loading loading-spinner loading-xs" /> : null}
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-      <form method="dialog" className="modal-backdrop">
-        <button type="button" onClick={onCancel}>
-          close
-        </button>
-      </form>
-    </dialog>
-  );
-}
 
 export function WorkflowRevisionBanner({
   owner,
@@ -110,6 +71,7 @@ export function WorkflowRevisionBanner({
         title={`Revert to revision #${revision}?`}
         message={`This replaces the live workflow with revision #${revision} from ${formatTime(createdAt)} and creates a new revision.`}
         confirmLabel="Revert"
+        confirmClass="btn-warning"
         pending={revert.isPending}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => doRevert(false)}
@@ -125,5 +87,3 @@ export function WorkflowRevisionBanner({
     </>
   );
 }
-
-export { ConfirmDialog };

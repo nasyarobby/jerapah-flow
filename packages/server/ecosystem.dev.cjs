@@ -1,7 +1,8 @@
 /**
- * Dev ecosystem for `pnpm dev:pm2`.
+ * Local multi-process Ops UI ecosystem (`pnpm dev:pm2`).
  * Prefer starting children via control.js (desired state) rather than this file.
  * Kept as a reference / fallback: `pm2 start packages/server/ecosystem.dev.cjs`
+ * For production monolith, use root ecosystem.config.cjs instead.
  */
 const path = require("path");
 

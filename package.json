@@ -14,16 +14,9 @@
     "start:api": "pnpm --filter @jerapah-flow/server start:api",
     "start:worker": "pnpm --filter @jerapah-flow/server start:worker",
     "start:control": "pnpm --filter @jerapah-flow/server start:control",
-    "migrate": "pnpm --filter @jerapah-flow/server migrate"
+    "migrate": "pnpm --filter @jerapah-flow/server migrate",
+    "test": "pnpm --filter @jerapah-flow/shared test && pnpm --filter @jerapah-flow/web test",
+    "lint": "pnpm --filter @jerapah-flow/web lint"
   },
-  "packageManager": "pnpm@10.25.0",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "esbuild"
-    ]
-  },
-  "dependencies": {
-    "rss-parser": "^3.13.0"
-  }
+  "packageManager": "pnpm@11.22.0"
 }

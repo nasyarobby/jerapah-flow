@@ -1,58 +1,24 @@
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import {
+  HTTP_METHODS,
+  namespacedPath,
+  hasWorkflowTrigger,
+} from "@jerapah-flow/shared";
 
 const KNOWN_TOP = new Set(["name", "description", "enabled", "scripts", "triggers"]);
-const HTTP_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+
+export { HTTP_METHODS, namespacedPath, hasWorkflowTrigger };
 
 export const NEW_WORKFLOW_YAML = `name: new workflow
-scripts:
-  - plugin/get-current-time
-triggers:
-  - type: HTTP
-    method: POST
-    path: /new
+scripts: []
+triggers: []
 `;
-
-export function ensureWorkflowFilename(file) {
-  const trimmed = String(file ?? "").trim();
-  if (!trimmed) return "";
-  return /\.ya?ml$/i.test(trimmed) ? trimmed : `${trimmed}.yaml`;
-}
-
-/**
- * Next unused copy filename: `track.yaml` → `track-copy.yaml`,
- * `track-copy.yaml` → `track-copy-2.yaml`.
- * @param {string} file
- * @param {string[]} existingFiles
- */
-export function suggestCopyFilename(file, existingFiles = []) {
-  const name = ensureWorkflowFilename(file) || "workflow.yaml";
-  const match = name.match(/^(.*?)(\.ya?ml)$/i);
-  const base = match ? match[1] : name;
-  const ext = match ? match[2] : ".yaml";
-  const existing = new Set(existingFiles);
-
-  const copyMatch = base.match(/^(.*)-copy(?:-(\d+))?$/);
-  const root = copyMatch ? copyMatch[1] : base;
-  const candidate = (i) =>
-    i <= 1 ? `${root}-copy${ext}` : `${root}-copy-${i}${ext}`;
-
-  let n = copyMatch ? Number(copyMatch[2] || 1) + 1 : 1;
-  while (existing.has(candidate(n))) n += 1;
-  return candidate(n);
-}
 
 let uidSeq = 0;
 
 export function nextUiId(prefix = "ui") {
   uidSeq += 1;
   return `${prefix}-${uidSeq}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-export function namespacedPath(owner, triggerPath) {
-  const cleaned = String(triggerPath ?? "")
-    .replace(/^\/+/, "")
-    .trim();
-  return `/u/${owner}/${cleaned}`;
 }
 
 /**
@@ -108,12 +74,72 @@ export function stringifyWorkflowDoc(doc) {
   return stringifyYaml(out, { indent: 2, lineWidth: 0 });
 }
 
+export function nextStepId(existingIds) {
+  const used = existingIds instanceof Set ? existingIds : new Set([...(existingIds ?? [])].filter(Boolean));
+  let n = 1;
+  while (used.has(`step-${n}`)) n += 1;
+  return `step-${n}`;
+}
+
+export function withAllocatedStepId(step, existingSteps) {
+  if (step?.id) return step;
+  const ids = (existingSteps ?? []).map((s) => s.id).filter(Boolean);
+  return { ...step, id: nextStepId(ids) };
+}
+
+export function needsMode(needs) {
+  if (needs == null) return "none";
+  if (Array.isArray(needs)) return "list";
+  if (typeof needs === "object") return "map";
+  return "none";
+}
+
+export function isEmptyNeeds(needs) {
+  if (needs == null) return true;
+  if (Array.isArray(needs)) return needs.length === 0;
+  if (typeof needs === "object") return Object.keys(needs).length === 0;
+  return false;
+}
+
+export function isDagDoc(doc) {
+  return (doc?.scripts ?? []).some((s) => !isEmptyNeeds(s.needs));
+}
+
+export function stepCustomName(step) {
+  return typeof step?.name === "string" ? step.name.trim() : "";
+}
+
+export function stepDisplayName(step, fallback) {
+  const custom = stepCustomName(step);
+  if (custom) return custom;
+  if (fallback) return fallback;
+  if (step?.kind === "set") return "set";
+  if (step?.profile) return `profile ${step.profile}`;
+  return step?.script || "untitled";
+}
+
 export function newScriptStep(script, config = {}) {
   return {
     uiId: nextUiId("step"),
     kind: "script",
     script,
+    profile: "",
     config: config && typeof config === "object" && !Array.isArray(config) ? { ...config } : {},
+    name: "",
+    id: "",
+    when: "",
+    needs: null,
+  };
+}
+
+export function newProfileStep(profileName, script = "") {
+  return {
+    uiId: nextUiId("step"),
+    kind: "script",
+    script,
+    profile: profileName,
+    config: {},
+    name: "",
     id: "",
     when: "",
     needs: null,
@@ -126,6 +152,7 @@ export function newSetStep() {
     kind: "set",
     script: "set",
     expression: "",
+    name: "",
     id: "",
     when: "",
     needs: null,
@@ -180,10 +207,6 @@ export function newWorkflowTrigger() {
   };
 }
 
-export function hasWorkflowTrigger(workflow) {
-  return (workflow?.triggers ?? []).some((t) => String(t?.type ?? "").toLowerCase() === "workflow");
-}
-
 export function triggerDestinations(workflows, { owner, excludeFile } = {}) {
   return (workflows ?? []).filter((w) => {
     if (owner && w.owner !== owner) return false;
@@ -192,10 +215,12 @@ export function triggerDestinations(workflows, { owner, excludeFile } = {}) {
   });
 }
 
-export { HTTP_METHODS };
-
 function readOnFailureWorkflow(raw) {
   return typeof raw?.onFailureWorkflow === "string" ? raw.onFailureWorkflow : "";
+}
+
+function readStepName(raw) {
+  return typeof raw === "string" ? raw : "";
 }
 
 function normalizeStep(step) {
@@ -205,7 +230,9 @@ function normalizeStep(step) {
       uiId,
       kind: "script",
       script: step,
+      profile: "",
       config: {},
+      name: "",
       id: "",
       when: "",
       needs: null,
@@ -216,7 +243,9 @@ function normalizeStep(step) {
       uiId,
       kind: "script",
       script: "",
+      profile: "",
       config: {},
+      name: "",
       id: "",
       when: "",
       needs: null,
@@ -229,12 +258,13 @@ function normalizeStep(step) {
       kind: "set",
       script: "set",
       expression: typeof spec.expression === "string" ? spec.expression : "",
+      name: readStepName(step.name),
       id: typeof step.id === "string" ? step.id : "",
       when: typeof step.when === "string" ? step.when : "",
       needs: step.needs ?? null,
     };
   }
-  const known = new Set(["script", "config", "id", "when", "needs", "set"]);
+  const known = new Set(["script", "profile", "config", "name", "id", "when", "needs", "set"]);
   /** @type {Record<string, unknown>} */
   const extra = {};
   for (const [key, value] of Object.entries(step)) {
@@ -248,7 +278,9 @@ function normalizeStep(step) {
     uiId,
     kind: "script",
     script: typeof step.script === "string" ? step.script : "",
+    profile: typeof step.profile === "string" ? step.profile : "",
     config,
+    name: readStepName(step.name),
     id: typeof step.id === "string" ? step.id : "",
     when: typeof step.when === "string" ? step.when : "",
     needs: step.needs ?? null,
@@ -309,10 +341,16 @@ function normalizeTrigger(raw) {
   };
 }
 
+function dumpStepName(step, out) {
+  const name = stepCustomName(step);
+  if (name) out.name = name;
+}
+
 function dumpStep(step) {
   if (step.kind === "set") {
     /** @type {Record<string, unknown>} */
     const out = {};
+    dumpStepName(step, out);
     if (step.id) out.id = step.id;
     out.set = {
       expression: step.expression ?? "",
@@ -323,8 +361,13 @@ function dumpStep(step) {
   }
   /** @type {Record<string, unknown>} */
   const out = {};
+  dumpStepName(step, out);
   if (step.id) out.id = step.id;
-  out.script = step.script ?? "";
+  if (step.profile) {
+    out.profile = step.profile;
+  } else {
+    out.script = step.script ?? "";
+  }
   const config = step.config;
   if (config && typeof config === "object" && !Array.isArray(config) && Object.keys(config).length) {
     out.config = config;
@@ -377,11 +420,4 @@ function dumpTrigger(t) {
     return { type: "workflow", ...(t.extra ?? {}) };
   }
   return { type: t?.type ?? "HTTP", ...(t.extra ?? {}) };
-}
-
-function isEmptyNeeds(needs) {
-  if (needs == null) return true;
-  if (Array.isArray(needs)) return needs.length === 0;
-  if (typeof needs === "object") return Object.keys(needs).length === 0;
-  return false;
 }

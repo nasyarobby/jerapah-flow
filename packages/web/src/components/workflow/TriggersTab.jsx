@@ -15,7 +15,8 @@ import {
 } from "@dnd-kit/sortable";
 import { LuPlus } from "react-icons/lu";
 import { newCronTrigger, newHttpTrigger, newWorkflowTrigger } from "../../lib/workflow-doc.js";
-import { AddTriggerDialog, TriggerCard } from "./TriggerCard.jsx";
+import { AddTriggerDialog } from "./AddTriggerDialog.jsx";
+import { TriggerCard } from "./TriggerCard.jsx";
 
 export function TriggersTab({
   doc,

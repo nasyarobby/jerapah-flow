@@ -6,6 +6,7 @@ import {
   useHttpPages,
   useUpsertHttpAuth,
 } from "../api/hooks.js";
+import { FormInput, FormSelect } from "./FormControls.jsx";
 
 function emptyCred(source = "literal") {
   return { source, value: "", kv: "", namespace: "", secret: "" };
@@ -120,15 +121,15 @@ function CredentialFields({ label, cred, onChange, allowEmpty, masked }) {
     <div className="space-y-3 rounded-box border border-base-300 p-3">
       <p className="text-sm font-medium">{label}</p>
       <Field label="Source">
-        <select
-          className="select select-bordered w-full"
+        <FormSelect
+          className="w-full"
           value={cred.source}
           onChange={(e) => onChange({ ...cred, source: e.target.value, keep: false })}
         >
           <option value="literal">Plain text</option>
           <option value="kv">From KV</option>
           <option value="secret">From secret</option>
-        </select>
+        </FormSelect>
       </Field>
       {cred.source === "literal" ? (
         <Field
@@ -140,9 +141,9 @@ function CredentialFields({ label, cred, onChange, allowEmpty, masked }) {
           }
         >
           <div className="flex w-full gap-1">
-            <input
+            <FormInput
               type={masked && !show ? "password" : "text"}
-              className="input input-bordered w-full font-mono"
+              className="w-full font-mono"
               value={cred.value}
               onChange={(e) => onChange({ ...cred, value: e.target.value, keep: false })}
               placeholder={
@@ -168,16 +169,16 @@ function CredentialFields({ label, cred, onChange, allowEmpty, masked }) {
       {cred.source === "kv" ? (
         <>
           <Field label="Namespace (optional)">
-            <input
-              className="input input-bordered w-full font-mono"
+            <FormInput
+              className="w-full font-mono"
               placeholder="namespace"
               value={cred.namespace}
               onChange={(e) => onChange({ ...cred, namespace: e.target.value })}
             />
           </Field>
           <Field label="Key">
-            <input
-              className="input input-bordered w-full font-mono"
+            <FormInput
+              className="w-full font-mono"
               placeholder="key"
               value={cred.kv}
               onChange={(e) => onChange({ ...cred, kv: e.target.value })}
@@ -191,8 +192,8 @@ function CredentialFields({ label, cred, onChange, allowEmpty, masked }) {
           label="Secret name"
           hint="Encrypted secret — value is never shown here. Manage it on the Secrets page."
         >
-          <input
-            className="input input-bordered w-full font-mono"
+          <FormInput
+            className="w-full font-mono"
             placeholder="secret name"
             value={cred.secret}
             onChange={(e) => onChange({ ...cred, secret: e.target.value })}
@@ -297,8 +298,8 @@ export function AuthEditorModal({ mode, auth, onClose, onSaved }) {
         ) : (
           <form className="mt-3 space-y-4" onSubmit={onSubmit}>
             <Field label="Name">
-              <input
-                className="input input-bordered w-full font-mono"
+              <FormInput
+                className="w-full font-mono"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
@@ -308,15 +309,15 @@ export function AuthEditorModal({ mode, auth, onClose, onSaved }) {
             </Field>
 
             <Field label="Type">
-              <select
-                className="select select-bordered w-full"
+              <FormSelect
+                className="w-full"
                 value={form.type}
                 onChange={(e) => setForm({ ...form, type: e.target.value })}
               >
                 <option value="bearer">bearer</option>
                 <option value="basic">basic</option>
                 <option value="header">header</option>
-              </select>
+              </FormSelect>
             </Field>
 
             {form.type === "bearer" ? (
@@ -345,8 +346,8 @@ export function AuthEditorModal({ mode, auth, onClose, onSaved }) {
             {form.type === "header" ? (
               <>
                 <Field label="Header name">
-                  <input
-                    className="input input-bordered w-full font-mono"
+                  <FormInput
+                    className="w-full font-mono"
                     value={form.header}
                     onChange={(e) => setForm({ ...form, header: e.target.value })}
                     required
@@ -362,9 +363,9 @@ export function AuthEditorModal({ mode, auth, onClose, onSaved }) {
             ) : null}
 
             <Field label="Unauthorized status (optional)">
-              <input
+              <FormInput
                 type="number"
-                className="input input-bordered w-full"
+                className="w-full"
                 value={form.unauthorized_status}
                 onChange={(e) => setForm({ ...form, unauthorized_status: e.target.value })}
                 min={100}
@@ -374,8 +375,8 @@ export function AuthEditorModal({ mode, auth, onClose, onSaved }) {
             </Field>
 
             <Field label="Unauthorized response page (optional)">
-              <select
-                className="select select-bordered w-full"
+              <FormSelect
+                className="w-full"
                 value={form.unauthorized_response}
                 onChange={(e) => setForm({ ...form, unauthorized_response: e.target.value })}
               >
@@ -385,7 +386,7 @@ export function AuthEditorModal({ mode, auth, onClose, onSaved }) {
                     {p.name}
                   </option>
                 ))}
-              </select>
+              </FormSelect>
             </Field>
 
             {upsert.isError ? (

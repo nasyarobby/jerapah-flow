@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useConsecutiveFailures } from "../api/hooks.js";
-import { formatTime } from "../lib/format.jsx";
+import { formatTime } from "../lib/format";
 
 export function FailuresPage() {
   const { data, isLoading, error } = useConsecutiveFailures();

@@ -1,4 +1,5 @@
 import jsonata from "jsonata";
+export { namespacedPath } from "@jerapah-flow/shared";
 
 export const SET_STEP_SCRIPT = "set";
 
@@ -6,19 +7,23 @@ export const SET_STEP_SCRIPT = "set";
  * @typedef {{ alias: string, from: string }} NeedEdge
  * @typedef {{
  *   kind: "script",
- *   script: string,
+   *   script: string,
+   *   profile: string | null,
  *   config: unknown | null,
  *   expression?: undefined,
+ *   name: string | null,
  *   id: string | null,
- *   needsKind: "none" | "list" | "map",
- *   needs: NeedEdge[],
- *   when: string | null,
- * }} ParsedScriptStep
+   *   needsKind: "none" | "list" | "map",
+   *   needs: NeedEdge[],
+   *   when: string | null,
+   * }} ParsedScriptStep
  * @typedef {{
  *   kind: "set",
- *   script: typeof SET_STEP_SCRIPT,
- *   config: { expression: string },
+   *   script: typeof SET_STEP_SCRIPT,
+   *   profile: null,
+   *   config: { expression: string },
  *   expression: string,
+ *   name: string | null,
  *   id: string | null,
  *   needsKind: "none" | "list" | "map",
  *   needs: NeedEdge[],
@@ -67,16 +72,6 @@ export async function evaluateJsonata(source, ctx) {
 }
 
 /**
- * Resolve an HTTP path under the owner namespace: /notify -> /u/alice/notify
- * @param {string} owner
- * @param {string} triggerPath
- */
-export function namespacedPath(owner, triggerPath) {
-  const cleaned = String(triggerPath).replace(/^\/+/, "");
-  return `/u/${owner}/${cleaned}`;
-}
-
-/**
  * @param {unknown} step
  * @returns {ParsedStep}
  */
@@ -85,7 +80,9 @@ export function parseScriptStep(step) {
     return {
       kind: "script",
       script: step,
+      profile: null,
       config: null,
+      name: null,
       id: null,
       needsKind: "none",
       needs: [],
@@ -97,25 +94,35 @@ export function parseScriptStep(step) {
   }
 
   const hasScript = step.script != null && step.script !== "";
+  const hasProfile = step.profile != null && step.profile !== "";
   const hasSet = step.set != null;
 
   if (hasScript && hasSet) {
     throw new Error("Step cannot have both script and set");
+  }
+  if (hasProfile && hasSet) {
+    throw new Error("Step cannot have both profile and set");
   }
 
   if (hasSet) {
     return parseSetStep(step);
   }
 
-  if (hasScript) {
-    if (typeof step.script !== "string") {
-      throw new Error(`Invalid script step: ${JSON.stringify(step)}`);
-    }
+  if (hasProfile && typeof step.profile !== "string") {
+    throw new Error(`Invalid profile: ${JSON.stringify(step.profile)}`);
+  }
+  if (hasScript && typeof step.script !== "string") {
+    throw new Error(`Invalid script step: ${JSON.stringify(step)}`);
+  }
+
+  if (hasScript || hasProfile) {
     const { needsKind, needs } = parseNeeds(step.needs);
     return {
       kind: "script",
-      script: step.script,
+      script: hasScript ? step.script : "",
+      profile: hasProfile ? step.profile : null,
       config: step.config ?? null,
+      name: parseOptionalName(step.name),
       id: parseOptionalId(step.id),
       needsKind,
       needs,
@@ -265,8 +272,10 @@ function parseSetStep(step) {
   return {
     kind: "set",
     script: SET_STEP_SCRIPT,
+    profile: null,
     config: { expression },
     expression,
+    name: parseOptionalName(step.name),
     id: parseOptionalId(step.id),
     needsKind,
     needs,
@@ -285,6 +294,19 @@ function parseWhen(when) {
   }
   compileJsonata(when, "when");
   return when;
+}
+
+/**
+ * @param {unknown} name
+ * @returns {string | null}
+ */
+function parseOptionalName(name) {
+  if (name == null || name === "") return null;
+  if (typeof name !== "string") {
+    throw new Error(`Invalid step name: ${JSON.stringify(name)}`);
+  }
+  const trimmed = name.trim();
+  return trimmed || null;
 }
 
 /**

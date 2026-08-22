@@ -9,6 +9,7 @@ import {
   LuGitBranch,
   LuHouse,
   LuKey,
+  LuLayers,
   LuLogOut,
   LuMenu,
   LuMoon,
@@ -16,7 +17,6 @@ import {
   LuShield,
   LuSun,
   LuTags,
-  LuUsers,
 } from "react-icons/lu";
 import { useLogout, useOpsStatus } from "../api/hooks.js";
 import { brandMark } from "../theme/brand.js";
@@ -31,6 +31,7 @@ const navSections = [
     items: [
       { to: "/workflows", label: "Workflows", icon: LuGitBranch },
       { to: "/scripts", label: "Scripts", icon: LuCode },
+      { to: "/profiles", label: "Profiles", icon: LuLayers },
       { to: "/events", label: "Events", icon: LuActivity },
     ],
   },
@@ -50,7 +51,6 @@ const navSections = [
     items: [
       { to: "/manage", label: "Manage", icon: LuServer },
       { to: "/backup", label: "Backup", icon: LuArchive },
-      { to: "/users", label: "Users", icon: LuUsers },
     ],
   },
 ];
