@@ -9,12 +9,28 @@ import { FormInput, FormSelect, FormTextarea } from "../FormControls.jsx";
 import { LogViewer } from "../LogViewer.jsx";
 import { StatusBadge } from "../../lib/format";
 import { contextFromMeta, prettyJson } from "../../lib/script.js";
+import { needsMode } from "../../lib/workflow-doc.js";
 import { ConfigFields } from "./ConfigFields.jsx";
 import { ConfigTooltip, configValueText, FieldLabel, previewConfigValue, SchemaTooltip } from "./FieldHelp.jsx";
 import { ScriptIcon } from "../ScriptIcon.jsx";
 import { configHasOverlay, mergeProfileConfig } from "../../lib/profile.js";
 
-export function ScriptCard({
+export function ScriptCard(props) {
+  if (props.sortable === false) {
+    return <ScriptCardView {...props} drag={null} />;
+  }
+  return <ScriptCardSortable {...props} />;
+}
+
+function ScriptCardSortable(props) {
+  const drag = useSortable({
+    id: props.step.uiId,
+    disabled: props.disabled,
+  });
+  return <ScriptCardView {...props} drag={drag} />;
+}
+
+function ScriptCardView({
   step,
   index,
   otherSteps,
@@ -26,18 +42,25 @@ export function ScriptCard({
   workflows,
   owner,
   excludeFile,
+  sortable = true,
+  defaultExpanded = false,
+  drag,
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: step.uiId,
-    disabled,
-  });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = drag ?? {
+    attributes: {},
+    listeners: {},
+    setNodeRef: undefined,
+    transform: null,
+    transition: undefined,
+    isDragging: false,
+  };
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.6 : 1,
   };
   const [tryOpen, setTryOpen] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const profile = step.profile && profilesByName?.get(step.profile);
   const scriptName = profile?.script || step.script;
   const listed = scriptsByName?.get(scriptName);
@@ -68,16 +91,18 @@ export function ScriptCard({
     >
       <div className={`card-body gap-3 ${expanded ? "p-4" : "p-3"}`}>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs btn-square cursor-grab active:cursor-grabbing"
-            aria-label={`Drag step ${index + 1}`}
-            disabled={disabled}
-            {...attributes}
-            {...listeners}
-          >
-            <LuGripVertical className="size-4 opacity-60" />
-          </button>
+          {sortable !== false ? (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs btn-square cursor-grab active:cursor-grabbing"
+              aria-label={`Drag step ${index + 1}`}
+              disabled={disabled}
+              {...attributes}
+              {...listeners}
+            >
+              <LuGripVertical className="size-4 opacity-60" />
+            </button>
+          ) : null}
           {step.kind === "script" && scriptName ? (
             <ScriptIcon name={scriptName} hasIcon={listed?.hasIcon} className="size-8 shrink-0" />
           ) : null}
@@ -382,12 +407,6 @@ function NeedsMap({ needs, ids, disabled, onChange }) {
       </button>
     </div>
   );
-}
-
-function needsMode(needs) {
-  if (needs == null) return "none";
-  if (Array.isArray(needs)) return "list";
-  return "map";
 }
 
 function ScriptTryDialog({ script, config, meta, owner, onClose }) {

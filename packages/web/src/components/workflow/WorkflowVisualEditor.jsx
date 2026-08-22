@@ -1,33 +1,13 @@
 import { useMemo, useState } from "react";
-import { parse as parseYaml } from "yaml";
 import { useHttpAuths, useHttpPages, useProfiles, useScripts, useWorkflows } from "../../api/hooks.js";
 import { dataFromInputMeta, firstInputMeta } from "../../lib/script.js";
-import { workflowToFlowchart } from "../../lib/workflow-mermaid.js";
 import { parseWorkflowYaml, stringifyWorkflowDoc } from "../../lib/workflow-doc.js";
 import { FormInput, FormTextarea } from "../FormControls.jsx";
+import { GraphTab } from "./GraphTab.jsx";
 import { ScriptsTab } from "./ScriptsTab.jsx";
 import { TriggersTab } from "./TriggersTab.jsx";
 import { YamlTab } from "./YamlTab.jsx";
 import { WorkflowTestPanel } from "./WorkflowTestPanel.jsx";
-
-function useYamlPreview(content) {
-  return useMemo(() => {
-    try {
-      const parsedYaml = parseYaml(content);
-      return {
-        parsed: parsedYaml,
-        parseError: null,
-        mermaid: workflowToFlowchart(parsedYaml),
-      };
-    } catch (err) {
-      return {
-        parsed: null,
-        parseError: err instanceof Error ? err.message : String(err),
-        mermaid: { chart: "", scriptIds: {} },
-      };
-    }
-  }, [content]);
-}
 
 export function WorkflowVisualEditor({
   yaml,
@@ -40,14 +20,14 @@ export function WorkflowVisualEditor({
   testOpen,
   onTestClose,
 }) {
-  const [tab, setTab] = useState("scripts");
+  const [tab, setTab] = useState("graph");
   const [lastEdited, setLastEdited] = useState("yaml");
   const [doc, setDoc] = useState(() => parseWorkflowYaml(yaml).doc);
 
-  const { parsed, parseError, mermaid } = useYamlPreview(yaml);
   const parsedDoc = useMemo(() => parseWorkflowYaml(yaml), [yaml]);
   const displayDoc = lastEdited === "visual" && doc ? doc : parsedDoc.doc;
   const visualDisabled = !displayDoc;
+  const parseError = parsedDoc.parseError;
 
   const { data: scripts = [] } = useScripts();
   const { data: profiles = [] } = useProfiles(owner || undefined, { enabled: Boolean(owner) });
@@ -116,6 +96,20 @@ export function WorkflowVisualEditor({
   if (visualDisabled) testDisabledReason = "Fix YAML before running.";
   else if (unsaved) testDisabledReason = "Save the workflow before running. Test uses the saved YAML.";
 
+  const graphProps = {
+    doc: displayDoc,
+    onPatch: patchDoc,
+    disabled: visualDisabled,
+    scripts,
+    profiles,
+    workflows,
+    owner,
+    file,
+    excludeFile: file,
+    auths,
+    pages,
+  };
+
   return (
     <>
       <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -150,6 +144,14 @@ export function WorkflowVisualEditor({
         <button
           type="button"
           role="tab"
+          className={`tab ${tab === "graph" ? "tab-active" : ""}`}
+          onClick={() => selectTab("graph")}
+        >
+          Graph
+        </button>
+        <button
+          type="button"
+          role="tab"
           className={`tab ${tab === "scripts" ? "tab-active" : ""}`}
           onClick={() => selectTab("scripts")}
         >
@@ -179,6 +181,7 @@ export function WorkflowVisualEditor({
         </p>
       ) : null}
 
+      {tab === "graph" ? <GraphTab {...graphProps} /> : null}
       {tab === "scripts" ? (
         <ScriptsTab
           doc={displayDoc}
@@ -204,13 +207,7 @@ export function WorkflowVisualEditor({
         />
       ) : null}
       {tab === "yaml" ? (
-        <YamlTab
-          content={yaml}
-          onChange={onYamlTabChange}
-          parseError={parseError}
-          mermaid={mermaid}
-          parsed={parsed}
-        />
+        <YamlTab content={yaml} onChange={onYamlTabChange} parseError={parseError} />
       ) : null}
 
       {showTest && owner && file ? (

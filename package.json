@@ -15,7 +15,7 @@
     "start:worker": "pnpm --filter @jerapah-flow/server start:worker",
     "start:control": "pnpm --filter @jerapah-flow/server start:control",
     "migrate": "pnpm --filter @jerapah-flow/server migrate",
-    "test": "pnpm --filter @jerapah-flow/shared test",
+    "test": "pnpm --filter @jerapah-flow/shared test && pnpm --filter @jerapah-flow/web test",
     "lint": "pnpm --filter @jerapah-flow/web lint"
   },
   "packageManager": "pnpm@11.22.0"

@@ -4,6 +4,7 @@ import { LuMaximize2, LuMinimize2, LuPlay } from "react-icons/lu";
 import { api, errorMessage } from "../../api/client.js";
 import { useRunWorkflow } from "../../api/hooks.js";
 import { CodeEditor } from "../CodeEditor.jsx";
+import { JsonTree } from "../JsonViewBlock.jsx";
 import { StatusBadge } from "../../lib/format";
 import { prettyJson } from "../../lib/script.js";
 import {
@@ -50,6 +51,7 @@ export function WorkflowTestPanel({
   const [last, setLast] = useState(null);
   const [polling, setPolling] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [inputView, setInputView] = useState("json");
   const saveTimer = useRef(null);
   const pollAbort = useRef(null);
 
@@ -146,9 +148,15 @@ export function WorkflowTestPanel({
     );
   }
 
-  const resultJson = last
-    ? prettyJson(last.error ? { error: last.error } : last.result)
-    : "";
+  const resultValue = last ? (last.error ? { error: last.error } : last.result) : undefined;
+
+  let inputTreeValue;
+  let inputTreeError = null;
+  try {
+    inputTreeValue = JSON.parse(dataJson || "null");
+  } catch (err) {
+    inputTreeError = err instanceof Error ? err.message : String(err);
+  }
 
   const busy = run.isPending || polling;
 
@@ -206,9 +214,31 @@ export function WorkflowTestPanel({
             <p className="text-xs opacity-60 mb-1 flex items-center gap-2">
               data
               <SchemaTooltip label="Input" fields={inputFields} />
+              <span className="join ml-auto">
+                <button
+                  type="button"
+                  className={`join-item btn btn-xs ${inputView === "json" ? "btn-active" : ""}`}
+                  onClick={() => setInputView("json")}
+                >
+                  JSON
+                </button>
+                <button
+                  type="button"
+                  className={`join-item btn btn-xs ${inputView === "tree" ? "btn-active" : ""}`}
+                  onClick={() => setInputView("tree")}
+                >
+                  Tree
+                </button>
+              </span>
             </p>
             <div className={expanded ? "h-[calc(100%-1.25rem)]" : "h-[calc(100%-1.25rem)]"}>
-              <CodeEditor language="json" value={dataJson} onChange={onDataChange} height="100%" />
+              {inputView === "json" ? (
+                <CodeEditor language="json" value={dataJson} onChange={onDataChange} height="100%" />
+              ) : inputTreeError ? (
+                <p className="text-error text-sm p-2">Fix JSON to preview the tree: {inputTreeError}</p>
+              ) : (
+                <JsonTree value={inputTreeValue} keyName="data" className="h-full max-h-full" />
+              )}
             </div>
           </div>
           <div className={expanded ? "min-h-0 h-full" : "min-h-64 h-64"}>
@@ -222,13 +252,11 @@ export function WorkflowTestPanel({
               ) : null}
             </p>
             <div className={expanded ? "h-[calc(100%-1.25rem)]" : "h-[calc(100%-1.25rem)]"}>
-              <CodeEditor
-                language="json"
-                value={resultJson}
-                onChange={() => {}}
-                readOnly
-                height="100%"
-              />
+              {resultValue === undefined ? (
+                <p className="text-xs opacity-50 p-2">Run the workflow to see a result tree.</p>
+              ) : (
+                <JsonTree value={resultValue} keyName="result" className="h-full max-h-full" />
+              )}
             </div>
           </div>
         </div>
