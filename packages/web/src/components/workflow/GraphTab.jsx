@@ -158,8 +158,10 @@ function GraphTabInner({
     (conn) => {
       if (disabled) return false;
       const from = parseGraphNodeId(conn.source);
+      if (from?.kind !== "step") return false;
+      if (!conn.target) return true;
       const to = parseGraphNodeId(conn.target);
-      if (from?.kind !== "step" || to?.kind !== "step") return false;
+      if (to?.kind !== "step") return false;
       return canConnectSteps(doc, from.uiId, to.uiId);
     },
     [doc, disabled],
@@ -282,8 +284,8 @@ function GraphTabInner({
             onEdgesDelete={onEdgesDelete}
             nodesConnectable={!disabled}
             nodesDraggable={!disabled}
-            elementsSelectable
-            fitView
+            connectionRadius={40}
+            defaultEdgeOptions={{ type: "smoothstep" }}
             proOptions={{ hideAttribution: false }}
           >
             <Background />
