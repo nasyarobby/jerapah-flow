@@ -138,13 +138,14 @@ Injected: `log` (pino), `console`, `fetch`, `require`, `$axios`, `$kv`, `$finger
 
 ```yaml
 scripts:
-  - script: plugin/my-plugin
+  - name: Notify to channel
+    script: plugin/my-plugin
     config:
       url: http://10.8.0.6:3030/notes
       token: $SECRET_joplin_api_token
 ```
 
-Canonical ref is `plugin/<id>` (`.js` suffix is optional).
+Optional `name` is the display title in the editor and graph (falls back to the script filename). Canonical ref is `plugin/<id>` (`.js` suffix is optional).
 
 ## Do not
 

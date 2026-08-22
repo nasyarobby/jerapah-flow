@@ -5,6 +5,7 @@ import {
   pruneTrySession,
   recordTrySuccess,
   seedTryDialog,
+  stepTryLabel,
 } from "./try-session.js";
 
 function step(uiId, extra = {}) {
@@ -165,4 +166,18 @@ test("pruneTrySession drops removed steps", () => {
   assert.ok(pruned.byStep.a);
   assert.equal(pruned.byStep.b, undefined);
   assert.equal(pruned.lastTriedUiId, null);
+});
+
+test("stepTryLabel uses custom name", () => {
+  assert.equal(
+    stepTryLabel({ kind: "script", script: "ntfy.js", name: "Notify to channel" }, 0),
+    "step 1 / Notify to channel",
+  );
+  assert.equal(
+    stepTryLabel(
+      { kind: "script", script: "ntfy.js", id: "notify", name: "Notify to channel" },
+      2,
+    ),
+    "step 3 / notify (Notify to channel)",
+  );
 });

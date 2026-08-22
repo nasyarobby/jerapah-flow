@@ -105,6 +105,19 @@ export function isDagDoc(doc) {
   return (doc?.scripts ?? []).some((s) => !isEmptyNeeds(s.needs));
 }
 
+export function stepCustomName(step) {
+  return typeof step?.name === "string" ? step.name.trim() : "";
+}
+
+export function stepDisplayName(step, fallback) {
+  const custom = stepCustomName(step);
+  if (custom) return custom;
+  if (fallback) return fallback;
+  if (step?.kind === "set") return "set";
+  if (step?.profile) return `profile ${step.profile}`;
+  return step?.script || "untitled";
+}
+
 export function newScriptStep(script, config = {}) {
   return {
     uiId: nextUiId("step"),
@@ -112,6 +125,7 @@ export function newScriptStep(script, config = {}) {
     script,
     profile: "",
     config: config && typeof config === "object" && !Array.isArray(config) ? { ...config } : {},
+    name: "",
     id: "",
     when: "",
     needs: null,
@@ -125,6 +139,7 @@ export function newProfileStep(profileName, script = "") {
     script,
     profile: profileName,
     config: {},
+    name: "",
     id: "",
     when: "",
     needs: null,
@@ -137,6 +152,7 @@ export function newSetStep() {
     kind: "set",
     script: "set",
     expression: "",
+    name: "",
     id: "",
     when: "",
     needs: null,
@@ -200,6 +216,10 @@ function readOnFailureWorkflow(raw) {
   return typeof raw?.onFailureWorkflow === "string" ? raw.onFailureWorkflow : "";
 }
 
+function readStepName(raw) {
+  return typeof raw === "string" ? raw : "";
+}
+
 function normalizeStep(step) {
   const uiId = nextUiId("step");
   if (typeof step === "string") {
@@ -209,6 +229,7 @@ function normalizeStep(step) {
       script: step,
       profile: "",
       config: {},
+      name: "",
       id: "",
       when: "",
       needs: null,
@@ -221,6 +242,7 @@ function normalizeStep(step) {
       script: "",
       profile: "",
       config: {},
+      name: "",
       id: "",
       when: "",
       needs: null,
@@ -233,12 +255,13 @@ function normalizeStep(step) {
       kind: "set",
       script: "set",
       expression: typeof spec.expression === "string" ? spec.expression : "",
+      name: readStepName(step.name),
       id: typeof step.id === "string" ? step.id : "",
       when: typeof step.when === "string" ? step.when : "",
       needs: step.needs ?? null,
     };
   }
-  const known = new Set(["script", "profile", "config", "id", "when", "needs", "set"]);
+  const known = new Set(["script", "profile", "config", "name", "id", "when", "needs", "set"]);
   /** @type {Record<string, unknown>} */
   const extra = {};
   for (const [key, value] of Object.entries(step)) {
@@ -254,6 +277,7 @@ function normalizeStep(step) {
     script: typeof step.script === "string" ? step.script : "",
     profile: typeof step.profile === "string" ? step.profile : "",
     config,
+    name: readStepName(step.name),
     id: typeof step.id === "string" ? step.id : "",
     when: typeof step.when === "string" ? step.when : "",
     needs: step.needs ?? null,
@@ -306,10 +330,16 @@ function normalizeTrigger(raw) {
   };
 }
 
+function dumpStepName(step, out) {
+  const name = stepCustomName(step);
+  if (name) out.name = name;
+}
+
 function dumpStep(step) {
   if (step.kind === "set") {
     /** @type {Record<string, unknown>} */
     const out = {};
+    dumpStepName(step, out);
     if (step.id) out.id = step.id;
     out.set = {
       expression: step.expression ?? "",
@@ -320,6 +350,7 @@ function dumpStep(step) {
   }
   /** @type {Record<string, unknown>} */
   const out = {};
+  dumpStepName(step, out);
   if (step.id) out.id = step.id;
   if (step.profile) {
     out.profile = step.profile;

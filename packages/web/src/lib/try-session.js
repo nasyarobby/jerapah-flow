@@ -4,7 +4,7 @@
  */
 
 import { contextFromMeta } from "./script.js";
-import { isDagDoc, isEmptyNeeds, needsMode } from "./workflow-doc.js";
+import { isDagDoc, isEmptyNeeds, needsMode, stepDisplayName } from "./workflow-doc.js";
 
 /**
  * @typedef {{
@@ -89,16 +89,16 @@ export function pruneTrySession(session, steps) {
 
 /**
  * Human-readable step label for seed hints.
- * @param {{ index?: number, kind?: string, script?: string, profile?: string, id?: string }} step
+ * @param {{ index?: number, kind?: string, script?: string, profile?: string, id?: string, name?: string }} step
  * @param {number} [index]
  */
 export function stepTryLabel(step, index) {
   const n = index != null ? index + 1 : (step.index ?? 0) + 1;
   const id = typeof step.id === "string" && step.id.trim() ? step.id.trim() : null;
-  const name =
-    step.kind === "set"
-      ? "set"
-      : step.profile || step.script || "step";
+  const name = stepDisplayName(
+    step,
+    step.kind === "set" ? "set" : step.profile || step.script || "step",
+  );
   if (id) return `step ${n} / ${id} (${name})`;
   return `step ${n} / ${name}`;
 }

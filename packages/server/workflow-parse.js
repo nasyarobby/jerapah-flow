@@ -9,9 +9,10 @@ export const SET_STEP_SCRIPT = "set";
  *   kind: "script",
    *   script: string,
    *   profile: string | null,
-   *   config: unknown | null,
-   *   expression?: undefined,
-   *   id: string | null,
+ *   config: unknown | null,
+ *   expression?: undefined,
+ *   name: string | null,
+ *   id: string | null,
    *   needsKind: "none" | "list" | "map",
    *   needs: NeedEdge[],
    *   when: string | null,
@@ -21,8 +22,9 @@ export const SET_STEP_SCRIPT = "set";
    *   script: typeof SET_STEP_SCRIPT,
    *   profile: null,
    *   config: { expression: string },
-   *   expression: string,
-   *   id: string | null,
+ *   expression: string,
+ *   name: string | null,
+ *   id: string | null,
  *   needsKind: "none" | "list" | "map",
  *   needs: NeedEdge[],
  *   when: string | null,
@@ -80,6 +82,7 @@ export function parseScriptStep(step) {
       script: step,
       profile: null,
       config: null,
+      name: null,
       id: null,
       needsKind: "none",
       needs: [],
@@ -119,6 +122,7 @@ export function parseScriptStep(step) {
       script: hasScript ? step.script : "",
       profile: hasProfile ? step.profile : null,
       config: step.config ?? null,
+      name: parseOptionalName(step.name),
       id: parseOptionalId(step.id),
       needsKind,
       needs,
@@ -271,6 +275,7 @@ function parseSetStep(step) {
     profile: null,
     config: { expression },
     expression,
+    name: parseOptionalName(step.name),
     id: parseOptionalId(step.id),
     needsKind,
     needs,
@@ -289,6 +294,19 @@ function parseWhen(when) {
   }
   compileJsonata(when, "when");
   return when;
+}
+
+/**
+ * @param {unknown} name
+ * @returns {string | null}
+ */
+function parseOptionalName(name) {
+  if (name == null || name === "") return null;
+  if (typeof name !== "string") {
+    throw new Error(`Invalid step name: ${JSON.stringify(name)}`);
+  }
+  const trimmed = name.trim();
+  return trimmed || null;
 }
 
 /**

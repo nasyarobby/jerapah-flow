@@ -1,4 +1,4 @@
-import { isDagDoc, isEmptyNeeds, needsMode, nextStepId } from "./workflow-doc.js";
+import { isDagDoc, isEmptyNeeds, needsMode, nextStepId, stepCustomName } from "./workflow-doc.js";
 
 export const STEP_NODE_PREFIX = "step:";
 export const TRIGGER_NODE_PREFIX = "trig:";
@@ -44,6 +44,8 @@ export function triggerSummary(trigger, owner) {
 }
 
 export function stepLabel(step) {
+  const custom = stepCustomName(step);
+  if (custom) return custom;
   if (step?.kind === "set") return step.id ? `${step.id}: set` : "set";
   const target = step?.profile ? `profile ${step.profile}` : step?.script || "untitled";
   return step?.id ? `${step.id}: ${target}` : target;
@@ -254,6 +256,7 @@ export function buildGraphElements(doc, positions = {}) {
       data: {
         layoutKey,
         label: stepLabel(s),
+        named: Boolean(stepCustomName(s)),
         kind: s.kind,
         stepId: s.id || "",
         when: s.when || "",

@@ -6,6 +6,7 @@ import {
   canConnectSteps,
   enteringDagWouldStripWhen,
   removeStepEdge,
+  stepLabel,
   stepPredecessors,
   stepSuccessors,
   wouldCreateCycle,
@@ -112,4 +113,16 @@ test("stepSuccessors / stepPredecessors DAG multi", () => {
   assert.deepEqual(stepPredecessors(scripts, "c").sort(), ["a", "b"]);
   assert.deepEqual(stepPredecessors(scripts, "d"), ["a"]);
   assert.deepEqual(stepPredecessors(scripts, "a"), []);
+});
+
+test("stepLabel uses custom name", () => {
+  assert.equal(
+    stepLabel({ kind: "script", script: "ntfy.js", name: "Notify to channel" }),
+    "Notify to channel",
+  );
+  assert.equal(stepLabel({ kind: "script", script: "ntfy.js", id: "n" }), "n: ntfy.js");
+  assert.equal(
+    stepLabel({ kind: "set", id: "xform", name: "Shape payload" }),
+    "Shape payload",
+  );
 });

@@ -42,6 +42,20 @@ import "@xyflow/react/dist/style.css";
 
 const nodeTypes = { trigger: TriggerGraphNode, step: StepGraphNode };
 
+function listedHasIcon(listed) {
+  if (listed == null || typeof listed === "string") return undefined;
+  return listed.hasIcon;
+}
+
+function stepIconData(node, scriptsByName, profilesByName) {
+  if (node.type !== "step" || node.data?.kind === "set") {
+    return { iconScript: "", hasIcon: false };
+  }
+  const profile = node.data?.profile ? profilesByName.get(node.data.profile) : null;
+  const iconScript = profile?.script || node.data?.script || "";
+  return { iconScript, hasIcon: listedHasIcon(scriptsByName.get(iconScript)) };
+}
+
 /** Two Control zoom-out steps from React Flow's default zoom (1). */
 const INITIAL_ZOOM = 1 / 1.2 ** 2;
 const FIT_VIEW = { padding: 0.2, maxZoom: INITIAL_ZOOM, duration: 200 };
@@ -87,28 +101,6 @@ function GraphTabInner({
   const steps = doc?.scripts ?? [];
   const triggers = doc?.triggers ?? [];
 
-  const { edges } = useMemo(() => buildGraphElements(doc, positions), [doc, positions]);
-
-  useEffect(() => {
-    const built = buildGraphElements(doc, positions);
-    setNodes((prev) => {
-      const selected = new Set(prev.filter((n) => n.selected).map((n) => n.id));
-      return built.nodes.map((n) => ({
-        ...n,
-        selected: selected.has(n.id),
-        deletable: !disabled,
-        draggable: !disabled,
-      }));
-    });
-  }, [doc, disabled, positions]);
-
-  useEffect(() => {
-    const t = requestAnimationFrame(() => fitView(FIT_VIEW));
-    return () => cancelAnimationFrame(t);
-  }, [owner, file, fitView]);
-
-  const selected = parseGraphNodeId(selectedId);
-
   const scriptsByName = useMemo(() => {
     const map = new Map();
     for (const s of scripts) {
@@ -125,6 +117,29 @@ function GraphTabInner({
     }
     return map;
   }, [profiles]);
+
+  const { edges } = useMemo(() => buildGraphElements(doc, positions), [doc, positions]);
+
+  useEffect(() => {
+    const built = buildGraphElements(doc, positions);
+    setNodes((prev) => {
+      const selected = new Set(prev.filter((n) => n.selected).map((n) => n.id));
+      return built.nodes.map((n) => ({
+        ...n,
+        data: { ...n.data, ...stepIconData(n, scriptsByName, profilesByName) },
+        selected: selected.has(n.id),
+        deletable: !disabled,
+        draggable: !disabled,
+      }));
+    });
+  }, [doc, disabled, positions, scriptsByName, profilesByName]);
+
+  useEffect(() => {
+    const t = requestAnimationFrame(() => fitView(FIT_VIEW));
+    return () => cancelAnimationFrame(t);
+  }, [owner, file, fitView]);
+
+  const selected = parseGraphNodeId(selectedId);
 
   const displayEdges = useMemo(
     () =>

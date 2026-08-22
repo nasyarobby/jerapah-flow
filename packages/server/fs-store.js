@@ -50,7 +50,7 @@ export function readScript(name) {
 }
 
 /**
- * Icon next to the script: `fetch-html.js` → `fetch-html.png` or `.jpg`.
+ * Icon next to the script: `fetch-html.js` → `fetch-html.png`, `.jpg`, or `.jpeg`.
  * @returns {{ filePath: string, contentType: string } | null}
  */
 export function resolveScriptIcon(name) {
@@ -59,6 +59,7 @@ export function resolveScriptIcon(name) {
   for (const { ext, contentType } of [
     { ext: "png", contentType: "image/png" },
     { ext: "jpg", contentType: "image/jpeg" },
+    { ext: "jpeg", contentType: "image/jpeg" },
   ]) {
     const filePath = path.join(SCRIPTS_DIR, `${base}.${ext}`);
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {

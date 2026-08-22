@@ -5,7 +5,7 @@ export function scriptIconSrc(name) {
   return `/api/scripts/${encodeURIComponent(name)}/icon`;
 }
 
-/** Same-name PNG/JPG next to the script, or a JS document icon. */
+/** Same-name PNG/JPG/JPEG next to the script, or a JS document icon. */
 export function ScriptIcon({ name, hasIcon, className = "size-10" }) {
   const [failed, setFailed] = useState(false);
 

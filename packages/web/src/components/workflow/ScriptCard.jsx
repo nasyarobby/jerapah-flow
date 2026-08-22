@@ -18,7 +18,7 @@ import { LogViewer } from "../LogViewer.jsx";
 import { StatusBadge } from "../../lib/format";
 import { prettyJson } from "../../lib/script.js";
 import { seedTryDialog, stepTryLabel } from "../../lib/try-session.js";
-import { needsMode } from "../../lib/workflow-doc.js";
+import { needsMode, stepCustomName, stepDisplayName } from "../../lib/workflow-doc.js";
 import {
   stepPredecessors,
   stepSuccessors,
@@ -117,7 +117,9 @@ function ScriptCardView({
     step.id && otherSteps.some((s) => s.id === step.id && s.uiId !== step.uiId);
   const preview = previewConfigValue(mergedConfig, meta?.previewConfigKey);
   const previewFull = configValueText(mergedConfig, meta?.previewConfigKey);
-  const baseName = step.kind === "set" ? "set" : scriptName || "untitled";
+  const scriptFallback = step.kind === "set" ? "set" : scriptName || "untitled";
+  const customName = stepCustomName(step);
+  const baseName = stepDisplayName(step, scriptFallback);
   const titleFull = previewFull ? `${baseName} (${previewFull})` : baseName;
   const setConfig =
     step.kind === "set" ? { expression: step.expression ?? "" } : null;
@@ -180,10 +182,18 @@ function ScriptCardView({
           >
             <div className="flex min-w-0 items-center gap-2">
               <h3
-                className="card-title min-w-0 flex-1 text-base font-mono"
+                className={`card-title min-w-0 flex-1 text-base ${customName ? "" : "font-mono"}`}
                 title={titleFull}
               >
                 <span className="min-w-0 truncate">{baseName}</span>
+                {customName && scriptFallback && scriptFallback !== customName ? (
+                  <span
+                    className="badge badge-ghost badge-sm shrink-0 truncate font-mono font-normal"
+                    title={scriptFallback}
+                  >
+                    {scriptFallback}
+                  </span>
+                ) : null}
                 {!expanded && preview ? (
                   <span
                     className="badge badge-secondary badge-sm shrink-0 truncate font-mono font-normal"
@@ -275,6 +285,15 @@ function ScriptCardView({
 
         {expanded ? (
           <>
+            <label className="form-control">
+              <span className="label py-0 text-sm">Name</span>
+              <FormInput
+                value={step.name ?? ""}
+                disabled={disabled}
+                onChange={(e) => onChange({ ...step, name: e.target.value })}
+                placeholder={scriptFallback}
+              />
+            </label>
             {step.kind === "set" ? (
               <div className="space-y-2">
                 <FieldLabel
@@ -469,14 +488,21 @@ function ConfigJsonEditor({ config, disabled, onChange }) {
 
 function NeedsEditor({ step, otherSteps, disabled, onChange }) {
   const mode = needsMode(step.needs);
-  const ids = otherSteps
-    .filter((s) => s.id && s.uiId !== step.uiId)
-    .map((s) => s.id);
+  const others = otherSteps.filter((s) => s.id && s.uiId !== step.uiId);
+  const ids = others.map((s) => s.id);
+  const nameById = new Map(
+    others.map((s) => [s.id, stepCustomName(s) || null]),
+  );
 
   function setMode(next) {
     if (next === "none") onChange({ ...step, needs: null });
     else if (next === "list") onChange({ ...step, needs: [], when: "" });
     else onChange({ ...step, needs: {}, when: "" });
+  }
+
+  function idLabel(id) {
+    const named = nameById.get(id);
+    return named ? `${id} · ${named}` : id;
   }
 
   return (
@@ -520,7 +546,7 @@ function NeedsEditor({ step, otherSteps, disabled, onChange }) {
                       });
                     }}
                   />
-                  <span className="font-mono text-xs">{id}</span>
+                  <span className="font-mono text-xs">{idLabel(id)}</span>
                 </label>
               );
             })
@@ -531,6 +557,7 @@ function NeedsEditor({ step, otherSteps, disabled, onChange }) {
         <NeedsMap
           needs={step.needs && !Array.isArray(step.needs) ? step.needs : {}}
           ids={ids}
+          idLabel={idLabel}
           disabled={disabled}
           onChange={(needs) => onChange({ ...step, needs })}
         />
@@ -539,7 +566,7 @@ function NeedsEditor({ step, otherSteps, disabled, onChange }) {
   );
 }
 
-function NeedsMap({ needs, ids, disabled, onChange }) {
+function NeedsMap({ needs, ids, idLabel, disabled, onChange }) {
   const entries = Object.entries(needs ?? {});
   return (
     <div className="space-y-1">
@@ -564,11 +591,11 @@ function NeedsMap({ needs, ids, disabled, onChange }) {
             onChange={(e) => onChange({ ...needs, [alias]: e.target.value })}
           >
             {from && !ids.includes(from) ? (
-              <option value={from}>{from}</option>
+              <option value={from}>{idLabel ? idLabel(from) : from}</option>
             ) : null}
             {ids.map((id) => (
               <option key={id} value={id}>
-                {id}
+                {idLabel ? idLabel(id) : id}
               </option>
             ))}
           </FormSelect>
@@ -874,8 +901,20 @@ function ScriptTryDialog({
         }
       >
         <div className="flex shrink-0 items-start gap-2">
+          {!isSet && script ? (
+            <ScriptIcon
+              name={script}
+              hasIcon={existing.data?.hasIcon}
+              className="size-8 shrink-0"
+            />
+          ) : null}
           <div className="min-w-0 flex-1">
-            <h3 className="font-bold font-mono">{isSet ? "set" : script}</h3>
+            <h3 className={stepCustomName(step) ? "font-bold" : "font-bold font-mono"}>
+              {stepDisplayName(step, isSet ? "set" : script)}
+            </h3>
+            {stepCustomName(step) && script ? (
+              <p className="text-xs font-mono opacity-60">{isSet ? "set" : script}</p>
+            ) : null}
             <p className="text-sm opacity-70">
               {isSet
                 ? "Dry-run this set with editable data, context, and expression. Does not create an event. Use Apply to card to write the expression back to the step."
