@@ -10,12 +10,8 @@ const KNOWN_TOP = new Set(["name", "description", "enabled", "scripts", "trigger
 export { HTTP_METHODS, namespacedPath, hasWorkflowTrigger };
 
 export const NEW_WORKFLOW_YAML = `name: new workflow
-scripts:
-  - plugin/get-current-time
-triggers:
-  - type: HTTP
-    method: POST
-    path: /new
+scripts: []
+triggers: []
 `;
 
 let uidSeq = 0;

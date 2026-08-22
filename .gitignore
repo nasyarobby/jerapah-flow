@@ -10,8 +10,8 @@ packages/web/dist
 # Personal/local scripts and workflows (not for the repo)
 debug-*.js
 
-# Site-specific workflows (keep examples in workflows/default/)
-packages/server/workflows/local/
+# Legacy live workflow tree (migrated to packages/server/data/workflows/)
+packages/server/workflows/
 
 # Plugin install staging and per-plugin deps
 plugins/.staging-*

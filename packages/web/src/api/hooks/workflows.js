@@ -28,6 +28,13 @@ export function useOwners() {
   });
 }
 
+export function useWorkflowExamples() {
+  return useQuery({
+    queryKey: ["workflow-examples"],
+    queryFn: async () => (await api.get("/workflow-examples")).data.examples,
+  });
+}
+
 export function useSaveWorkflow() {
   const qc = useQueryClient();
   return useMutation({

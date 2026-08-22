@@ -31,6 +31,7 @@ import {
   getRedisUrlForLog,
 } from "./workflow-queue.js";
 import { purgeExpiredTrash } from "./workflow-trash.js";
+import { migrateLegacyWorkflowsIfNeeded } from "./workflow-migrate.js";
 import {
   getConfigGeneration,
   startHeartbeatLoop,
@@ -127,6 +128,12 @@ export async function startApp(opts = {}) {
       return reply.code(403).send({ error: "forbidden" });
     }
   });
+
+  try {
+    migrateLegacyWorkflowsIfNeeded();
+  } catch (err) {
+    log.warn({ err }, "legacy workflow migrate failed");
+  }
 
   const registry = createRegistry(server, {
     queue: workflowQueue,

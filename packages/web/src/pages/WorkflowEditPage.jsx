@@ -11,6 +11,7 @@ import {
   useWorkflowRevision,
 } from "../api/hooks.js";
 import { DuplicateWorkflowDialog } from "../components/DuplicateWorkflowDialog.jsx";
+import { NewWorkflowPresetDialog, shouldSkipNewWorkflowPreset } from "../components/NewWorkflowPresetDialog.jsx";
 import { WorkflowFileIcon } from "../components/WorkflowFileIcon.jsx";
 import { WorkflowVisualEditor } from "../components/workflow/WorkflowVisualEditor.jsx";
 import { WorkflowHistoryPanel } from "../components/workflow/WorkflowHistoryPanel.jsx";
@@ -100,15 +101,21 @@ export function WorkflowNewPage() {
   const navigate = useNavigate();
   const { notify } = useNotifications();
   const { data: owners = [] } = useOwners();
-  const [owner, setOwner] = useState("");
+  const [owner, setOwner] = useState("local");
+  const [ready, setReady] = useState(() => shouldSkipNewWorkflowPreset());
   const [content, setContent] = useState(NEW_WORKFLOW_YAML);
-  const [savedYaml] = useState(NEW_WORKFLOW_YAML);
+  const [savedYaml, setSavedYaml] = useState(NEW_WORKFLOW_YAML);
   const [saveWarnings, setSaveWarnings] = useState(null);
   const create = useCreateWorkflow();
 
   useEffect(() => {
-    if (!owner && owners[0]) setOwner(owners[0]);
-  }, [owner, owners]);
+    // Prefer local when it exists; otherwise first owner. Do not clobber a typed value.
+    setOwner((prev) => {
+      if (prev && prev !== "local") return prev;
+      if (owners.includes("local") || owners.length === 0) return "local";
+      return owners[0];
+    });
+  }, [owners]);
 
   function onSave(saveAnyway = false) {
     create.mutate(
@@ -129,6 +136,20 @@ export function WorkflowNewPage() {
           notify.error(errorMessage(err));
         },
       },
+    );
+  }
+
+  if (!ready) {
+    return (
+      <NewWorkflowPresetDialog
+        onCancel={() => navigate("/workflows")}
+        onChoose={(yaml) => {
+          const initial = yaml == null || yaml === "" ? NEW_WORKFLOW_YAML : yaml;
+          setContent(initial);
+          setSavedYaml(initial);
+          setReady(true);
+        }}
+      />
     );
   }
 
@@ -155,10 +176,17 @@ export function WorkflowNewPage() {
                 placeholder="owner"
                 value={owner}
                 onChange={(e) => setOwner(e.target.value)}
+                list="new-workflow-owners"
                 required
               />
             }
           />
+          <datalist id="new-workflow-owners">
+            {owners.includes("local") ? null : <option value="local" />}
+            {owners.map((o) => (
+              <option key={o} value={o} />
+            ))}
+          </datalist>
         </div>
       </WorkflowEditorLayout>
       {saveWarnings ? (

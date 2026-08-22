@@ -45,6 +45,11 @@ import {
   createWorkflowBackupBuffer,
   restoreWorkflowBackup,
 } from "../../workflow-backup.js";
+import {
+  listExampleWorkflows,
+  readExampleWorkflow,
+  assertExampleWorkflowId,
+} from "../../workflow-examples.js";
 
 /**
  * Reload this process and notify other HTTP/worker processes via Redis.
@@ -244,6 +249,22 @@ export default function workflowsPluginFactory(registry) {
   return async function workflowsPlugin(fastify) {
     fastify.get("/owners", async () => {
       return { owners: fsStore.listOwners() };
+    });
+
+    fastify.get("/workflow-examples", async () => {
+      return { examples: listExampleWorkflows() };
+    });
+
+    fastify.get("/workflow-examples/:id", async (req, reply) => {
+      const { id } = /** @type {{ id: string }} */ (req.params);
+      if (!assertExampleWorkflowId(id)) {
+        return reply.code(400).send({ error: "invalid example id" });
+      }
+      const example = readExampleWorkflow(id);
+      if (!example) {
+        return reply.code(404).send({ error: "example not found" });
+      }
+      return example;
     });
 
     fastify.get("/workflows/trash", async () => {

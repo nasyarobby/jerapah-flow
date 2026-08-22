@@ -45,6 +45,18 @@ The first account created becomes **admin**. Later accounts are created from Use
 - Shipped example source (install from UI/API): `examples/plugins/get-current-time` → runtime `plugin/get-current-time`.
 - `plugins/joplin-api` and `plugins/send-sms` are **personal/user plugins** appropriate for a fork — not shipped examples. See **AGENTS.md** for creating user plugins under `plugins/<id>/`.
 
+## Workflows (instance data vs examples)
+
+| Kind | Loaded by runner? | Location |
+|---|---|---|
+| **Live workflows** | Yes | `packages/server/data/workflows/<owner>/` (gitignored) |
+| **Example presets** | No | `examples/workflows/*.yaml` — offered when creating a new workflow |
+
+- Live YAML is **instance data**, same as SQLite and secrets — not product source. Prefer owner `local` for personal workflows.
+- On first start, if the instance store is empty and a legacy `packages/server/workflows/` tree still exists, it is copied into `data/workflows/`.
+- New workflow editor starts empty; optional presets copy example YAML into the editor (nothing is saved until Save).
+- Override the live store in tests with `JFLOW_WORKFLOWS_DIR`.
+
 ```bash
 # Smoke
 JFLOW_PLUGINS_DIR=packages/server/data/plugins-smoke-test \
@@ -114,6 +126,7 @@ Desired state is stored in `packages/server/data/control-state.json` (generation
 | `JFLOW_JWT_SECRET` | `jflow-dev-secret` (dev only) | **Required in production**. |
 | `JFLOW_SECRETS_KEY` | `jflow-dev-secrets-key` (dev only) | Master key for named secrets. **Required in production**. Changing it makes existing secrets unreadable. 64 hex chars are used as a raw AES-256 key; any other string is derived with scrypt. |
 | `JFLOW_DB_PATH` | `packages/server/data/jerapah-flow.db` | SQLite file. |
+| `JFLOW_WORKFLOWS_DIR` | `packages/server/data/workflows` | Live workflow YAML (instance data). |
 | `REDIS_URL` | `redis://127.0.0.1:6379` | Redis for BullMQ workflow queue. **Required** — the server will not start if Redis is unreachable. |
 | `REDIS_PASS` | — | Optional Redis AUTH password (sent via ioredis `password`). Prefer this over embedding credentials in `REDIS_URL` so logs stay clean. |
 | `JFLOW_QUEUE_NAME` | `jerapah-workflows` | BullMQ queue name. |
