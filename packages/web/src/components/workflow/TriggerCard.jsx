@@ -8,7 +8,22 @@ import { CRON_CUSTOM, CRON_PRESETS, matchCronPreset, scheduleForPreset } from ".
 import { FormInput, FormSelect } from "../FormControls.jsx";
 import { AuthPicker } from "./AuthPicker.jsx";
 
-export function TriggerCard({
+export function TriggerCard(props) {
+  if (props.sortable === false) {
+    return <TriggerCardView {...props} drag={null} />;
+  }
+  return <TriggerCardSortable {...props} />;
+}
+
+function TriggerCardSortable(props) {
+  const drag = useSortable({
+    id: props.trigger.uiId,
+    disabled: props.disabled,
+  });
+  return <TriggerCardView {...props} drag={drag} />;
+}
+
+function TriggerCardView({
   trigger,
   index,
   owner,
@@ -19,18 +34,25 @@ export function TriggerCard({
   pages = [],
   workflows = [],
   excludeFile,
+  sortable = true,
+  defaultExpanded = false,
+  drag,
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: trigger.uiId,
-    disabled,
-  });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = drag ?? {
+    attributes: {},
+    listeners: {},
+    setNodeRef: undefined,
+    transform: null,
+    transition: undefined,
+    isDragging: false,
+  };
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.6 : 1,
   };
   const type = trigger.type;
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const alertDestinations = triggerDestinations(workflows, { owner, excludeFile });
 
   return (
@@ -43,16 +65,18 @@ export function TriggerCard({
     >
       <div className={`card-body gap-3 ${expanded ? "p-4" : "p-3"}`}>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs btn-square cursor-grab active:cursor-grabbing"
-            aria-label={`Drag trigger ${index + 1}`}
-            disabled={disabled}
-            {...attributes}
-            {...listeners}
-          >
-            <LuGripVertical className="size-4 opacity-60" />
-          </button>
+          {sortable !== false ? (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs btn-square cursor-grab active:cursor-grabbing"
+              aria-label={`Drag trigger ${index + 1}`}
+              disabled={disabled}
+              {...attributes}
+              {...listeners}
+            >
+              <LuGripVertical className="size-4 opacity-60" />
+            </button>
+          ) : null}
           <button
             type="button"
             className="min-w-0 flex-1 text-left"

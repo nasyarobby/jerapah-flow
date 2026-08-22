@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { LuPlus } from "react-icons/lu";
 import { defaultConfigFromMeta } from "../../lib/script.js";
-import { newProfileStep, newScriptStep, newSetStep } from "../../lib/workflow-doc.js";
+import { newProfileStep, newScriptStep, newSetStep, withAllocatedStepId } from "../../lib/workflow-doc.js";
 import { AddScriptDialog } from "./AddScriptDialog.jsx";
 import { ScriptCard } from "./ScriptCard.jsx";
 
@@ -115,16 +115,11 @@ export function ScriptsTab({
         owner={owner}
         onClose={() => setAddOpen(false)}
         onPick={(picked) => {
-          if (picked.kind === "set") {
-            patchSteps([...steps, newSetStep()]);
-          } else if (picked.kind === "profile") {
-            patchSteps([...steps, newProfileStep(picked.name, picked.script)]);
-          } else {
-            patchSteps([
-              ...steps,
-              newScriptStep(picked.name, defaultConfigFromMeta(picked.meta)),
-            ]);
-          }
+          let next;
+          if (picked.kind === "set") next = newSetStep();
+          else if (picked.kind === "profile") next = newProfileStep(picked.name, picked.script);
+          else next = newScriptStep(picked.name, defaultConfigFromMeta(picked.meta));
+          patchSteps([...steps, withAllocatedStepId(next, steps)]);
           setAddOpen(false);
         }}
       />

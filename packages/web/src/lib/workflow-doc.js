@@ -78,6 +78,37 @@ export function stringifyWorkflowDoc(doc) {
   return stringifyYaml(out, { indent: 2, lineWidth: 0 });
 }
 
+export function nextStepId(existingIds) {
+  const used = existingIds instanceof Set ? existingIds : new Set([...(existingIds ?? [])].filter(Boolean));
+  let n = 1;
+  while (used.has(`step-${n}`)) n += 1;
+  return `step-${n}`;
+}
+
+export function withAllocatedStepId(step, existingSteps) {
+  if (step?.id) return step;
+  const ids = (existingSteps ?? []).map((s) => s.id).filter(Boolean);
+  return { ...step, id: nextStepId(ids) };
+}
+
+export function needsMode(needs) {
+  if (needs == null) return "none";
+  if (Array.isArray(needs)) return "list";
+  if (typeof needs === "object") return "map";
+  return "none";
+}
+
+export function isEmptyNeeds(needs) {
+  if (needs == null) return true;
+  if (Array.isArray(needs)) return needs.length === 0;
+  if (typeof needs === "object") return Object.keys(needs).length === 0;
+  return false;
+}
+
+export function isDagDoc(doc) {
+  return (doc?.scripts ?? []).some((s) => !isEmptyNeeds(s.needs));
+}
+
 export function newScriptStep(script, config = {}) {
   return {
     uiId: nextUiId("step"),
@@ -348,11 +379,4 @@ function dumpTrigger(t) {
     return { type: "workflow", ...(t.extra ?? {}) };
   }
   return { type: t?.type ?? "HTTP", ...(t.extra ?? {}) };
-}
-
-function isEmptyNeeds(needs) {
-  if (needs == null) return true;
-  if (Array.isArray(needs)) return needs.length === 0;
-  if (typeof needs === "object") return Object.keys(needs).length === 0;
-  return false;
 }
