@@ -168,8 +168,11 @@ pnpm install
 pnpm build
 # Redis must be reachable at REDIS_URL (set REDIS_PASS if Redis requires AUTH)
 # Put secrets in .env (JFLOW_JWT_SECRET, JFLOW_SECRETS_KEY, REDIS_URL, …)
-pm2 start ecosystem.config.cjs
+# Use in-tree PM2 6.x (same module control.js requires). A global `pm2` 7.x
+# against a 6.x daemon pegs CPU even when ls shows only 2 fork instances.
+pnpm start:pm2
 # UI: http://localhost:8500
+# If you already mixed versions: pnpm pm2 -- kill && pnpm start:pm2
 ```
 
 Or without the ecosystem file:

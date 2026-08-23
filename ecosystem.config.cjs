@@ -3,6 +3,9 @@
  * Starts always-on processes only; HTTP (:8700) and workers are owned by
  * control.js via PM2 (same as `pnpm dev:pm2`).
  *
+ * Use `pnpm start:pm2` (in-tree PM2 6.x). Do not use a global `pm2` 7.x —
+ * a CLI/daemon version mismatch pegs CPU even with instances: 1.
+ *
  * Prerequisites: `pnpm build` (packages/web/dist), Redis, .env secrets.
  */
 const fs = require("fs");
@@ -41,7 +44,7 @@ module.exports = {
       name: "jflow-control",
       cwd: root,
       script: "packages/server/control.js",
-      interpreter: "node",
+      interpreter: process.execPath,
       instances: 1,
       exec_mode: "fork",
       autorestart: true,
@@ -55,7 +58,7 @@ module.exports = {
       name: "jflow-web",
       cwd: root,
       script: "packages/server/web-server.js",
-      interpreter: "node",
+      interpreter: process.execPath,
       instances: 1,
       exec_mode: "fork",
       autorestart: true,

@@ -15,6 +15,8 @@
     "start:worker": "pnpm --filter @jerapah-flow/server start:worker",
     "start:control": "pnpm --filter @jerapah-flow/server start:control",
     "start:web": "pnpm --filter @jerapah-flow/server start:web",
+    "pm2": "node scripts/pm2.mjs",
+    "start:pm2": "node scripts/pm2.mjs start ecosystem.config.cjs",
     "migrate": "pnpm --filter @jerapah-flow/server migrate",
     "test": "pnpm --filter @jerapah-flow/shared test && pnpm --filter @jerapah-flow/web test",
     "lint": "pnpm --filter @jerapah-flow/web lint"
