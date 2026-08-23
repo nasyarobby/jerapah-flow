@@ -48,7 +48,8 @@ module.exports = {
       instances: 1,
       exec_mode: "fork",
       autorestart: true,
-      max_restarts: 20,
+      max_restarts: 8,
+      restart_delay: 2000,
       env: {
         ...env,
         JFLOW_CONTROL_PORT: env.JFLOW_CONTROL_PORT ?? "8600",

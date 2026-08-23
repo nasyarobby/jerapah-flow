@@ -64,13 +64,6 @@ try {
   process.exit(1);
 }
 
-try {
-  await connectPm2();
-} catch (err) {
-  log.error({ err }, "failed to connect to PM2 — is pm2 installed?");
-  process.exit(1);
-}
-
 async function applyDesiredState() {
   const state = readControlState();
   await ensureHttp({
@@ -97,8 +90,6 @@ async function applyDesiredState() {
     "applied desired state",
   );
 }
-
-await applyDesiredState();
 
 const server = fastify({ loggerInstance: log });
 await server.register(cookie);
@@ -484,12 +475,24 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 const port = Number(process.env.JFLOW_CONTROL_PORT ?? process.env.PORT ?? 8600);
-server
-  .listen({ host: "0.0.0.0", port })
-  .then(() => {
-    log.info(`Control is running on port ${port}`);
-  })
-  .catch((err) => {
-    log.error({ err }, "failed to start control");
-    process.exit(1);
-  });
+try {
+  await server.listen({ host: "0.0.0.0", port });
+  log.info(`Control is running on port ${port}`);
+} catch (err) {
+  log.error({ err }, "failed to start control");
+  process.exit(1);
+}
+
+try {
+  await connectPm2();
+} catch (err) {
+  log.error({ err }, "failed to connect to PM2 — is pm2 installed?");
+  process.exit(1);
+}
+
+try {
+  await applyDesiredState();
+} catch (err) {
+  log.error({ err }, "failed to apply desired state");
+  process.exit(1);
+}

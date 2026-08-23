@@ -165,12 +165,56 @@ export async function restartPm2Process(pmId) {
 }
 
 /**
+ * PM2 injects these into process.env of a managed app. Spreading them into
+ * `pm2.start({ env })` overwrites `name` / `pm_exec_path` so God restarts
+ * jflow-control instead of launching http/worker (EADDRINUSE :8600 loop).
+ */
+const PM2_META_KEYS = new Set([
+  "name",
+  "namespace",
+  "exec_mode",
+  "exec_interpreter",
+  "instances",
+  "instance_var",
+  "node_app_instance",
+  "unique_id",
+  "status",
+  "username",
+  "windowsHide",
+  "merge_logs",
+  "vizion",
+  "vizion_running",
+  "autostart",
+  "autorestart",
+  "automation",
+  "km_link",
+]);
+
+/**
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {NodeJS.ProcessEnv}
+ */
+export function withoutPm2Meta(env) {
+  /** @type {NodeJS.ProcessEnv} */
+  const out = {};
+  for (const [key, val] of Object.entries(env)) {
+    if (val == null) continue;
+    if (PM2_META_KEYS.has(key)) continue;
+    if (key.startsWith("pm_") || key.startsWith("axm_") || key.startsWith("PM2_")) {
+      continue;
+    }
+    out[key] = val;
+  }
+  return out;
+}
+
+/**
  * Shared env for child processes.
  * @param {{ generation: number }} opts
  */
 export function childEnv(opts) {
   return {
-    ...process.env,
+    ...withoutPm2Meta(process.env),
     JFLOW_CONFIG_GENERATION: String(opts.generation),
     JFLOW_CORS_ORIGIN: process.env.JFLOW_CORS_ORIGIN ?? "http://localhost:8500",
     PORT: process.env.JFLOW_HTTP_PORT ?? "8700",
