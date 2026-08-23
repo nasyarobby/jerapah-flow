@@ -706,15 +706,14 @@ export default function workflowsPluginFactory(registry) {
         return reply.code(err.statusCode ?? 400).send({ error: err.message });
       }
       const raw = fsStore.readWorkflowYaml(owner, file);
-      if (raw == null) {
-        return reply.code(404).send({ error: "workflow not found" });
-      }
       let name = null;
-      try {
-        const parsed = yaml.parse(raw);
-        name = parsed?.name ?? null;
-      } catch {
-        // ignore
+      if (raw != null) {
+        try {
+          const parsed = yaml.parse(raw);
+          name = parsed?.name ?? null;
+        } catch {
+          // ignore
+        }
       }
       try {
         const item = await moveWorkflowToTrash({

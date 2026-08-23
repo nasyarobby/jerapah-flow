@@ -62,29 +62,49 @@ export async function isInTrash(owner, file) {
   return Boolean(row);
 }
 
+function unregisterWorkflow(owner, file) {
+  const registered = fsStore.readRegisters(owner).filter((f) => f !== file);
+  fsStore.writeRegisters(owner, registered);
+}
+
 /**
- * Soft-delete: move YAML to trash dir, unregister, keep revision history.
+ * Soft-delete: unregister, move YAML to trash when present, keep revision history.
+ * Missing YAML (ghost register entries) is still unregistered so it leaves the list.
  * @param {{
  *   workflowId: string,
  *   owner: string,
  *   file: string,
  *   name?: string | null,
  * }} opts
+ * @returns {Promise<ReturnType<typeof rowToItem> | null>} trash item, or null if there was no file to keep
  */
 export async function moveWorkflowToTrash(opts) {
+  unregisterWorkflow(opts.owner, opts.file);
+
   const sourcePath = path.join(WORKFLOWS_DIR, opts.owner, opts.file);
   if (!fs.existsSync(sourcePath)) {
-    const err = new Error("workflow not found");
-    err.statusCode = 404;
-    throw err;
+    const existing = await db("workflow_trash")
+      .where({ owner: opts.owner, file: opts.file })
+      .first();
+    return existing ? rowToItem(existing) : null;
   }
 
   const trashPath = trashFilePath(opts.owner, opts.file);
   fs.mkdirSync(path.dirname(trashPath), { recursive: true });
   fs.renameSync(sourcePath, trashPath);
 
-  const registered = fsStore.readRegisters(opts.owner).filter((f) => f !== opts.file);
-  fsStore.writeRegisters(opts.owner, registered);
+  const existing = await db("workflow_trash")
+    .where({ owner: opts.owner, file: opts.file })
+    .first();
+  if (existing) {
+    await db("workflow_trash").where({ id: existing.id }).update({
+      workflow_id: opts.workflowId,
+      name: opts.name ?? existing.name ?? null,
+      deleted_at: nowIso(),
+      trash_path: trashPath,
+    });
+    return rowToItem(await db("workflow_trash").where({ id: existing.id }).first());
+  }
 
   const id = randomUUID();
   const deleted_at = nowIso();

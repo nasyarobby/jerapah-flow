@@ -136,6 +136,18 @@ const warnings = collectWorkflowWarnings(
 );
 assert.ok(warnings.warnings.some((w) => w.code === "unknown_script"));
 
+const ghostFile = newWorkflowFilename();
+fsStore.writeRegisters(owner, [file, ghostFile]);
+const ghostTrash = await moveWorkflowToTrash({
+  workflowId: workflowIdFromFile(ghostFile),
+  owner,
+  file: ghostFile,
+  name: null,
+});
+assert.equal(ghostTrash, null);
+assert.ok(!fsStore.readRegisters(owner).includes(ghostFile));
+assert.ok(fsStore.readRegisters(owner).includes(file));
+
 const trashed = await moveWorkflowToTrash({
   workflowId,
   owner,
