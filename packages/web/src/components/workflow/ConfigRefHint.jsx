@@ -4,22 +4,40 @@ import { LuEye, LuEyeOff, LuExternalLink } from "react-icons/lu";
 import { useVariables } from "../../api/hooks.js";
 
 const VAR_PEEK_MAX = 48;
+const MUSTACHE_RE =
+  /\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*)\s*\}\}/g;
+const LEGACY_PREFIX_RE = /^\s*\$(VAR|SECRET|CONTEXT)_([A-Za-z0-9._-]*)\s*$/;
 
-const CONFIG_REF_PREFIXES = [
-  { prefix: "$SECRET_", label: "secret" },
-  { prefix: "$CONTEXT_", label: "context" },
-  { prefix: "$VAR_", label: "variable" },
-];
-
+/**
+ * @param {unknown} value
+ * @returns {{
+ *   kind: "mustache" | "legacy",
+ *   path?: string,
+ *   root?: string,
+ *   name?: string,
+ *   legacyKind?: string,
+ *   legacyName?: string,
+ * } | null}
+ */
 function describeConfigRef(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  for (const { prefix, label } of CONFIG_REF_PREFIXES) {
-    if (trimmed.startsWith(prefix) && trimmed.length > prefix.length) {
-      return { label, name: trimmed.slice(prefix.length), kind: prefix };
-    }
+  const legacy = LEGACY_PREFIX_RE.exec(trimmed);
+  if (legacy) {
+    const legacyKind =
+      legacy[1] === "VAR" ? "variable" : legacy[1] === "SECRET" ? "secret" : "context";
+    return {
+      kind: "legacy",
+      legacyKind,
+      legacyName: legacy[2] ?? "",
+    };
   }
-  return null;
+  MUSTACHE_RE.lastIndex = 0;
+  const match = MUSTACHE_RE.exec(trimmed);
+  if (!match) return null;
+  const path = match[1];
+  const root = path.split(".")[0];
+  return { kind: "mustache", path, root, name: path.slice(root.length + 1) };
 }
 
 function formatVarDisplay(value) {
@@ -33,7 +51,7 @@ function truncatePeek(text, maxLen = VAR_PEEK_MAX) {
   return `${text.slice(0, Math.max(0, maxLen - 1))}…`;
 }
 
-/** Edit-time lookup for `$VAR_` against workflow owner (not a runtime guarantee). */
+/** Edit-time lookup for `{{ vars.name }}` against workflow owner (not a runtime guarantee). */
 function lookupVariable(variables, owner, name) {
   const list = Array.isArray(variables) ? variables : [];
   const match = list.find((v) => v.owner === owner && v.name === name);
@@ -62,7 +80,7 @@ function variablesDeepLink({ owner, name, missing }) {
 
 export function ConfigRefHint({ value, owner }) {
   const ref = describeConfigRef(value);
-  const isVar = ref?.kind === "$VAR_";
+  const isVar = ref?.kind === "mustache" && ref.root === "vars" && Boolean(ref.name);
   const { data: variables = [], isPending } = useVariables(undefined, { enabled: isVar });
   const [revealed, setRevealed] = useState(false);
 
@@ -72,10 +90,32 @@ export function ConfigRefHint({ value, owner }) {
 
   if (!ref) return null;
 
+  if (ref.kind === "legacy") {
+    const hint =
+      ref.legacyKind === "variable"
+        ? `{{ vars.${ref.legacyName || "name"} }}`
+        : ref.legacyKind === "secret"
+          ? `{{ secrets.${ref.legacyName || "name"} }}`
+          : `{{ context.${ref.legacyName || "name"} }}`;
+    return (
+      <p className="text-xs text-error">
+        legacy ${ref.legacyKind} ref — use <span className="font-mono">{hint}</span>
+      </p>
+    );
+  }
+
   if (!isVar) {
+    const label =
+      ref.root === "secrets"
+        ? "secret"
+        : ref.root === "context"
+          ? "context"
+          : ref.root === "data"
+            ? "data"
+            : "expression";
     return (
       <p className="text-xs opacity-60">
-        from {ref.label} <span className="font-mono">{ref.name}</span>
+        from {label} <span className="font-mono">{ref.path}</span>
       </p>
     );
   }

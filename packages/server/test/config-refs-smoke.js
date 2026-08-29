@@ -2,7 +2,8 @@ import { migrate, db } from "../db.js";
 import { upsertSecret, deleteSecret } from "../secrets-store.js";
 import { deleteVariable, upsertVariable } from "../variables-store.js";
 import { Secret } from "../secret-value.js";
-import { parseConfigRef, resolveConfigRefs } from "../config-refs.js";
+import { parseLegacyConfigRef, resolveConfigRefs } from "../config-refs.js";
+import { rewriteLegacyConfigRefsInText } from "../config-ref-rewrite.js";
 
 await migrate();
 
@@ -23,126 +24,171 @@ async function assertRejects(fn, match) {
   throw new Error(`expected to reject (${match ?? "any error"})`);
 }
 
-const owner = "default";
-const workflowKey = "default/config-refs-smoke.yaml";
-const ctx = { owner, workflowKey, context: {} };
+const owner = "config_refs_smoke_owner";
+const ctx = { owner, workflowKey: `${owner}/config-refs-smoke.yaml`, context: {}, data: {} };
 
-function assertParse(value, expected) {
-  const got = parseConfigRef(value);
-  if (expected == null) {
-    assert(got == null, `expected null parse for ${JSON.stringify(value)}, got ${JSON.stringify(got)}`);
-    return;
-  }
-  assert(got != null, `expected parse for ${JSON.stringify(value)}`);
-  assert(got.kind === expected.kind, `kind ${got.kind} !== ${expected.kind}`);
-  assert(got.name === expected.name, `name ${JSON.stringify(got.name)} !== ${JSON.stringify(expected.name)}`);
+{
+  const rewritten = rewriteLegacyConfigRefsInText(
+    'url: $VAR_ntfy\ntoken: $SECRET_tok\nid: $CONTEXT_user',
+  );
+  assert(rewritten.changed, "rewrite detects legacy refs");
+  assert(
+    rewritten.text.includes("{{ vars.ntfy }}") &&
+      rewritten.text.includes("{{ secrets.tok }}") &&
+      rewritten.text.includes("{{ context.user }}"),
+    "rewrite maps prefixes",
+  );
+  assert(!rewriteLegacyConfigRefsInText("passwordSecret: gmail_app").changed, "bare names untouched");
 }
 
-assertParse("password123", null);
-assertParse("$FOO_bar", null);
-assertParse("$SECRET", null);
-assertParse("  password123  ", null);
-assertParse("$SECRET_zte_modem_password", { kind: "secret", name: "zte_modem_password" });
-assertParse("  $SECRET_zte_modem_password  ", { kind: "secret", name: "zte_modem_password" });
-assertParse("Bearer $SECRET_x", null);
-assertParse("$KV_modem password", null);
-assertParse("$VAR_ntfy_url", { kind: "var", name: "ntfy_url" });
-assertParse("$CONTEXT_token", { kind: "context", name: "token" });
-assertParse("$SECRET_", { kind: "secret", name: "" });
-assertParse("$CONTEXT_SECRET_foo", { kind: "context", name: "SECRET_foo" });
+assert(parseLegacyConfigRef("$VAR_ntfy_url")?.kind === "var", "legacy var parse");
+assert(parseLegacyConfigRef("$SECRET_x")?.kind === "secret", "legacy secret parse");
+assert(parseLegacyConfigRef("$CONTEXT_token")?.kind === "context", "legacy context parse");
+assert(parseLegacyConfigRef("{{ vars.x }}") == null, "mustache is not legacy");
+assert(parseLegacyConfigRef("Bearer $SECRET_x") == null, "mid-string not whole-value legacy");
 
 {
   const literal = await resolveConfigRefs("password123", ctx);
   assert(literal === "password123", "literal passthrough");
   const unknown = await resolveConfigRefs("$FOO_bar", ctx);
   assert(unknown === "$FOO_bar", "$FOO_bar stays literal");
-  const kvLiteral = await resolveConfigRefs("$KV_modem_password", ctx);
-  assert(kvLiteral === "$KV_modem_password", "$KV_ stays literal");
   const embedded = await resolveConfigRefs("Bearer $SECRET_x", ctx);
-  assert(embedded === "Bearer $SECRET_x", "mid-string stays literal");
+  assert(embedded === "Bearer $SECRET_x", "mid-string legacy stays literal");
   const number = await resolveConfigRefs(42, ctx);
   assert(number === 42, "number passthrough");
 }
 
-const secret = await upsertSecret({
-  owner,
-  name: "config_refs_smoke_token",
-  value: "s3cret-ok",
-});
-const varUrl = await upsertVariable({
-  owner,
-  name: "config_refs_smoke_url",
-  type: "string",
-  value: "https://example.test",
-});
-const varRetry = await upsertVariable({
-  owner,
-  name: "config_refs_smoke_retry",
-  type: "number",
-  value: 3,
-});
-const varDebug = await upsertVariable({
-  owner,
-  name: "config_refs_smoke_debug",
-  type: "boolean",
-  value: false,
-});
+await assertRejects(
+  () => resolveConfigRefs("$VAR_ntfy_channel", ctx),
+  "removed",
+);
+await assertRejects(
+  () => resolveConfigRefs("$SECRET_tok", ctx),
+  "use {{ secrets.tok }}",
+);
+await assertRejects(
+  () => resolveConfigRefs("$CONTEXT_token", ctx),
+  "use {{ context.token }}",
+);
 
+const created = [];
 try {
+  const secret = await upsertSecret({
+    owner,
+    name: "config_refs_smoke_token",
+    value: "s3cret-ok",
+  });
+  created.push(["secret", secret.id]);
+
+  const varUrl = await upsertVariable({
+    owner,
+    name: "config_refs_smoke_url",
+    type: "string",
+    value: "https://example.test",
+  });
+  created.push(["var", varUrl.id]);
+
+  const varRetry = await upsertVariable({
+    owner,
+    name: "config_refs_smoke_retry",
+    type: "number",
+    value: 3,
+  });
+  created.push(["var", varRetry.id]);
+
+  const varDebug = await upsertVariable({
+    owner,
+    name: "config_refs_smoke_debug",
+    type: "boolean",
+    value: false,
+  });
+  created.push(["var", varDebug.id]);
+
   {
-    const resolved = await resolveConfigRefs("$SECRET_config_refs_smoke_token", ctx);
-    assert(resolved === "s3cret-ok", "secret resolve");
+    const resolved = await resolveConfigRefs("{{ secrets.config_refs_smoke_token }}", ctx);
+    assert(resolved === "s3cret-ok", "secret whole-value");
   }
   {
-    const resolved = await resolveConfigRefs("  $SECRET_config_refs_smoke_token  ", ctx);
-    assert(resolved === "s3cret-ok", "secret resolve trimmed");
-  }
-  {
-    const resolved = await resolveConfigRefs("$VAR_config_refs_smoke_url", ctx);
+    const resolved = await resolveConfigRefs("{{ vars.config_refs_smoke_url }}", ctx);
     assert(resolved === "https://example.test", "var string");
   }
   {
-    const resolved = await resolveConfigRefs("$VAR_config_refs_smoke_retry", ctx);
-    assert(resolved === 3, "var number stays number");
-    assert(typeof resolved === "number", "var number type");
+    const resolved = await resolveConfigRefs("{{ vars.config_refs_smoke_retry }}", ctx);
+    assert(resolved === 3, "var number keeps type");
   }
   {
-    const resolved = await resolveConfigRefs("$VAR_config_refs_smoke_debug", ctx);
-    assert(resolved === false, "var boolean stays false");
-    assert(typeof resolved === "boolean", "var boolean type");
+    const resolved = await resolveConfigRefs("{{ vars.config_refs_smoke_debug }}", ctx);
+    assert(resolved === false, "var boolean keeps type");
   }
   {
-    const resolved = await resolveConfigRefs("$CONTEXT_token", {
+    const resolved = await resolveConfigRefs("{{ context.token }}", {
       ...ctx,
       context: { token: "ctx-token-ok" },
     });
     assert(resolved === "ctx-token-ok", "context string");
   }
   {
-    const resolved = await resolveConfigRefs("$CONTEXT_n", {
+    const resolved = await resolveConfigRefs("{{ context.n }}", {
       ...ctx,
       context: { n: 7 },
     });
-    assert(resolved === "7", "context number stringify");
+    assert(resolved === 7, "context number keeps type");
   }
   {
     const wrapped = new Secret("wrapped-secret-ok");
-    const resolved = await resolveConfigRefs("$CONTEXT_tok", {
+    const resolved = await resolveConfigRefs("{{ context.tok }}", {
       ...ctx,
       context: { tok: wrapped },
     });
     assert(resolved === "wrapped-secret-ok", "context Secret unwrap");
   }
-
+  {
+    const resolved = await resolveConfigRefs("{{ context.user }}", {
+      ...ctx,
+      context: { user: { id: "u1", role: "admin" } },
+    });
+    assert(
+      resolved && typeof resolved === "object" && resolved.id === "u1",
+      "whole-value object pass-through",
+    );
+  }
+  {
+    const resolved = await resolveConfigRefs("{{ context.user.id }}", {
+      ...ctx,
+      context: { user: { id: "nested-id" } },
+    });
+    assert(resolved === "nested-id", "nested context path");
+  }
+  {
+    const resolved = await resolveConfigRefs("{{ data.items.0.id }}", {
+      ...ctx,
+      data: { items: [{ id: "row-0" }] },
+    });
+    assert(resolved === "row-0", "array index path");
+  }
+  {
+    const resolved = await resolveConfigRefs(
+      "{{ vars.config_refs_smoke_url }}/{{ data.channel }}",
+      { ...ctx, data: { channel: "alerts" } },
+    );
+    assert(resolved === "https://example.test/alerts", "concatenation");
+  }
+  {
+    const resolved = await resolveConfigRefs("Bearer {{ context.token }}", {
+      ...ctx,
+      context: { token: "abc" },
+    });
+    assert(resolved === "Bearer abc", "mixed string");
+  }
   {
     const nested = await resolveConfigRefs(
       {
-        url: "$VAR_config_refs_smoke_url",
-        retry: "$VAR_config_refs_smoke_retry",
-        debug: "$VAR_config_refs_smoke_debug",
-        password: "$SECRET_config_refs_smoke_token",
+        url: "{{ vars.config_refs_smoke_url }}",
+        retry: "{{ vars.config_refs_smoke_retry }}",
+        debug: "{{ vars.config_refs_smoke_debug }}",
+        password: "{{ secrets.config_refs_smoke_token }}",
         headers: { Authorization: "$KV_modem_password" },
-        extra: ["$CONTEXT_token", "plain"],
+        extra: ["{{ context.token }}", "plain"],
       },
       { ...ctx, context: { token: "ctx-token-ok" } },
     );
@@ -155,59 +201,47 @@ try {
     assert(nested.extra[1] === "plain", "nested array literal");
   }
 
-  const data = { password: "$SECRET_config_refs_smoke_token" };
-  const config = { password: "$SECRET_config_refs_smoke_token" };
+  const data = { password: "{{ secrets.config_refs_smoke_token }}" };
+  const config = { password: "{{ secrets.config_refs_smoke_token }}" };
   const resolvedConfig = await resolveConfigRefs(config, ctx);
   assert(resolvedConfig.password === "s3cret-ok", "config resolved");
-  assert(data.password === "$SECRET_config_refs_smoke_token", "data not walked");
-  assert(config.password === "$SECRET_config_refs_smoke_token", "input config not mutated");
+  assert(data.password === "{{ secrets.config_refs_smoke_token }}", "data not walked");
+  assert(config.password === "{{ secrets.config_refs_smoke_token }}", "input config not mutated");
 
   await assertRejects(
-    () => resolveConfigRefs("$SECRET_does_not_exist_xyz", ctx),
+    () => resolveConfigRefs("{{ secrets.does_not_exist_xyz }}", ctx),
     'secret "does_not_exist_xyz" not found',
   );
   await assertRejects(
-    () => resolveConfigRefs("$SECRET_not valid", ctx),
-    "invalid secret name",
-  );
-  await assertRejects(
-    () => resolveConfigRefs("$SECRET_", ctx),
-    "invalid secret name",
-  );
-  await assertRejects(
-    () => resolveConfigRefs("$CONTEXT_missing", ctx),
-    'context "missing" not found',
+    () => resolveConfigRefs("{{ context.missing }}", ctx),
+    "path not found",
   );
   await assertRejects(
     () =>
-      resolveConfigRefs("$CONTEXT_obj", {
+      resolveConfigRefs("Bearer {{ context.obj }}", {
         ...ctx,
         context: { obj: { a: 1 } },
       }),
-    'context "obj" is not a scalar',
+    "not a scalar",
   );
   await assertRejects(
-    () => resolveConfigRefs("$CONTEXT_", ctx),
-    "empty context key",
+    () => resolveConfigRefs("{{ vars }}", ctx),
+    "empty var name",
   );
   await assertRejects(
-    () => resolveConfigRefs("$VAR_does_not_exist_xyz", ctx),
-    'variable "does_not_exist_xyz" not found',
+    () => resolveConfigRefs("{{ title }}", ctx),
+    "unknown root",
   );
   await assertRejects(
-    () => resolveConfigRefs("$VAR_not valid", ctx),
-    "invalid variable name",
-  );
-  await assertRejects(
-    () => resolveConfigRefs("$VAR_", ctx),
-    "empty variable name",
+    () => resolveConfigRefs("{{ context.__proto__.x }}", ctx),
+    "forbidden path segment",
   );
 } finally {
-  await deleteSecret(secret.id);
-  await deleteVariable(varUrl.id);
-  await deleteVariable(varRetry.id);
-  await deleteVariable(varDebug.id);
+  for (const [kind, id] of created.reverse()) {
+    if (kind === "secret") await deleteSecret(id);
+    else await deleteVariable(id);
+  }
+  await db.destroy();
 }
 
 console.log("config-refs smoke test passed");
-await db.destroy();

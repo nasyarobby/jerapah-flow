@@ -129,7 +129,9 @@ export function VariableEditorModal({ mode, initial, onClose, onSaved }) {
           </label>
           <p className="text-xs opacity-60">
             Stored in plaintext. Use Secrets for credentials. In workflows use{" "}
-            <span className="font-mono">$VAR_name</span> as a whole field.
+            <span className="font-mono">{"{{ vars.name }}"}</span> (quote strings that
+            start with <span className="font-mono">{"{"}</span>). Nested:{" "}
+            <span className="font-mono">{"{{ context.user.id }}"}</span>.
           </p>
           {formError ? <p className="text-error text-sm">{formError}</p> : null}
           {upsert.isError ? (

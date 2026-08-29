@@ -1,4 +1,4 @@
-import { HTTP_METHODS } from "@jerapah-flow/shared";
+import { HTTP_METHODS, DEFAULT_OWNER } from "@jerapah-flow/shared";
 import {
   checkAnyHttpAuth,
   resolveAuthMechanisms,
@@ -85,8 +85,14 @@ export function createHttpTriggerHandler({
   return async function dispatchHttpTrigger(req, reply) {
     const wildcard = /** @type {{ "*": string }} */ (req.params)["*"] ?? "";
     const url = `/u/${String(wildcard).replace(/^\/+/, "")}`;
+    // Compat: leftover webhooks still hitting /u/default/... after owner rename.
+    const compatUrl = url.startsWith("/u/default/")
+      ? `/u/${DEFAULT_OWNER}/${url.slice("/u/default/".length)}`
+      : url === "/u/default"
+        ? `/u/${DEFAULT_OWNER}`
+        : url;
     const method = String(req.method ?? "GET").toUpperCase();
-    const routeKey = `${method} ${url}`;
+    const routeKey = `${method} ${compatUrl}`;
     const mapped = httpRoutes.get(routeKey);
 
     if (!mapped) {
@@ -104,7 +110,7 @@ export function createHttpTriggerHandler({
         if (t?.type !== "HTTP") return false;
         const m = String(t.method ?? "POST").toUpperCase();
         const p = namespacedPath(entry.owner, t.path);
-        return m === method && p === url;
+        return m === method && p === compatUrl;
       }) ?? mapped.trigger;
 
     if (

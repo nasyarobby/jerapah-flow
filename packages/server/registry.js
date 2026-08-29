@@ -511,6 +511,7 @@ export function createRegistry(server, opts = {}) {
         owner,
         workflowKey: key,
         context: incomingContext,
+        data: ctx.data,
       });
       const stepCtx = {
         data: ctx.data,

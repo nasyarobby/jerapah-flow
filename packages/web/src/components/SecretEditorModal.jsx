@@ -66,7 +66,8 @@ export function SecretEditorModal({ mode, initial, onClose, onSaved }) {
         </label>
         <p className="text-xs opacity-60">
           Values are encrypted at rest and never shown again after save. Values shorter than 8
-          characters are not redacted from logs.
+          characters are not redacted from logs. In workflows use{" "}
+          <span className="font-mono">{"{{ secrets.name }}"}</span> (quote in YAML).
         </p>
         {upsert.isError ? (
           <p className="text-error text-sm">{errorMessage(upsert.error)}</p>

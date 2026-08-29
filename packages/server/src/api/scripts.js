@@ -31,6 +31,7 @@ import { getAppVersion } from "../../app-version.js";
 import { EXAMPLE_PLUGINS_DIR } from "../../paths.js";
 import { pluginScriptRef } from "../../plugin-manifest.js";
 import { evaluateJsonata, SET_STEP_SCRIPT } from "../../workflow-parse.js";
+import { DEFAULT_OWNER } from "@jerapah-flow/shared";
 
 /**
  * @param {{ referencedScripts: () => Set<string> }} registry
@@ -258,7 +259,7 @@ export default function scriptsPluginFactory(registry) {
         req.body ?? {}
       );
 
-      let owner = "local";
+      let owner = DEFAULT_OWNER;
       if (body.owner != null && body.owner !== "") {
         try {
           owner = fsStore.assertOwner(String(body.owner));
@@ -304,6 +305,7 @@ export default function scriptsPluginFactory(registry) {
               owner,
               workflowKey: "dry-run",
               context: incomingContext,
+              data: incomingData,
             },
           );
           const ctx = {
@@ -365,6 +367,7 @@ export default function scriptsPluginFactory(registry) {
           owner,
           workflowKey: "dry-run",
           context: incomingContext,
+          data: incomingData,
         });
         const ctx = {
           data: incomingData,

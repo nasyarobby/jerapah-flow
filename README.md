@@ -83,12 +83,33 @@ Each script is `async function main(ctx)` and **must** return:
 |---|---|
 | `ctx.data` | This step’s input (trigger payload, previous `output`, or DAG `needs`) |
 | `ctx.context` | Run clipboard (plain object, default `{}`) |
-| `ctx.config` | This step’s YAML config |
+| `ctx.config` | This step’s YAML config (mustache refs already resolved) |
 | `output` | Becomes the **next** step’s `data` |
 | `context` | Next snapshot of the bag. Omitted → keep incoming |
 | `skipRemaining` | Stop later steps. Sibling of `output`/`context`, not inside `output` |
 
 Returning the full `ctx` is an error. Mutating `ctx.data` or `ctx.context` does not persist unless returned.
+
+### Config interpolation
+
+YAML `config` strings may use mustache paths. Quote values that start with `{`.
+
+```yaml
+url: "{{ vars.ntfy_channel }}"
+token: "{{ secrets.joplin_api_token }}"
+id: "{{ context.user.id }}"
+title: "{{ data.httpResponse.data.date }}"
+topic: "{{ vars.ntfy_prefix }}/{{ data.channel }}"
+```
+
+| Root | Meaning |
+|---|---|
+| `vars` | Owner variable; remaining segments are the flat name (`{{ vars.foo.bar }}` → variable `foo.bar`) |
+| `secrets` | Same for secrets |
+| `context` | Run clipboard (nested) |
+| `data` | This step’s input (nested; numeric segments index arrays) |
+
+A string that is exactly one `{{ path }}` keeps the native type (object/array/number/boolean). Mixed strings concatenate as text. Bare name fields such as `passwordSecret: gmail_app_password` stay names for `$secrets.get` — do not wrap them in `{{ secrets.… }}`. Legacy `$VAR_` / `$SECRET_` / `$CONTEXT_` whole-value refs throw; use mustache instead. Script APIs `$vars.get` / `$secrets.get` are unchanged.
 
 YAML **SET** evaluates JSONata against the full `ctx`; the result is `output` (the next step’s data). `jsonata.js` does the same.
 

@@ -120,7 +120,7 @@ Return `{ output, context?, skipRemaining? }`. Do not return `ctx`. Mutations of
 |---|---|
 | `ctx.data` | Step input (trigger payload, previous `output`, or DAG `needs`) |
 | `ctx.context` | Run clipboard (plain object) |
-| `ctx.config` | YAML `config` (secrets already unwrapped from `$SECRET_name`) |
+| `ctx.config` | YAML `config` (mustache refs like `{{ secrets.name }}` already resolved) |
 | `output` | Next step’s `data` |
 | `context` | Next clipboard. Omit to keep incoming |
 
@@ -142,7 +142,7 @@ scripts:
     script: plugin/my-plugin
     config:
       url: http://10.8.0.6:3030/notes
-      token: $SECRET_joplin_api_token
+      token: "{{ secrets.joplin_api_token }}"
 ```
 
 Optional `name` is the display title in the editor and graph (falls back to the script filename). Canonical ref is `plugin/<id>` (`.js` suffix is optional).
@@ -153,4 +153,4 @@ Optional `name` is the display title in the editor and graph (falls back to the 
 - Use an id that matches a core script file (`ntfy`, `jsonata`, …).
 - Mismatch folder name and `jerapah-plugin.json` `id` (plugin is disabled).
 - Commit `plugins/.staging-*` or `plugins/*/node_modules/`.
-- Put secrets in `script.js`; use YAML `$SECRET_name` / `$VAR_name`.
+- Put secrets in `script.js`; use YAML `{{ secrets.name }}` / `{{ vars.name }}` (quote if the value starts with `{`).

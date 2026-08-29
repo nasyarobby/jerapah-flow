@@ -71,11 +71,11 @@ const created = await upsertProfile({
   owner,
   name,
   script: "ntfy.js",
-  config: { url: "$VAR_ntfy_channel" },
+  config: { url: "{{ vars.ntfy_channel }}" },
   description: "smoke",
 });
 assert(created.name === name, "created");
-assert(created.config.url === "$VAR_ntfy_channel", "config roundtrip");
+assert(created.config.url === "{{ vars.ntfy_channel }}", "config roundtrip");
 assert(created.script === "ntfy.js", "script locked on profile");
 
 const fetched = await getProfilePlain(owner, name);

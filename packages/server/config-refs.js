@@ -3,36 +3,49 @@ import { assertSecretName, getSecretPlaintext } from "./secrets-store.js";
 import { isSecret } from "./secret-value.js";
 import { assertVariableName, getVariablePlain } from "./variables-store.js";
 
-const PREFIXES = [
-  { kind: "context", prefix: "$CONTEXT_" },
-  { kind: "secret", prefix: "$SECRET_" },
-  { kind: "var", prefix: "$VAR_" },
-];
+const FORBIDDEN_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
+const MUSTACHE_TOKEN_RE =
+  /\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*)\s*\}\}/g;
+const WHOLE_MUSTACHE_RE =
+  /^\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*)\s*\}\}$/;
+const LEGACY_PREFIX_RE = /^\s*\$(VAR|SECRET|CONTEXT)_([A-Za-z0-9._-]*)\s*$/;
 
 /**
- * @typedef {{ kind: "secret" | "context" | "var", name: string, raw: string }} ConfigRef
- * @typedef {{ owner: string, workflowKey: string, context?: unknown }} ConfigRefCtx
+ * @typedef {{
+ *   owner: string,
+ *   workflowKey?: string,
+ *   context?: unknown,
+ *   data?: unknown,
+ * }} ConfigRefCtx
  */
 
 /**
- * Parse a whole-value config placeholder. Returns null for literals.
+ * Detect leftover `$VAR_` / `$SECRET_` / `$CONTEXT_` whole-value refs.
  * @param {unknown} value
- * @returns {ConfigRef | null}
+ * @returns {{ kind: "var" | "secret" | "context", name: string, raw: string } | null}
  */
-export function parseConfigRef(value) {
+export function parseLegacyConfigRef(value) {
   if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  for (const { kind, prefix } of PREFIXES) {
-    if (trimmed.startsWith(prefix)) {
-      return { kind, name: trimmed.slice(prefix.length), raw: trimmed };
-    }
-  }
-  return null;
+  const match = LEGACY_PREFIX_RE.exec(value);
+  if (!match) return null;
+  const kind =
+    match[1] === "VAR" ? "var" : match[1] === "SECRET" ? "secret" : "context";
+  return { kind, name: match[2] ?? "", raw: value.trim() };
 }
 
 /**
- * Walk config (objects/arrays) and replace whole-value `$SECRET_` / `$CONTEXT_` / `$VAR_`
- * strings. Does not walk trigger data.
+ * @param {"var" | "secret" | "context"} kind
+ * @param {string} name
+ */
+function legacyRenameHint(kind, name) {
+  if (kind === "var") return `use {{ vars.${name || "name"} }}`;
+  if (kind === "secret") return `use {{ secrets.${name || "name"} }}`;
+  return `use {{ context.${name || "name"} }}`;
+}
+
+/**
+ * Walk config (objects/arrays) and interpolate `{{ path }}` strings.
+ * Does not walk trigger data.
  *
  * @param {unknown} value
  * @param {ConfigRefCtx} ctx
@@ -68,83 +81,186 @@ export async function resolveConfigRefs(value, ctx, seen = new WeakSet()) {
 /**
  * @param {string} value
  * @param {ConfigRefCtx} ctx
- * @returns {Promise<string | number | boolean>}
+ * @returns {Promise<unknown>}
  */
 async function resolveStringRef(value, ctx) {
-  const ref = parseConfigRef(value);
-  if (!ref) return value;
+  const legacy = parseLegacyConfigRef(value);
+  if (legacy) {
+    throw new Error(
+      `config ref ${legacy.raw}: removed; ${legacyRenameHint(legacy.kind, legacy.name)}`,
+    );
+  }
 
-  if (ref.kind === "secret") {
-    return resolveSecretRef(ref, ctx);
+  const whole = WHOLE_MUSTACHE_RE.exec(value);
+  if (whole && whole[0] === value) {
+    return resolvePath(whole[1], ctx, { raw: value, allowObject: true });
   }
-  if (ref.kind === "var") {
-    return resolveVarRef(ref, ctx);
+
+  if (!value.includes("{{")) {
+    return value;
   }
-  return resolveContextRef(ref, ctx);
+
+  MUSTACHE_TOKEN_RE.lastIndex = 0;
+  let out = "";
+  let lastIndex = 0;
+  let match;
+  while ((match = MUSTACHE_TOKEN_RE.exec(value)) != null) {
+    out += value.slice(lastIndex, match.index);
+    const resolved = await resolvePath(match[1], ctx, {
+      raw: match[0],
+      allowObject: false,
+    });
+    out += stringifyScalar(resolved, match[0]);
+    lastIndex = match.index + match[0].length;
+  }
+  out += value.slice(lastIndex);
+  return out;
 }
 
 /**
- * @param {ConfigRef} ref
+ * @param {string} pathExpr
  * @param {ConfigRefCtx} ctx
- * @returns {Promise<string>}
+ * @param {{ raw: string, allowObject: boolean }} opts
  */
-async function resolveSecretRef(ref, ctx) {
-  try {
-    assertSecretName(ref.name);
-  } catch {
-    throw new Error(`config ref ${ref.raw}: invalid secret name`);
+async function resolvePath(pathExpr, ctx, opts) {
+  const segments = pathExpr.split(".");
+  if (segments.length === 0 || segments.some((s) => !s)) {
+    throw new Error(`config ref ${opts.raw}: empty path`);
   }
-  const plaintext = await getSecretPlaintext(ctx.owner, ref.name);
-  if (plaintext == null) {
-    throw new Error(`config ref ${ref.raw}: secret "${ref.name}" not found`);
+  for (const seg of segments) {
+    if (FORBIDDEN_SEGMENTS.has(seg)) {
+      throw new Error(`config ref ${opts.raw}: forbidden path segment "${seg}"`);
+    }
   }
-  return plaintext;
+
+  const root = segments[0];
+  const rest = segments.slice(1);
+
+  if (root === "vars") {
+    return resolveNamedStore("var", rest, ctx, opts);
+  }
+  if (root === "secrets") {
+    return resolveNamedStore("secret", rest, ctx, opts);
+  }
+  if (root === "context") {
+    return walkObject(ctx.context, rest, opts);
+  }
+  if (root === "data") {
+    return walkObject(ctx.data, rest, opts);
+  }
+  throw new Error(
+    `config ref ${opts.raw}: unknown root "${root}" (use vars, secrets, context, or data)`,
+  );
 }
 
 /**
- * @param {ConfigRef} ref
+ * @param {"var" | "secret"} kind
+ * @param {string[]} rest
  * @param {ConfigRefCtx} ctx
- * @returns {Promise<string | number | boolean>}
+ * @param {{ raw: string, allowObject: boolean }} opts
  */
-async function resolveVarRef(ref, ctx) {
-  if (ref.name.length === 0) {
-    throw new Error(`config ref ${ref.raw}: empty variable name`);
+async function resolveNamedStore(kind, rest, ctx, opts) {
+  if (rest.length === 0) {
+    throw new Error(`config ref ${opts.raw}: empty ${kind} name`);
   }
+  const name = rest.join(".");
   try {
-    assertVariableName(ref.name);
+    if (kind === "secret") assertSecretName(name);
+    else assertVariableName(name);
   } catch {
-    throw new Error(`config ref ${ref.raw}: invalid variable name`);
+    throw new Error(`config ref ${opts.raw}: invalid ${kind} name`);
   }
-  const value = await getVariablePlain(ctx.owner, ref.name);
+
+  if (kind === "secret") {
+    const plaintext = await getSecretPlaintext(ctx.owner, name);
+    if (plaintext == null) {
+      throw new Error(`config ref ${opts.raw}: secret "${name}" not found`);
+    }
+    return plaintext;
+  }
+
+  const value = await getVariablePlain(ctx.owner, name);
   if (value == null) {
-    throw new Error(`config ref ${ref.raw}: variable "${ref.name}" not found`);
+    throw new Error(`config ref ${opts.raw}: variable "${name}" not found`);
   }
   return value;
 }
 
 /**
- * @param {ConfigRef} ref
- * @param {ConfigRefCtx} ctx
- * @returns {string}
+ * @param {unknown} root
+ * @param {string[]} rest
+ * @param {{ raw: string, allowObject: boolean }} opts
  */
-function resolveContextRef(ref, ctx) {
-  if (ref.name.length === 0) {
-    throw new Error(`config ref ${ref.raw}: empty context key`);
+function walkObject(root, rest, opts) {
+  if (rest.length === 0) {
+    return unwrapValue(root, opts);
   }
-  const bag =
-    ctx.context != null && typeof ctx.context === "object" && !Array.isArray(ctx.context)
-      ? /** @type {Record<string, unknown>} */ (ctx.context)
-      : {};
-  if (!Object.prototype.hasOwnProperty.call(bag, ref.name)) {
-    throw new Error(`config ref ${ref.raw}: context "${ref.name}" not found`);
+
+  let cur = root;
+  for (const seg of rest) {
+    if (cur == null || typeof cur !== "object") {
+      throw new Error(`config ref ${opts.raw}: path not found`);
+    }
+    if (Array.isArray(cur)) {
+      if (!/^\d+$/.test(seg)) {
+        throw new Error(`config ref ${opts.raw}: path not found`);
+      }
+      const idx = Number(seg);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= cur.length) {
+        throw new Error(`config ref ${opts.raw}: path not found`);
+      }
+      cur = cur[idx];
+      continue;
+    }
+    const bag = /** @type {Record<string, unknown>} */ (cur);
+    if (!Object.prototype.hasOwnProperty.call(bag, seg)) {
+      throw new Error(`config ref ${opts.raw}: path not found`);
+    }
+    cur = bag[seg];
   }
-  const raw = bag[ref.name];
-  if (isSecret(raw)) {
-    return raw.reveal();
+  return unwrapValue(cur, opts);
+}
+
+/**
+ * @param {unknown} value
+ * @param {{ raw: string, allowObject: boolean }} opts
+ */
+function unwrapValue(value, opts) {
+  if (isSecret(value)) {
+    return value.reveal();
   }
-  const coerced = coerceCredentialString(raw);
-  if (coerced == null) {
-    throw new Error(`config ref ${ref.raw}: context "${ref.name}" is not a scalar`);
+  if (!opts.allowObject && value != null && typeof value === "object") {
+    throw new Error(`config ref ${opts.raw}: value is not a scalar`);
   }
-  return coerced;
+  // Whole-value context/data may be any JSON type; mixed strings need scalars only.
+  if (opts.allowObject) {
+    if (value != null && typeof value === "object") return value;
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      return value;
+    }
+    // Prefer credential coercion for odd primitives (e.g. bigint) when whole-value.
+    const coerced = coerceCredentialString(value);
+    if (coerced != null) return coerced;
+    return value;
+  }
+  return value;
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} raw
+ */
+function stringifyScalar(value, raw) {
+  if (value == null) {
+    throw new Error(`config ref ${raw}: value is null`);
+  }
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  throw new Error(`config ref ${raw}: value is not a scalar`);
 }

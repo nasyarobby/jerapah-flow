@@ -179,7 +179,7 @@ export function VariablesPage() {
         title={confirmDelete ? `Delete ${confirmDelete.name}?` : ""}
         message={
           confirmDelete
-            ? `This cannot be undone. Workflows that reference $VAR_${confirmDelete.name} will fail.`
+            ? `This cannot be undone. Workflows that reference {{ vars.${confirmDelete.name} }} will fail.`
             : ""
         }
         error={del.isError ? errorMessage(del.error) : null}

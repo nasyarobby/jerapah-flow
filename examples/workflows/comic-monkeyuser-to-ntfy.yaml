@@ -1,6 +1,6 @@
 name: Comic - monkeyuser to ntfy
 description: |
-  Scrape the latest MonkeyUser comic and send it to ntfy (requires $VAR_ntfy_channel).
+  Scrape the latest MonkeyUser comic and send it to ntfy (requires {{ vars.ntfy_channel }}).
 scripts:
   - script: fetch-html.js
     config:
@@ -20,7 +20,7 @@ scripts:
   - script: fetch-binary.js
   - script: ntfy.js
     config:
-      url: $VAR_ntfy_channel
+      url: "{{ vars.ntfy_channel }}"
 triggers:
   - type: HTTP
     method: POST

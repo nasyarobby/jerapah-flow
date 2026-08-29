@@ -17,7 +17,9 @@
     "test:workflow-history": "JFLOW_WORKFLOWS_DIR=./data/workflow-history-smoke JFLOW_DB_PATH=./data/workflow-history-smoke.db node test/workflow-history-smoke.js",
     "reset-admin": "node reset-admin.js",
     "test:profiles": "node test/profiles-smoke.js",
-    "test:set-dry-run": "node test/set-dry-run-smoke.js"
+    "test:set-dry-run": "node test/set-dry-run-smoke.js",
+    "test:config-refs": "node test/config-refs-smoke.js",
+    "test:owner-migrate": "node test/owner-migrate-smoke.js"
   },
   "dependencies": {
     "@jerapah-flow/shared": "workspace:*",

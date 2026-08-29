@@ -198,7 +198,7 @@ joplinHttp.meta = {
     token: {
       type: "string",
       required: true,
-      description: "Bearer token ($SECRET_); Bearer prefix is added if missing",
+      description: "Bearer token ({{ secrets.* }}); Bearer prefix is added if missing",
     },
     timeoutMs: {
       type: "number",
@@ -237,7 +237,7 @@ joplinHttp.meta = {
     config: {
       url: "http://10.8.0.6:3030/notes",
       method: "GET",
-      token: "$SECRET_joplin_api_token",
+      token: "{{ secrets.joplin_api_token }}",
       timeoutMs: 60000,
     },
   },

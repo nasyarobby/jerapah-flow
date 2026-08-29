@@ -11,6 +11,7 @@ import { isSecret, Secret, unwrapSecretsDeep } from "./secret-value.js";
 import { getHttpPageByName, getHttpTemplateByName } from "./http-pages-store.js";
 import { getSecretPlaintext } from "./secrets-store.js";
 import { getVariablePlain } from "./variables-store.js";
+import { DEFAULT_OWNER } from "@jerapah-flow/shared";
 
 const hostRequire = createRequire(import.meta.url);
 
@@ -443,7 +444,7 @@ function createScriptSandbox({
   log,
   script,
   workflowName,
-  owner = "default",
+  owner = DEFAULT_OWNER,
   $workflows = $workflowsStub,
   pluginDir = null,
 }) {
@@ -563,7 +564,7 @@ export function instantiateScriptSource(script, source, opts = {}) {
     log: opts.log ?? inspectLog,
     script,
     workflowName: opts.workflowName ?? "inspect",
-    owner: opts.owner ?? "default",
+    owner: opts.owner ?? DEFAULT_OWNER,
     $workflows: opts.$workflows,
     pluginDir: opts.pluginDir ?? null,
   });
