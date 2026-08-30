@@ -4,14 +4,14 @@ This file tells agents how to add a **user plugin**. Do not put personal or site
 
 ## Workflows (instance data)
 
-Live workflows are **not** product source. They live under `packages/server/data/workflows/<owner>/` (gitignored; override with `JFLOW_WORKFLOWS_DIR`).
+Live workflows are **not** product source. They live under `data/workflows/<owner>/` (gitignored; override with `JFLOW_WORKFLOWS_DIR`).
 
 | Kind | In git? | Path |
 |---|---|---|
-| Live / personal YAML | No | `packages/server/data/workflows/<owner>/` |
+| Live / personal YAML | No | `data/workflows/<owner>/` |
 | Example presets | Yes | `examples/workflows/*.yaml` (copy into editor only; runner does not load them) |
 
-Do **not** add personal YAML under `packages/server/`, `examples/workflows/`, or `packages/server/data/workflows/`. Prefer owner `local`. Example presets must use **core** scripts only (no `plugin/…` that requires install).
+Do **not** add personal YAML under `packages/server/`, `examples/workflows/`, or `data/workflows/`. Prefer owner `local`. Example presets must use **core** scripts only (no `plugin/…` that requires install).
 
 ## Where things live
 

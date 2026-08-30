@@ -1,8 +1,6 @@
 import path from "path";
 import pm2 from "pm2";
-import { SERVER_ROOT } from "./paths.js";
-
-const REPO_ROOT = path.resolve(SERVER_ROOT, "../..");
+import { REPO_ROOT, SERVER_ROOT } from "./paths.js";
 
 export const PM2_HTTP_NAME = "jflow-http";
 export const PM2_WORKER_NAME = "jflow-worker";

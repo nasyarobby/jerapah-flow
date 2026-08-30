@@ -1,6 +1,8 @@
 node_modules/
 .pnpm-store/
+# Instance data (SQLite, live workflows, control-state, backups)
 data/
+# Process logs
 logs/
 *.db
 *.db-*
@@ -10,7 +12,7 @@ packages/web/dist
 # Personal/local scripts and workflows (not for the repo)
 debug-*.js
 
-# Legacy live workflow tree (migrated to packages/server/data/workflows/)
+# Legacy live workflow trees
 packages/server/workflows/
 
 # Plugin install staging and per-plugin deps

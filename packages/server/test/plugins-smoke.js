@@ -2,6 +2,7 @@
  * Smoke: core vs plugin scripts, fork, example install, resolve, run.
  *
  * Run:
+ *   JFLOW_DATA_DIR=packages/server/data \
  *   JFLOW_PLUGINS_DIR=packages/server/data/plugins-smoke-test \
  *   JFLOW_DB_PATH=packages/server/data/plugins-smoke.db \
  *   node packages/server/test/plugins-smoke.js

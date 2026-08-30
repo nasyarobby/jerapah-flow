@@ -55,7 +55,7 @@ pnpm --dir packages/server reset-admin -- --username admin --password 'your-pass
 
 | Kind | Loaded by runner? | Location |
 |---|---|---|
-| **Live workflows** | Yes | `packages/server/data/workflows/<owner>/` (gitignored) |
+| **Live workflows** | Yes | `data/workflows/<owner>/` (gitignored) |
 | **Example presets** | No | `examples/workflows/*.yaml` — offered when creating a new workflow |
 
 - Live YAML is **instance data**, same as SQLite and secrets — not product source. New resources use owner `local` (owner remains in storage/URLs for a possible future multi-tenant mode; the UI hides it).
@@ -63,7 +63,8 @@ pnpm --dir packages/server reset-admin -- --username admin --password 'your-pass
 - Override the live store in tests with `JFLOW_WORKFLOWS_DIR`.
 
 ```bash
-# Smoke
+# Smoke (isolated under packages/server/data — not the live instance tree)
+JFLOW_DATA_DIR=packages/server/data \
 JFLOW_PLUGINS_DIR=packages/server/data/plugins-smoke-test \
 JFLOW_DB_PATH=packages/server/data/plugins-smoke.db \
 node packages/server/test/plugins-smoke.js
@@ -144,7 +145,7 @@ Admin UI route **Ops** (`/ops`) talks to the control process.
 | Drain restart | Pause → wait active=0 → stop children → migrate → recreate → resume |
 | Force restart | Same without waiting (interrupts active runs; orphans marked `worker_lost`) |
 
-Desired state is stored in `packages/server/data/control-state.json` (generation, worker count, restart-needed). Plugin installs (later) bump generation and set restart-needed; you apply with Drain restart.
+Desired state is stored in `data/control-state.json` (generation, worker count, restart-needed). Plugin installs (later) bump generation and set restart-needed; you apply with Drain restart.
 
 ## Environment
 
@@ -152,8 +153,10 @@ Desired state is stored in `packages/server/data/control-state.json` (generation
 |---|---|---|
 | `JFLOW_JWT_SECRET` | `jflow-dev-secret` (dev only) | **Required in production**. |
 | `JFLOW_SECRETS_KEY` | `jflow-dev-secrets-key` (dev only) | Master key for named secrets. **Required in production**. Changing it makes existing secrets unreadable. 64 hex chars are used as a raw AES-256 key; any other string is derived with scrypt. |
-| `JFLOW_DB_PATH` | `packages/server/data/jerapah-flow.db` | SQLite file. |
-| `JFLOW_WORKFLOWS_DIR` | `packages/server/data/workflows` | Live workflow YAML (instance data). |
+| `JFLOW_DATA_DIR` | `data/` | Instance data root (SQLite, workflows, control-state, backups, trash). Falls back to `packages/server/data` if that tree still has the db or workflows. |
+| `JFLOW_DB_PATH` | `data/jerapah-flow.db` | SQLite file. |
+| `JFLOW_WORKFLOWS_DIR` | `data/workflows` | Live workflow YAML (instance data). |
+| `JFLOW_LOGS_DIR` | `logs/` | Rolling process logs. |
 | `REDIS_URL` | `redis://127.0.0.1:6379` | Redis for BullMQ workflow queue. **Required** — the server will not start if Redis is unreachable. |
 | `REDIS_PASS` | — | Optional Redis AUTH password (sent via ioredis `password`). Prefer this over embedding credentials in `REDIS_URL` so logs stay clean. |
 | `JFLOW_QUEUE_NAME` | `jerapah-workflows` | BullMQ queue name. |

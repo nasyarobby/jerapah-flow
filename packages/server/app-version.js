@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
-import { SERVER_ROOT } from "./paths.js";
+import { REPO_ROOT } from "./paths.js";
 
-const ROOT_PKG = path.resolve(SERVER_ROOT, "../../package.json");
+const ROOT_PKG = path.join(REPO_ROOT, "package.json");
 
 /**
  * JerapahFlow app version from the monorepo root package.json.
