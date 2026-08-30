@@ -6,32 +6,19 @@ import { useVariables } from "../../api/hooks.js";
 const VAR_PEEK_MAX = 48;
 const MUSTACHE_RE =
   /\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*)\s*\}\}/g;
-const LEGACY_PREFIX_RE = /^\s*\$(VAR|SECRET|CONTEXT)_([A-Za-z0-9._-]*)\s*$/;
 
 /**
  * @param {unknown} value
  * @returns {{
- *   kind: "mustache" | "legacy",
+ *   kind: "mustache",
  *   path?: string,
  *   root?: string,
  *   name?: string,
- *   legacyKind?: string,
- *   legacyName?: string,
  * } | null}
  */
 function describeConfigRef(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  const legacy = LEGACY_PREFIX_RE.exec(trimmed);
-  if (legacy) {
-    const legacyKind =
-      legacy[1] === "VAR" ? "variable" : legacy[1] === "SECRET" ? "secret" : "context";
-    return {
-      kind: "legacy",
-      legacyKind,
-      legacyName: legacy[2] ?? "",
-    };
-  }
   MUSTACHE_RE.lastIndex = 0;
   const match = MUSTACHE_RE.exec(trimmed);
   if (!match) return null;
@@ -89,20 +76,6 @@ export function ConfigRefHint({ value, owner }) {
   }, [value, owner]);
 
   if (!ref) return null;
-
-  if (ref.kind === "legacy") {
-    const hint =
-      ref.legacyKind === "variable"
-        ? `{{ vars.${ref.legacyName || "name"} }}`
-        : ref.legacyKind === "secret"
-          ? `{{ secrets.${ref.legacyName || "name"} }}`
-          : `{{ context.${ref.legacyName || "name"} }}`;
-    return (
-      <p className="text-xs text-error">
-        legacy ${ref.legacyKind} ref — use <span className="font-mono">{hint}</span>
-      </p>
-    );
-  }
 
   if (!isVar) {
     const label =

@@ -2,8 +2,7 @@ import { migrate, db } from "../db.js";
 import { upsertSecret, deleteSecret } from "../secrets-store.js";
 import { deleteVariable, upsertVariable } from "../variables-store.js";
 import { Secret } from "../secret-value.js";
-import { parseLegacyConfigRef, resolveConfigRefs } from "../config-refs.js";
-import { rewriteLegacyConfigRefsInText } from "../config-ref-rewrite.js";
+import { resolveConfigRefs } from "../config-refs.js";
 
 await migrate();
 
@@ -28,48 +27,15 @@ const owner = "config_refs_smoke_owner";
 const ctx = { owner, workflowKey: `${owner}/config-refs-smoke.yaml`, context: {}, data: {} };
 
 {
-  const rewritten = rewriteLegacyConfigRefsInText(
-    'url: $VAR_ntfy\ntoken: $SECRET_tok\nid: $CONTEXT_user',
-  );
-  assert(rewritten.changed, "rewrite detects legacy refs");
-  assert(
-    rewritten.text.includes("{{ vars.ntfy }}") &&
-      rewritten.text.includes("{{ secrets.tok }}") &&
-      rewritten.text.includes("{{ context.user }}"),
-    "rewrite maps prefixes",
-  );
-  assert(!rewriteLegacyConfigRefsInText("passwordSecret: gmail_app").changed, "bare names untouched");
-}
-
-assert(parseLegacyConfigRef("$VAR_ntfy_url")?.kind === "var", "legacy var parse");
-assert(parseLegacyConfigRef("$SECRET_x")?.kind === "secret", "legacy secret parse");
-assert(parseLegacyConfigRef("$CONTEXT_token")?.kind === "context", "legacy context parse");
-assert(parseLegacyConfigRef("{{ vars.x }}") == null, "mustache is not legacy");
-assert(parseLegacyConfigRef("Bearer $SECRET_x") == null, "mid-string not whole-value legacy");
-
-{
   const literal = await resolveConfigRefs("password123", ctx);
   assert(literal === "password123", "literal passthrough");
   const unknown = await resolveConfigRefs("$FOO_bar", ctx);
   assert(unknown === "$FOO_bar", "$FOO_bar stays literal");
   const embedded = await resolveConfigRefs("Bearer $SECRET_x", ctx);
-  assert(embedded === "Bearer $SECRET_x", "mid-string legacy stays literal");
+  assert(embedded === "Bearer $SECRET_x", "mid-string stays literal");
   const number = await resolveConfigRefs(42, ctx);
   assert(number === 42, "number passthrough");
 }
-
-await assertRejects(
-  () => resolveConfigRefs("$VAR_ntfy_channel", ctx),
-  "removed",
-);
-await assertRejects(
-  () => resolveConfigRefs("$SECRET_tok", ctx),
-  "use {{ secrets.tok }}",
-);
-await assertRejects(
-  () => resolveConfigRefs("$CONTEXT_token", ctx),
-  "use {{ context.token }}",
-);
 
 const created = [];
 try {

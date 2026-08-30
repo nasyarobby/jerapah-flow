@@ -11,7 +11,7 @@ Live workflows are **not** product source. They live under `packages/server/data
 | Live / personal YAML | No | `packages/server/data/workflows/<owner>/` |
 | Example presets | Yes | `examples/workflows/*.yaml` (copy into editor only; runner does not load them) |
 
-Do **not** add personal YAML under `packages/server/`, `examples/workflows/`, or the legacy `packages/server/workflows/` tree. Prefer owner `local`. Example presets must use **core** scripts only (no `plugin/…` that requires install).
+Do **not** add personal YAML under `packages/server/`, `examples/workflows/`, or `packages/server/data/workflows/`. Prefer owner `local`. Example presets must use **core** scripts only (no `plugin/…` that requires install).
 
 ## Where things live
 

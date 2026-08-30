@@ -8,7 +8,6 @@ const MUSTACHE_TOKEN_RE =
   /\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*)\s*\}\}/g;
 const WHOLE_MUSTACHE_RE =
   /^\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*)\s*\}\}$/;
-const LEGACY_PREFIX_RE = /^\s*\$(VAR|SECRET|CONTEXT)_([A-Za-z0-9._-]*)\s*$/;
 
 /**
  * @typedef {{
@@ -18,30 +17,6 @@ const LEGACY_PREFIX_RE = /^\s*\$(VAR|SECRET|CONTEXT)_([A-Za-z0-9._-]*)\s*$/;
  *   data?: unknown,
  * }} ConfigRefCtx
  */
-
-/**
- * Detect leftover `$VAR_` / `$SECRET_` / `$CONTEXT_` whole-value refs.
- * @param {unknown} value
- * @returns {{ kind: "var" | "secret" | "context", name: string, raw: string } | null}
- */
-export function parseLegacyConfigRef(value) {
-  if (typeof value !== "string") return null;
-  const match = LEGACY_PREFIX_RE.exec(value);
-  if (!match) return null;
-  const kind =
-    match[1] === "VAR" ? "var" : match[1] === "SECRET" ? "secret" : "context";
-  return { kind, name: match[2] ?? "", raw: value.trim() };
-}
-
-/**
- * @param {"var" | "secret" | "context"} kind
- * @param {string} name
- */
-function legacyRenameHint(kind, name) {
-  if (kind === "var") return `use {{ vars.${name || "name"} }}`;
-  if (kind === "secret") return `use {{ secrets.${name || "name"} }}`;
-  return `use {{ context.${name || "name"} }}`;
-}
 
 /**
  * Walk config (objects/arrays) and interpolate `{{ path }}` strings.
@@ -84,13 +59,6 @@ export async function resolveConfigRefs(value, ctx, seen = new WeakSet()) {
  * @returns {Promise<unknown>}
  */
 async function resolveStringRef(value, ctx) {
-  const legacy = parseLegacyConfigRef(value);
-  if (legacy) {
-    throw new Error(
-      `config ref ${legacy.raw}: removed; ${legacyRenameHint(legacy.kind, legacy.name)}`,
-    );
-  }
-
   const whole = WHOLE_MUSTACHE_RE.exec(value);
   if (whole && whole[0] === value) {
     return resolvePath(whole[1], ctx, { raw: value, allowObject: true });

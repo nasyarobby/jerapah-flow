@@ -59,7 +59,6 @@ pnpm --dir packages/server reset-admin -- --username admin --password 'your-pass
 | **Example presets** | No | `examples/workflows/*.yaml` — offered when creating a new workflow |
 
 - Live YAML is **instance data**, same as SQLite and secrets — not product source. New resources use owner `local` (owner remains in storage/URLs for a possible future multi-tenant mode; the UI hides it).
-- On first start, if the instance store is empty and a legacy `packages/server/workflows/` tree still exists, it is copied into `data/workflows/`.
 - New workflow editor starts empty; optional presets copy example YAML into the editor (nothing is saved until Save).
 - Override the live store in tests with `JFLOW_WORKFLOWS_DIR`.
 
@@ -109,7 +108,7 @@ topic: "{{ vars.ntfy_prefix }}/{{ data.channel }}"
 | `context` | Run clipboard (nested) |
 | `data` | This step’s input (nested; numeric segments index arrays) |
 
-A string that is exactly one `{{ path }}` keeps the native type (object/array/number/boolean). Mixed strings concatenate as text. Bare name fields such as `passwordSecret: gmail_app_password` stay names for `$secrets.get` — do not wrap them in `{{ secrets.… }}`. Legacy `$VAR_` / `$SECRET_` / `$CONTEXT_` whole-value refs throw; use mustache instead. Script APIs `$vars.get` / `$secrets.get` are unchanged.
+A string that is exactly one `{{ path }}` keeps the native type (object/array/number/boolean). Mixed strings concatenate as text. Bare name fields such as `passwordSecret: gmail_app_password` stay names for `$secrets.get` — do not wrap them in `{{ secrets.… }}`. Script APIs `$vars.get` / `$secrets.get` are unchanged.
 
 YAML **SET** evaluates JSONata against the full `ctx`; the result is `output` (the next step’s data). `jsonata.js` does the same.
 

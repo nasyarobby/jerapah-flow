@@ -14,7 +14,9 @@ export async function up(knex) {
     t.unique(["owner", "name"]);
   });
 
-  await knex.schema.raw("CREATE INDEX profiles_owner_name_idx ON profiles (owner, name)");
+  await knex.schema.raw(
+    "CREATE INDEX profiles_owner_name_idx ON profiles (owner, name)",
+  );
 }
 
 /**
