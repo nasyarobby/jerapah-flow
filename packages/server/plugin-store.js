@@ -381,6 +381,96 @@ export function forkCoreScript(coreName, newId, opts = {}) {
 }
 
 /**
+ * Copy an installed plugin to a new plugin id.
+ *
+ * @param {string} sourceId
+ * @param {string} newId
+ * @param {{ description?: string }} [opts]
+ */
+export function duplicatePlugin(sourceId, newId, opts = {}) {
+  const fromId = assertPluginId(sourceId);
+  const id = assertPluginId(newId);
+  if (id === fromId) {
+    const err = new Error("cannot duplicate onto itself");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (coreBareNames().has(id)) {
+    const err = new Error(`plugin id collides with core script: ${id}`);
+    err.statusCode = 409;
+    throw err;
+  }
+  if (fs.existsSync(pluginDir(id))) {
+    const err = new Error(`plugin already exists: ${id}`);
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const source = getInstalledPlugin(fromId);
+  if (!source) {
+    const err = new Error(`plugin not found: ${fromId}`);
+    err.statusCode = 404;
+    throw err;
+  }
+  if (!source.manifest) {
+    const err = new Error(
+      source.compatError || `plugin has no valid manifest: ${fromId}`,
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const staging = path.join(PLUGINS_DIR, `.staging-dup-${id}-${Date.now()}`);
+  fs.mkdirSync(staging, { recursive: true });
+  try {
+    fs.cpSync(source.dir, staging, {
+      recursive: true,
+      filter: (src) => {
+        const base = path.basename(src);
+        return base !== "node_modules" && base !== ".disabled";
+      },
+    });
+
+    const manifest = buildManifest({
+      id,
+      name: id,
+      version: source.manifest.version,
+      jerapah: source.manifest.jerapah,
+      main: source.manifest.main,
+      description:
+        opts.description ?? source.manifest.description ?? null,
+    });
+    fs.writeFileSync(
+      path.join(staging, PLUGIN_MANIFEST),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      "utf8",
+    );
+
+    const pkgPath = path.join(staging, "package.json");
+    if (fs.existsSync(pkgPath)) {
+      let pkg = {};
+      try {
+        pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+      } catch {
+        pkg = {};
+      }
+      if (pkg == null || typeof pkg !== "object" || Array.isArray(pkg)) {
+        pkg = {};
+      }
+      pkg.name = `jflow-plugin-${id}`;
+      fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
+    }
+
+    return installPluginFromDirectory(staging, {
+      overwrite: false,
+      reason: `plugin:${id} duplicated from ${fromId}`,
+    });
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
+}
+
+/**
  * @param {string} pluginDirectory
  * @returns {((id: string) => unknown) | null}
  */

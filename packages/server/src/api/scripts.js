@@ -8,6 +8,7 @@ import {
 import * as fsStore from "../../fs-store.js";
 import {
   forkCoreScript,
+  duplicatePlugin,
   listCoreScriptNames,
   listInstalledPlugins,
   resolveScriptRef,
@@ -29,7 +30,7 @@ import { normalizeStepResult } from "../../step-result.js";
 import { resolveConfigRefs } from "../../config-refs.js";
 import { getAppVersion } from "../../app-version.js";
 import { EXAMPLE_PLUGINS_DIR } from "../../paths.js";
-import { pluginScriptRef } from "../../plugin-manifest.js";
+import { parsePluginScriptRef, pluginScriptRef } from "../../plugin-manifest.js";
 import { evaluateJsonata, SET_STEP_SCRIPT } from "../../workflow-parse.js";
 import { DEFAULT_OWNER } from "@jerapah-flow/shared";
 
@@ -235,6 +236,40 @@ export default function scriptsPluginFactory(registry) {
         const coreName = rawName.endsWith(".js") ? rawName : `${rawName}.js`;
         fsStore.assertScriptName(coreName);
         const installed = forkCoreScript(coreName, body.id.trim(), {
+          description: body.description,
+        });
+        clearScriptCache();
+        return reply.code(201).send({
+          ...installed,
+          restartNeeded: true,
+          warning:
+            "Plugins run as the JerapahFlow process user. Review code before install.",
+        });
+      } catch (err) {
+        return reply
+          .code(/** @type {any} */ (err).statusCode ?? 500)
+          .send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    fastify.post("/scripts/:name/duplicate", async (req, reply) => {
+      const rawName = decodeURIComponent(
+        /** @type {{ name: string }} */ (req.params).name,
+      );
+      const body = /** @type {{ id?: string, description?: string }} */ (
+        req.body ?? {}
+      );
+      if (typeof body.id !== "string" || !body.id.trim()) {
+        return reply.code(400).send({ error: "id is required" });
+      }
+      const parsed = parsePluginScriptRef(rawName);
+      if (!parsed) {
+        return reply
+          .code(400)
+          .send({ error: "name must be a plugin ref (plugin/<id>)" });
+      }
+      try {
+        const installed = duplicatePlugin(parsed.id, body.id.trim(), {
           description: body.description,
         });
         clearScriptCache();

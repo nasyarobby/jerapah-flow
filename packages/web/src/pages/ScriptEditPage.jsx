@@ -4,6 +4,7 @@ import { LuArrowLeft, LuCopy, LuPlay, LuSave } from "react-icons/lu";
 import { errorMessage } from "../api/client.js";
 import {
   useCreatePlugin,
+  useDuplicatePlugin,
   useForkScript,
   useSaveScript,
   useScript,
@@ -119,9 +120,11 @@ export function ScriptEditPage() {
   const existing = useScript(name);
   const save = useSaveScript();
   const fork = useForkScript();
+  const duplicate = useDuplicatePlugin();
   const [content, setContent] = useState("");
   const [contentReady, setContentReady] = useState(false);
   const [forkId, setForkId] = useState("");
+  const [duplicateId, setDuplicateId] = useState("");
 
   const isCore = existing.data?.kind === "core" || existing.data?.editable === false;
 
@@ -157,6 +160,21 @@ export function ScriptEditPage() {
       {
         onSuccess: (data) => {
           notify.success("Forked to plugin — drain-restart recommended");
+          navigate(`/scripts/${encodeURIComponent(data.scriptRef)}/edit`);
+        },
+      },
+    );
+  }
+
+  function onDuplicate(e) {
+    e.preventDefault();
+    const id = normalizePluginId(duplicateId);
+    if (!id) return;
+    duplicate.mutate(
+      { name, id },
+      {
+        onSuccess: (data) => {
+          notify.success("Duplicated — drain-restart recommended");
           navigate(`/scripts/${encodeURIComponent(data.scriptRef)}/edit`);
         },
       },
@@ -238,7 +256,27 @@ export function ScriptEditPage() {
             <span className="text-error text-sm">{errorMessage(fork.error)}</span>
           ) : null}
         </form>
-      ) : null}
+      ) : (
+        <form onSubmit={onDuplicate} className="flex flex-wrap items-center gap-2">
+          <input
+            className="input input-sm font-mono w-56"
+            placeholder="duplicate id (e.g. my-plugin-copy)"
+            value={duplicateId}
+            onChange={(e) => setDuplicateId(e.target.value)}
+          />
+          <button
+            type="submit"
+            className="btn btn-sm"
+            disabled={duplicate.isPending || !normalizePluginId(duplicateId)}
+          >
+            <LuCopy className="size-4" />
+            Duplicate plugin
+          </button>
+          {duplicate.isError ? (
+            <span className="text-error text-sm">{errorMessage(duplicate.error)}</span>
+          ) : null}
+        </form>
+      )}
 
       <form id="script-edit-form" onSubmit={onSave} className="min-h-0 flex-1">
         <CodeEditor

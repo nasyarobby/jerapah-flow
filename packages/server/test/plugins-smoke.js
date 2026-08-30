@@ -13,6 +13,7 @@ import { migrate, db } from "../db.js";
 import { getAppVersion, satisfiesRange } from "../app-version.js";
 import {
   forkCoreScript,
+  duplicatePlugin,
   resolveScriptRef,
   uninstallPlugin,
   listInstalledPlugins,
@@ -83,6 +84,26 @@ async function main() {
   );
   assert.equal(blankRun.output.ok, true);
 
+  const duplicated = duplicatePlugin("blank-smoke", "blank-smoke-copy");
+  assert.equal(duplicated.scriptRef, "plugin/blank-smoke-copy");
+  clearScriptCache();
+  assert.equal(resolveScriptRef("plugin/blank-smoke-copy").kind, "plugin");
+  const dupRun = await runScript(
+    "plugin/blank-smoke-copy",
+    { data: 1, context: {}, config: null },
+    { log: silent, workflowName: "smoke", owner: "default" },
+  );
+  assert.equal(dupRun.output.ok, true);
+
+  let hitDupSelf = false;
+  try {
+    duplicatePlugin("blank-smoke", "blank-smoke");
+  } catch (err) {
+    hitDupSelf = true;
+    assert.match(String(err.message), /itself/);
+  }
+  assert.equal(hitDupSelf, true);
+
   let hit = false;
   try {
     forkCoreScript("ntfy.js", "ntfy");
@@ -102,6 +123,7 @@ async function main() {
 
   uninstallPlugin("jsonata-smoke-fork");
   uninstallPlugin("blank-smoke");
+  uninstallPlugin("blank-smoke-copy");
   uninstallPlugin("get-current-time");
 
   console.log("plugins-smoke: ok");

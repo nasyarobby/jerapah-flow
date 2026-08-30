@@ -4,6 +4,7 @@ import { LuCopy, LuPencil, LuPlay, LuPlus, LuSearch, LuTrash2 } from "react-icon
 import { errorMessage } from "../api/client.js";
 import {
   useDeleteScript,
+  useDuplicatePlugin,
   useForkScript,
   useInstallPlugin,
   useScripts,
@@ -23,8 +24,11 @@ export function ScriptsPage() {
   const [query, setQuery] = useState("");
   const [forkFor, setForkFor] = useState(null);
   const [forkId, setForkId] = useState("");
+  const [duplicateFor, setDuplicateFor] = useState(null);
+  const [duplicateId, setDuplicateId] = useState("");
   const del = useDeleteScript();
   const fork = useForkScript();
+  const duplicate = useDuplicatePlugin();
   const install = useInstallPlugin();
   const { notify } = useNotifications();
 
@@ -182,14 +186,33 @@ export function ScriptsPage() {
                         <LuCopy className="size-4" />
                       </button>
                     ) : (
-                      <Link
-                        to={`/scripts/${encodeURIComponent(name)}/edit`}
-                        className="btn btn-ghost btn-xs"
-                        title="Edit"
-                        aria-label="Edit"
-                      >
-                        <LuPencil className="size-4" />
-                      </Link>
+                      <>
+                        <Link
+                          to={`/scripts/${encodeURIComponent(name)}/edit`}
+                          className="btn btn-ghost btn-xs"
+                          title="Edit"
+                          aria-label="Edit"
+                        >
+                          <LuPencil className="size-4" />
+                        </Link>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs"
+                          title="Duplicate"
+                          aria-label="Duplicate"
+                          onClick={() => {
+                            setDuplicateFor(name);
+                            setDuplicateId(
+                              String(name)
+                                .replace(/^plugin\//i, "")
+                                .replace(/\.js$/i, "")
+                                .toLowerCase() + "-copy",
+                            );
+                          }}
+                        >
+                          <LuCopy className="size-4" />
+                        </button>
+                      </>
                     )}
                     {!isCore ? (
                       <button
@@ -258,6 +281,60 @@ export function ScriptsPage() {
           </div>
           <form method="dialog" className="modal-backdrop">
             <button type="button" onClick={() => setForkFor(null)}>
+              close
+            </button>
+          </form>
+        </dialog>
+      ) : null}
+
+      {duplicateFor ? (
+        <dialog className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-semibold">Duplicate {duplicateFor}</h3>
+            <p className="text-sm opacity-70 py-2">
+              Creates <code>plugin/&lt;id&gt;</code> from this plugin.
+            </p>
+            <input
+              className="input input-bordered input-sm w-full font-mono"
+              value={duplicateId}
+              onChange={(e) => setDuplicateId(e.target.value)}
+            />
+            {duplicate.isError ? (
+              <p className="text-error text-sm mt-2">{errorMessage(duplicate.error)}</p>
+            ) : null}
+            <div className="modal-action">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setDuplicateFor(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={duplicate.isPending || !duplicateId.trim()}
+                onClick={() =>
+                  duplicate.mutate(
+                    { name: duplicateFor, id: duplicateId.trim() },
+                    {
+                      onSuccess: (data) => {
+                        setDuplicateFor(null);
+                        notify.success("Duplicated — drain-restart recommended");
+                        navigate(
+                          `/scripts/${encodeURIComponent(data.scriptRef)}/edit`,
+                        );
+                      },
+                    },
+                  )
+                }
+              >
+                Duplicate
+              </button>
+            </div>
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button type="button" onClick={() => setDuplicateFor(null)}>
               close
             </button>
           </form>

@@ -59,6 +59,23 @@ export function useForkScript() {
   });
 }
 
+export function useDuplicatePlugin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, id, description }) =>
+      (
+        await api.post(`/scripts/${encodeURIComponent(name)}/duplicate`, {
+          id,
+          description,
+        })
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["scripts"] });
+      qc.invalidateQueries({ queryKey: ["ops-status"] });
+    },
+  });
+}
+
 export function useInstallPlugin() {
   const qc = useQueryClient();
   return useMutation({

@@ -15,6 +15,10 @@ function ntfyHeaders(ctx) {
     headers.Title = ctx.data.title;
   }
 
+  if (ctx.config?.markdown === true) {
+    headers.md = "true";
+  }
+
   return headers;
 }
 
@@ -148,6 +152,11 @@ ntfy.meta = {
       type: "string",
       default: "https://ntfy.sh/jerapah-flow",
       description: "ntfy topic URL",
+    },
+    markdown: {
+      type: "boolean",
+      default: false,
+      description: "Send as Markdown (ntfy md header)",
     },
     fingerprint: {
       type: "string",
